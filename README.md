@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading and inline Markdown writing pre-alpha (`0.4.0`).
+> Status: structured-data reading and inline Markdown writing pre-alpha (`0.4.1`).
 
 ## Install the first prototype
 
@@ -19,7 +19,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.4.0` prototype reads Favorites, boards and older post pages from
+The `0.4.1` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun never calls
@@ -433,39 +433,51 @@ All fragile knowledge belongs in one compatibility layer inspired by
 Kapyguts. UI components must not contain Kapybara selectors or GraphQL field
 assumptions directly.
 
-## Proposed repository shape
+## Source and build
+
+The raw install URL still serves one self-contained userscript. That root
+`bokoun.user.js` is now a generated artifact: edit the modules in `src/`, then
+rebuild it. This keeps installation simple without keeping the implementation
+in one long hand-maintained file.
 
 ```text
 bokoun/
 ├── README.md
-├── bokoun.user.js              # installable seed/build artifact
+├── bokoun.user.js              # generated, directly installable artifact
+├── package.json
 ├── src/
-│   ├── boot.js
+│   ├── main.js                 # module assembly and guarded startup
+│   ├── runtime.js              # constants and shared runtime state
+│   ├── styles.js               # isolated Shadow DOM styles
+│   ├── shell.js                # boot shell, preferences and scroll state
+│   ├── adapters.js             # structured-data and semantic-DOM readers
+│   ├── board-state.js          # normalized post window and deduplication
+│   ├── writing.js              # drafts and native composer bridge
+│   ├── pagination.js           # endless older-page loading
+│   ├── ui.js                   # markup and UI event binding
+│   ├── navigation.js           # native/Bokoun handoff and anchors
 │   ├── controller.js
-│   ├── router.js
-│   ├── model.js
-│   ├── storage.js
-│   ├── sanitize.js
-│   ├── adapters/
-│   │   ├── kapybara-dom.js
-│   │   ├── kapybara-data.js
-│   │   └── kapybara-composer.js
-│   └── ui/
-│       ├── shell.js
-│       ├── favorites.js
-│       ├── board.js
-│       ├── post.js
-│       ├── composer.js
-│       └── styles.js
 ├── tests/
 │   ├── fixtures/
-│   ├── adapters/
-│   └── model/
+│   └── userscript.test.js
 └── tools/
-    └── build-userscript.js
+    ├── build-userscript.mjs
+    └── check-generated.mjs
 ```
 
-The actual structure should stay smaller until repetition justifies each file.
+Development commands:
+
+```sh
+npm install
+npm run build
+npm run check
+npm test
+```
+
+`npm run check` compares a fresh in-memory build with the committed
+`bokoun.user.js`, so a forgotten or manually edited artifact fails
+deterministically. esbuild bundles the modules into an IIFE; Bokoun does not
+load code or dependencies from the network at runtime.
 
 ## Roadmap
 
@@ -533,6 +545,10 @@ periodically, reports the active adapter through `data-read-source`, and falls
 back to semantic DOM reads after a request or contract failure. Structured boot
 does not depend on the old native post/Favorites selectors. Synthetic fixtures
 exercise the transport without retaining private club content.
+
+The behavior-neutral `0.4.1` hardening release split the implementation into
+cohesive source modules and added a reproducible single-file build. The raw
+install path and runtime behavior remain unchanged.
 
 ### Phase 4 — direct transport experiment
 

@@ -1,20 +1,32 @@
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const test = require("node:test");
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { installAdapters } from "../src/adapters.js";
 
-const scriptPath = path.join(__dirname, "..", "bokoun.user.js");
-const source = fs.readFileSync(scriptPath, "utf8");
-const structured = require(scriptPath);
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const scriptPath = path.join(dirname, "..", "bokoun.user.js");
+const sourceDir = path.join(dirname, "..", "src");
+const generatedSource = fs.readFileSync(scriptPath, "utf8");
+const source = [
+  generatedSource,
+  ...fs.readdirSync(sourceDir)
+    .filter((name) => name.endsWith(".js"))
+    .sort()
+    .map((name) => fs.readFileSync(path.join(sourceDir, name), "utf8")),
+].join("\n");
+const structured = {};
+installAdapters(structured);
 
 function fixture(name) {
-  return fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");
+  return fs.readFileSync(path.join(dirname, "fixtures", name), "utf8");
 }
 
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.4\.0/);
+  assert.match(source, /@version\s+0\.4\.1/);
 });
 
 test("older-page fallback stays authenticated and same-origin", () => {
