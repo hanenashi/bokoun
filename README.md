@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="assets/bokoun.png" alt="Bokoun icon" width="400">
+</p>
+
 # Bokoun
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading and inline Markdown writing pre-alpha (`0.4.1`).
+> Status: structured-data reading and inline Markdown writing pre-alpha (`0.4.2`).
 
 ## Install the first prototype
 
@@ -19,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.4.1` prototype reads Favorites, boards and older post pages from
+The `0.4.2` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun never calls
@@ -445,6 +449,9 @@ bokoun/
 ├── README.md
 ├── bokoun.user.js              # generated, directly installable artifact
 ├── package.json
+├── assets/
+│   ├── bokoun.ico              # userscript icon
+│   └── bokoun.png              # README artwork
 ├── src/
 │   ├── main.js                 # module assembly and guarded startup
 │   ├── runtime.js              # constants and shared runtime state

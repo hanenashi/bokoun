@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.4.1";
+export const VERSION = "0.4.2";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;

@@ -26,7 +26,11 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.4\.1/);
+  assert.match(source, /@version\s+0\.4\.2/);
+  assert.match(
+    source,
+    /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
+  );
 });
 
 test("older-page fallback stays authenticated and same-origin", () => {

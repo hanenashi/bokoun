@@ -14,6 +14,7 @@ export const userscriptBanner = `// ==UserScript==
 // @version      ${packageJson.version}
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
+// @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
 // @match        https://kapybara.okoun.cz/*
 // @run-at       document-start
 // @grant        GM_getValue
