@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: first read-only userscript prototype (`0.1.0`).
+> Status: first read-only userscript prototype (`0.1.1`).
 
 ## Install the first prototype
 
@@ -11,13 +11,15 @@ another userscript manager, then open Kapybara on a phone:
 
 - [install Bokoun directly](https://github.com/hanenashi/bokoun/raw/refs/heads/main/bokoun.user.js)
   while signed into GitHub;
+- after the first installation, reload any Kapybara tab that was already open;
 - supported routes: `/fav/activity`, `/fav/topics` and `/boards/{club}`;
 - Bokoun activates automatically at viewport widths up to 760 px;
 - append `?bokoun=on` to a supported URL to try it on desktop;
-- tap **Plná verze** to restore normal Kapybara for the current tab;
+- tap **Plná verze** to show normal Kapybara, then tap the floating **B** to
+  return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.1.0` prototype is intentionally read-only. It never calls GraphQL,
+The `0.1.1` prototype is intentionally read-only. It never calls GraphQL,
 never sends a post and does not copy credentials or private content into its
 storage. Unsupported routes and initialization failures restore normal
 Kapybara automatically.

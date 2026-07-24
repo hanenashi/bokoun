@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.1.0
+// @version      0.1.1
 // @description  Minimal read-only mobile interface for Kapybara/Okoun
 // @author       BeeChan
 // @match        https://kapybara.okoun.cz/*
@@ -14,8 +14,9 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.0";
+  const VERSION = "0.1.1";
   const HOST_ID = "bokoun-host";
+  const RETURN_HOST_ID = "bokoun-return";
   const BOOT_TIMEOUT_MS = 10_000;
   const ROUTE_POLL_MS = 150;
   const MOBILE_QUERY = "(max-width: 760px)";
@@ -532,6 +533,7 @@
   function mountShell() {
     if (state.host?.isConnected) return;
 
+    document.getElementById(RETURN_HOST_ID)?.remove();
     const host = document.createElement("div");
     host.id = HOST_ID;
     host.setAttribute("role", "application");
@@ -581,6 +583,53 @@
   function openFullKapybara() {
     sessionStorage.setItem(SESSION_DISABLED_KEY, "1");
     revealNative({ stop: true });
+    showReturnControl();
+  }
+
+  function showReturnControl() {
+    if (!document.body || document.getElementById(RETURN_HOST_ID)) return;
+
+    const host = document.createElement("div");
+    host.id = RETURN_HOST_ID;
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+          position: fixed;
+          right: 12px;
+          bottom: max(72px, calc(env(safe-area-inset-bottom) + 60px));
+          z-index: 2147483646;
+          display: block;
+        }
+
+        button {
+          display: grid;
+          width: 44px;
+          height: 44px;
+          place-items: center;
+          padding: 0;
+          border: 1px solid #a85a00;
+          border-radius: 50%;
+          background: #ffffff;
+          color: #a85a00;
+          font: 700 19px/1 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        button:focus-visible {
+          outline: 2px solid #a85a00;
+          outline-offset: 2px;
+        }
+      </style>
+      <button type="button" aria-label="Zpět do Bokouna" title="Zpět do Bokouna">B</button>
+    `;
+    shadow.querySelector("button").addEventListener("click", () => {
+      sessionStorage.removeItem(SESSION_DISABLED_KEY);
+      location.reload();
+    });
+    document.body.append(host);
   }
 
   function registerMenus() {
@@ -979,12 +1028,17 @@
     registerMenus();
     if (!shouldBoot()) {
       delete document.documentElement.dataset.bokounBooting;
+      if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") {
+        await waitForBody();
+        showReturnControl();
+      }
       return;
     }
 
     await waitForBody();
     if (!shouldBoot()) {
       delete document.documentElement.dataset.bokounBooting;
+      if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") showReturnControl();
       return;
     }
 
