@@ -1,0 +1,1013 @@
+// ==UserScript==
+// @name         Bokoun
+// @namespace    https://github.com/hanenashi/bokoun
+// @version      0.1.0
+// @description  Minimal read-only mobile interface for Kapybara/Okoun
+// @author       BeeChan
+// @match        https://kapybara.okoun.cz/*
+// @run-at       document-start
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @updateURL    https://raw.githubusercontent.com/hanenashi/bokoun/main/bokoun.user.js
+// @downloadURL  https://raw.githubusercontent.com/hanenashi/bokoun/main/bokoun.user.js
+// ==/UserScript==
+
+(() => {
+  "use strict";
+
+  const VERSION = "0.1.0";
+  const HOST_ID = "bokoun-host";
+  const BOOT_TIMEOUT_MS = 10_000;
+  const ROUTE_POLL_MS = 150;
+  const MOBILE_QUERY = "(max-width: 760px)";
+  const SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
+  const SCROLL_KEY = "bokoun.scroll.v1";
+  const PREF_ENABLED_KEY = "bokoun.enabled";
+
+  const SELECTORS = Object.freeze({
+    favoritesPage: ".favorites-page",
+    favoriteRows: ".favorites-page a[href^='/boards/']",
+    favoriteName: ".name",
+    favoriteUnreadCompact: ".pill-compact",
+    favoriteUnreadFull: ".pill-full",
+    favoriteTime: "time.ts",
+    favoriteRelativeTime: ".ts-rel",
+    boardHeader: "header.board-header",
+    boardTitle: "header.board-header .title-link h1, header.board-header h1",
+    posts: "article.post[data-post-id]",
+    postAuthor: ".post-header .author",
+    postTime: ".post-header time[datetime]",
+    postDate: ".post-header .date",
+    postReplyReference: ".reply-ref",
+    postBody: ".body .markdown, .body",
+  });
+
+  const ICONS = Object.freeze({
+    back: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M19 12H5M11 18l-6-6 6-6"></path>
+      </svg>
+    `,
+  });
+
+  const STYLES = `
+    :host {
+      --bg: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --border: #d0d5dd;
+      --accent: #a85a00;
+      --header-height: 52px;
+      all: initial;
+      color: var(--text);
+      font-family: Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    button, a {
+      font: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      color: inherit;
+    }
+
+    .app {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      height: 100vh;
+      height: 100dvh;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+      background: var(--bg);
+      color: var(--text);
+      scrollbar-gutter: stable;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      min-height: var(--header-height);
+      padding: env(safe-area-inset-top) 16px 0;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.98);
+    }
+
+    .topbar--board {
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      padding-left: 4px;
+    }
+
+    .title {
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.015em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .title--brand {
+      font-size: 24px;
+    }
+
+    .full-link,
+    .icon-button {
+      min-width: 44px;
+      min-height: 44px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .full-link {
+      padding: 0 0 0 12px;
+      color: var(--accent);
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .icon-button {
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      color: var(--text);
+    }
+
+    .icon-button svg {
+      width: 25px;
+      height: 25px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+    }
+
+    .tabs {
+      position: sticky;
+      top: calc(var(--header-height) + env(safe-area-inset-top));
+      z-index: 9;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 48px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.98);
+    }
+
+    .tab {
+      position: relative;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .tab[aria-current="page"] {
+      color: var(--accent);
+    }
+
+    .tab[aria-current="page"]::after {
+      position: absolute;
+      right: 12px;
+      bottom: -1px;
+      left: 12px;
+      height: 2px;
+      background: var(--accent);
+      content: "";
+    }
+
+    .favorites {
+      margin: 0;
+      padding: 0 16px max(24px, env(safe-area-inset-bottom));
+      list-style: none;
+    }
+
+    .favorite-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      min-height: 72px;
+      border-bottom: 1px solid var(--border);
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .favorite-main {
+      min-width: 0;
+      padding: 12px 0;
+    }
+
+    .favorite-name {
+      display: block;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 17px;
+      font-weight: 650;
+      line-height: 1.25;
+      letter-spacing: -0.008em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .favorite-time {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.25;
+    }
+
+    .favorite-unread {
+      min-width: 32px;
+      color: var(--accent);
+      font-size: 17px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 650;
+      text-align: right;
+    }
+
+    .posts {
+      padding: 0 16px max(28px, env(safe-area-inset-bottom));
+    }
+
+    .post {
+      padding: 20px 0 22px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .post-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 12px;
+      align-items: baseline;
+      margin-bottom: 11px;
+    }
+
+    .post-author {
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .post-date {
+      color: var(--muted);
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 400;
+      line-height: 1.3;
+    }
+
+    .reply-reference {
+      margin: -4px 0 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .post-body {
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-size: 17px;
+      font-weight: 400;
+      line-height: 1.55;
+    }
+
+    .post-body > :first-child {
+      margin-top: 0;
+    }
+
+    .post-body > :last-child {
+      margin-bottom: 0;
+    }
+
+    .post-body p,
+    .post-body ul,
+    .post-body ol,
+    .post-body blockquote,
+    .post-body pre {
+      margin: 0 0 0.8em;
+    }
+
+    .post-body ul,
+    .post-body ol {
+      padding-left: 1.4em;
+    }
+
+    .post-body blockquote {
+      padding-left: 12px;
+      border-left: 2px solid var(--border);
+      color: #344054;
+    }
+
+    .post-body a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+    }
+
+    .post-body img,
+    .post-body video {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 12px 0;
+    }
+
+    .post-body pre,
+    .post-body code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .post-body pre {
+      max-width: 100%;
+      overflow-x: auto;
+      padding: 12px;
+      border: 1px solid var(--border);
+      background: #f8f9fb;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .empty {
+      display: grid;
+      min-height: 45vh;
+      place-items: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 15px;
+      text-align: center;
+    }
+
+    .loading {
+      display: grid;
+      min-height: 40vh;
+      place-items: center;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .loading::after {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      content: "";
+      animation: bokoun-spin 0.8s linear infinite;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    @keyframes bokoun-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (min-width: 620px) {
+      .app-inner {
+        width: min(100%, 720px);
+        min-height: 100%;
+        margin: 0 auto;
+        border-right: 1px solid var(--border);
+        border-left: 1px solid var(--border);
+        background: var(--bg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .loading::after {
+        animation-duration: 1.8s;
+      }
+    }
+  `;
+
+  const state = {
+    active: false,
+    disabled: false,
+    host: null,
+    shadow: null,
+    scroller: null,
+    currentRouteKey: "",
+    currentSignature: "",
+    bootTimer: 0,
+    renderTimer: 0,
+    routeTimer: 0,
+    saveTimer: 0,
+    observer: null,
+  };
+
+  const gmGet = typeof GM_getValue === "function"
+    ? GM_getValue
+    : (key, fallback) => {
+        const raw = localStorage.getItem(`bokoun.gm.${key}`);
+        return raw === null ? fallback : JSON.parse(raw);
+      };
+
+  const gmSet = typeof GM_setValue === "function"
+    ? GM_setValue
+    : (key, value) => localStorage.setItem(`bokoun.gm.${key}`, JSON.stringify(value));
+
+  const gmMenu = typeof GM_registerMenuCommand === "function"
+    ? GM_registerMenuCommand
+    : () => undefined;
+
+  function routeType(pathname = location.pathname) {
+    if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
+    if (/^\/boards\/[^/]+\/?$/.test(pathname)) return "board";
+    return "unsupported";
+  }
+
+  function routeKey() {
+    return `${location.pathname}${location.search}`;
+  }
+
+  function isMobileEligible() {
+    const params = new URLSearchParams(location.search);
+    if (params.get("bokoun") === "on") return true;
+    if (params.get("bokoun") === "off") return false;
+    return matchMedia(MOBILE_QUERY).matches;
+  }
+
+  function shouldBoot() {
+    return Boolean(gmGet(PREF_ENABLED_KEY, true))
+      && sessionStorage.getItem(SESSION_DISABLED_KEY) !== "1"
+      && isMobileEligible()
+      && routeType() !== "unsupported";
+  }
+
+  function installGlobalStyle() {
+    if (document.getElementById("bokoun-global-style")) return;
+    const style = document.createElement("style");
+    style.id = "bokoun-global-style";
+    style.textContent = `
+      html[data-bokoun-booting="true"] body {
+        visibility: hidden !important;
+      }
+      html[data-bokoun-active="true"] body > :not(#${HOST_ID}) {
+        display: none !important;
+      }
+      html[data-bokoun-active="true"],
+      html[data-bokoun-active="true"] body {
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        background: #fff !important;
+      }
+      #${HOST_ID} {
+        display: block !important;
+        visibility: visible !important;
+      }
+    `;
+    document.documentElement.append(style);
+  }
+
+  function startPaintGuard() {
+    if (shouldBoot()) {
+      document.documentElement.dataset.bokounBooting = "true";
+      installGlobalStyle();
+    }
+  }
+
+  function waitForDocumentElement() {
+    if (document.documentElement) return Promise.resolve();
+    return new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        if (!document.documentElement) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(document, { childList: true });
+    });
+  }
+
+  function waitForBody() {
+    if (document.body) return Promise.resolve();
+    return new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        if (!document.body) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    });
+  }
+
+  function mountShell() {
+    if (state.host?.isConnected) return;
+
+    const host = document.createElement("div");
+    host.id = HOST_ID;
+    host.setAttribute("role", "application");
+    host.setAttribute("aria-label", "Bokoun");
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>${STYLES}</style>
+      <main class="app" tabindex="-1">
+        <div class="app-inner">
+          <div class="loading" aria-label="Načítám"></div>
+        </div>
+      </main>
+    `;
+    document.body.append(host);
+
+    state.host = host;
+    state.shadow = shadow;
+    state.scroller = shadow.querySelector(".app");
+    state.scroller.addEventListener("scroll", scheduleScrollSave, { passive: true });
+    state.active = true;
+    document.documentElement.dataset.bokounActive = "true";
+    delete document.documentElement.dataset.bokounBooting;
+  }
+
+  function revealNative({ stop = false } = {}) {
+    saveScroll();
+    state.active = false;
+    if (document.documentElement) {
+      delete document.documentElement.dataset.bokounBooting;
+      delete document.documentElement.dataset.bokounActive;
+    }
+    state.host?.remove();
+    state.host = null;
+    state.shadow = null;
+    state.scroller = null;
+    state.currentSignature = "";
+
+    if (stop) {
+      state.disabled = true;
+      clearTimeout(state.bootTimer);
+      clearTimeout(state.renderTimer);
+      clearInterval(state.routeTimer);
+      state.observer?.disconnect();
+    }
+  }
+
+  function openFullKapybara() {
+    sessionStorage.setItem(SESSION_DISABLED_KEY, "1");
+    revealNative({ stop: true });
+  }
+
+  function registerMenus() {
+    if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") {
+      gmMenu("Bokoun: zapnout v tomto panelu", () => {
+        sessionStorage.removeItem(SESSION_DISABLED_KEY);
+        location.reload();
+      });
+    } else {
+      gmMenu("Bokoun: otevřít plnou Kapybaru", openFullKapybara);
+    }
+
+    gmMenu(
+      gmGet(PREF_ENABLED_KEY, true) ? "Bokoun: vypnout trvale" : "Bokoun: zapnout trvale",
+      () => {
+        const next = !gmGet(PREF_ENABLED_KEY, true);
+        gmSet(PREF_ENABLED_KEY, next);
+        sessionStorage.removeItem(SESSION_DISABLED_KEY);
+        location.reload();
+      },
+    );
+  }
+
+  function getScrollMap() {
+    try {
+      return JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function saveScroll() {
+    if (!state.scroller || !state.currentRouteKey) return;
+    const map = getScrollMap();
+    map[state.currentRouteKey] = Math.max(0, Math.round(state.scroller.scrollTop));
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(map));
+  }
+
+  function scheduleScrollSave() {
+    clearTimeout(state.saveTimer);
+    state.saveTimer = window.setTimeout(saveScroll, 100);
+  }
+
+  function restoreScroll(key, fallback = 0) {
+    const y = getScrollMap()[key] ?? fallback;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        state.scroller?.scrollTo({ top: y, behavior: "auto" });
+      });
+    });
+  }
+
+  function nativeReady(type) {
+    if (type === "favorites") {
+      return Boolean(document.querySelector(SELECTORS.favoritesPage));
+    }
+    if (type === "board") {
+      return Boolean(
+        document.querySelector(SELECTORS.boardHeader)
+        && (
+          document.querySelector(SELECTORS.posts)
+          || document.querySelector(".posts, .empty-state, .board-page")
+        )
+      );
+    }
+    return false;
+  }
+
+  function text(node) {
+    return node?.textContent?.replace(/\s+/g, " ").trim() || "";
+  }
+
+  function normalizeHref(value) {
+    try {
+      const url = new URL(value, location.origin);
+      return url.origin === location.origin ? `${url.pathname}${url.search}${url.hash}` : url.href;
+    } catch {
+      return "";
+    }
+  }
+
+  function unreadCount(row) {
+    const compact = text(row.querySelector(SELECTORS.favoriteUnreadCompact));
+    const full = text(row.querySelector(SELECTORS.favoriteUnreadFull));
+    const match = (compact || full).match(/\d+/);
+    return match ? Number.parseInt(match[0], 10) : 0;
+  }
+
+  function relativeActivity(row) {
+    const nativeRelative = text(row.querySelector(SELECTORS.favoriteRelativeTime));
+    if (nativeRelative) return nativeRelative;
+
+    const datetime = row.querySelector(SELECTORS.favoriteTime)?.getAttribute("datetime");
+    if (!datetime) return "";
+    const timestamp = Date.parse(datetime);
+    if (!Number.isFinite(timestamp)) return "";
+
+    const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+    if (seconds < 60) return "právě teď";
+    if (seconds < 3600) return `před ${Math.floor(seconds / 60)} min`;
+    if (seconds < 86_400) return `před ${Math.floor(seconds / 3600)} h`;
+    if (seconds < 172_800) return "včera";
+    return `před ${Math.floor(seconds / 86_400)} dny`;
+  }
+
+  function readFavorites() {
+    return [...document.querySelectorAll(SELECTORS.favoriteRows)]
+      .map((row) => ({
+        href: normalizeHref(row.getAttribute("href")),
+        name: text(row.querySelector(SELECTORS.favoriteName)),
+        unread: unreadCount(row),
+        activity: relativeActivity(row),
+      }))
+      .filter((club) => club.href && club.name);
+  }
+
+  function sanitizeHtml(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html || "";
+
+    const allowedTags = new Set([
+      "A", "B", "BLOCKQUOTE", "BR", "CODE", "DEL", "DIV", "EM", "HR", "I",
+      "IMG", "LI", "OL", "P", "PRE", "S", "SPAN", "STRONG", "U", "UL",
+    ]);
+    const removeTags = new Set([
+      "BASE", "BUTTON", "EMBED", "FORM", "IFRAME", "INPUT", "LINK", "META",
+      "OBJECT", "SCRIPT", "STYLE", "SVG", "MATH", "TEXTAREA",
+    ]);
+    const elements = [...template.content.querySelectorAll("*")];
+
+    for (const element of elements) {
+      if (removeTags.has(element.tagName)) {
+        element.remove();
+        continue;
+      }
+      if (!allowedTags.has(element.tagName)) {
+        element.replaceWith(...element.childNodes);
+        continue;
+      }
+
+      for (const attribute of [...element.attributes]) {
+        const name = attribute.name.toLowerCase();
+        const allowed = (
+          (element.tagName === "A" && ["href", "title"].includes(name))
+          || (element.tagName === "IMG" && ["src", "alt", "title", "width", "height"].includes(name))
+          || (element.tagName === "SPAN" && name === "title")
+        );
+        if (!allowed) element.removeAttribute(attribute.name);
+      }
+
+      if (element.tagName === "A") {
+        const href = element.getAttribute("href");
+        if (!safeUrl(href, { image: false })) {
+          element.removeAttribute("href");
+        } else {
+          element.setAttribute("rel", "noopener noreferrer");
+        }
+      }
+
+      if (element.tagName === "IMG") {
+        const src = element.getAttribute("src");
+        if (!safeUrl(src, { image: true })) {
+          element.remove();
+        } else {
+          element.setAttribute("loading", "lazy");
+          element.setAttribute("decoding", "async");
+        }
+      }
+    }
+
+    return template.innerHTML;
+  }
+
+  function safeUrl(value, { image }) {
+    if (!value) return false;
+    try {
+      const url = new URL(value, location.href);
+      if (["http:", "https:"].includes(url.protocol)) return true;
+      return image && url.protocol === "data:" && /^data:image\//i.test(value);
+    } catch {
+      return false;
+    }
+  }
+
+  function compactDate(post) {
+    const time = post.querySelector(SELECTORS.postTime);
+    const visible = text(post.querySelector(SELECTORS.postDate));
+    if (visible) return visible;
+    const datetime = time?.getAttribute("datetime");
+    if (!datetime) return "";
+    const date = new Date(datetime);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("cs-CZ", {
+      day: "numeric",
+      month: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+
+  function readBoard() {
+    const title = text(document.querySelector(SELECTORS.boardTitle))
+      || decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "Klub");
+    const posts = [...document.querySelectorAll(SELECTORS.posts)].map((post) => {
+      const body = post.querySelector(SELECTORS.postBody);
+      return {
+        id: post.getAttribute("data-post-id") || "",
+        author: text(post.querySelector(SELECTORS.postAuthor)) || "neznámý",
+        date: compactDate(post),
+        datetime: post.querySelector(SELECTORS.postTime)?.getAttribute("datetime") || "",
+        replyReference: text(post.querySelector(SELECTORS.postReplyReference)),
+        bodyHtml: sanitizeHtml(body?.innerHTML || ""),
+      };
+    });
+    return { title, posts };
+  }
+
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value ?? "";
+    return div.innerHTML;
+  }
+
+  function signatureFor(type, model) {
+    if (type === "favorites") {
+      return `${routeKey()}|${model.length}|${model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")}`;
+    }
+    return `${routeKey()}|${model.title}|${model.posts.map((post) => post.id).join(",")}`;
+  }
+
+  function fullButton() {
+    return `<button class="full-link" type="button" data-action="full">Plná verze</button>`;
+  }
+
+  function favoritesMarkup(clubs) {
+    const selectedActivity = location.pathname === "/fav/activity";
+    const rows = clubs.length
+      ? clubs.map((club) => `
+          <li>
+            <a class="favorite-row" href="${escapeHtml(club.href)}" data-native-href="${escapeHtml(club.href)}">
+              <span class="favorite-main">
+                <span class="favorite-name">${escapeHtml(club.name)}</span>
+                <span class="favorite-time">${escapeHtml(club.activity)}</span>
+              </span>
+              ${club.unread ? `<span class="favorite-unread" aria-label="${club.unread} nových">${club.unread}</span>` : ""}
+            </a>
+          </li>
+        `).join("")
+      : `<li class="empty">Žádné oblíbené kluby.</li>`;
+
+    return `
+      <header class="topbar">
+        <h1 class="title title--brand">Bokoun</h1>
+        ${fullButton()}
+      </header>
+      <nav class="tabs" aria-label="Řazení oblíbených klubů">
+        <a class="tab" href="/fav/activity" data-native-href="/fav/activity" ${selectedActivity ? 'aria-current="page"' : ""}>Aktivita</a>
+        <a class="tab" href="/fav/topics" data-native-href="/fav/topics" ${selectedActivity ? "" : 'aria-current="page"'}>Témata</a>
+      </nav>
+      <ul class="favorites">${rows}</ul>
+    `;
+  }
+
+  function boardMarkup(board) {
+    const posts = board.posts.length
+      ? board.posts.map((post) => `
+          <article class="post" data-bokoun-post-id="${escapeHtml(post.id)}">
+            <header class="post-header">
+              <span class="post-author">${escapeHtml(post.author)}</span>
+              <time class="post-date" ${post.datetime ? `datetime="${escapeHtml(post.datetime)}"` : ""}>${escapeHtml(post.date)}</time>
+            </header>
+            ${post.replyReference ? `<div class="reply-reference">${escapeHtml(post.replyReference)}</div>` : ""}
+            <div class="post-body">${post.bodyHtml}</div>
+          </article>
+        `).join("")
+      : `<div class="empty">V tomto klubu zatím nejsou příspěvky.</div>`;
+
+    return `
+      <header class="topbar topbar--board">
+        <button class="icon-button" type="button" data-action="back" aria-label="Zpět do oblíbených">${ICONS.back}</button>
+        <h1 class="title">${escapeHtml(board.title)}</h1>
+        ${fullButton()}
+      </header>
+      <section class="posts" aria-label="Příspěvky">${posts}</section>
+    `;
+  }
+
+  function attachUiEvents() {
+    state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
+    state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
+    for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateNative(link.getAttribute("data-native-href"));
+      });
+    }
+  }
+
+  function navigateNative(href) {
+    if (!href) return;
+    saveScroll();
+    const target = new URL(href, location.origin);
+    const nativeLink = [...document.querySelectorAll("a[href]")]
+      .find((link) => {
+        if (link.closest(`#${HOST_ID}`)) return false;
+        try {
+          return new URL(link.href, location.origin).href === target.href;
+        } catch {
+          return false;
+        }
+      });
+
+    const previous = location.href;
+    if (!nativeLink) {
+      location.assign(target.href);
+      return;
+    }
+
+    nativeLink.click();
+    window.setTimeout(() => {
+      if (location.href === previous) location.assign(target.href);
+    }, 1_200);
+  }
+
+  function goBack() {
+    saveScroll();
+    if (history.length > 1) {
+      history.back();
+    } else {
+      navigateNative("/fav/activity");
+    }
+  }
+
+  function render({ force = false } = {}) {
+    if (state.disabled) return;
+    const type = routeType();
+
+    if (type === "unsupported" || !isMobileEligible()) {
+      revealNative();
+      return;
+    }
+
+    if (!nativeReady(type)) return;
+    if (!state.host?.isConnected) mountShell();
+
+    const previousKey = state.currentRouteKey;
+    const key = routeKey();
+    const previousY = state.scroller?.scrollTop || 0;
+    const model = type === "favorites" ? readFavorites() : readBoard();
+    const signature = signatureFor(type, model);
+    if (!force && signature === state.currentSignature) return;
+
+    state.currentRouteKey = key;
+    state.currentSignature = signature;
+    const inner = state.shadow.querySelector(".app-inner");
+    inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
+    attachUiEvents();
+
+    restoreScroll(key, previousKey === key ? previousY : 0);
+  }
+
+  function scheduleRender({ force = false } = {}) {
+    clearTimeout(state.renderTimer);
+    state.renderTimer = window.setTimeout(() => render({ force }), 40);
+  }
+
+  function handleRouteChange() {
+    if (state.disabled) return;
+    const key = routeKey();
+    if (key === state.currentRouteKey) return;
+
+    saveScroll();
+    state.currentSignature = "";
+
+    if (routeType() === "unsupported" || !isMobileEligible()) {
+      state.currentRouteKey = key;
+      revealNative();
+      return;
+    }
+
+    state.currentRouteKey = key;
+    if (!state.host?.isConnected) mountShell();
+    state.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
+    scheduleRender({ force: true });
+  }
+
+  function observeNative() {
+    state.observer = new MutationObserver(() => scheduleRender());
+    state.observer.observe(document.body, { childList: true, subtree: true });
+    state.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS);
+    window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
+    window.addEventListener("pagehide", saveScroll);
+  }
+
+  async function boot() {
+    registerMenus();
+    if (!shouldBoot()) {
+      delete document.documentElement.dataset.bokounBooting;
+      return;
+    }
+
+    await waitForBody();
+    if (!shouldBoot()) {
+      delete document.documentElement.dataset.bokounBooting;
+      return;
+    }
+
+    mountShell();
+    state.currentRouteKey = routeKey();
+    observeNative();
+    render({ force: true });
+
+    state.bootTimer = window.setTimeout(() => {
+      if (!nativeReady(routeType())) {
+        console.warn(`[Bokoun ${VERSION}] Native page was not ready; restored full Kapybara.`);
+        revealNative({ stop: true });
+      }
+    }, BOOT_TIMEOUT_MS);
+  }
+
+  waitForDocumentElement().then(() => {
+    startPaintGuard();
+    return boot();
+  }).catch((error) => {
+    console.warn(`[Bokoun ${VERSION}] Initialization failed; restored full Kapybara.`, error?.name || "Error");
+    revealNative({ stop: true });
+  });
+})();

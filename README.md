@@ -2,7 +2,40 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: architecture and feasibility stage. No installable build exists yet.
+> Status: first read-only userscript prototype (`0.1.0`).
+
+## Install the first prototype
+
+Install [bokoun.user.js](./bokoun.user.js) in Tampermonkey, Violentmonkey or
+another userscript manager, then open Kapybara on a phone:
+
+- [direct userscript install](https://raw.githubusercontent.com/hanenashi/bokoun/main/bokoun.user.js)
+- supported routes: `/fav/activity`, `/fav/topics` and `/boards/{club}`;
+- Bokoun activates automatically at viewport widths up to 760 px;
+- append `?bokoun=on` to a supported URL to try it on desktop;
+- tap **Plná verze** to restore normal Kapybara for the current tab;
+- use the userscript-manager menu to turn Bokoun off or on persistently.
+
+The `0.1.0` prototype is intentionally read-only. It never calls GraphQL,
+never sends a post and does not copy credentials or private content into its
+storage. Unsupported routes and initialization failures restore normal
+Kapybara automatically.
+
+Current prototype boundaries:
+
+- it shows the Favorites rows and posts already rendered by native Kapybara;
+- it does not yet request older pages or implement infinite loading;
+- it does not yet include reply/new-post controls;
+- automatic userscript updates may require manual installation while this
+  repository remains private.
+
+The first practical test loop is:
+
+1. open Favorites and scroll down;
+2. open a club;
+3. read;
+4. use Bokoun's Back arrow;
+5. confirm Favorites returns to the same position.
 
 ## Executive TL;DR
 
