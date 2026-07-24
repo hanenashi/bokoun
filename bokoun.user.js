@@ -9,8 +9,6 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
-// @updateURL    https://raw.githubusercontent.com/hanenashi/bokoun/main/bokoun.user.js
-// @downloadURL  https://raw.githubusercontent.com/hanenashi/bokoun/main/bokoun.user.js
 // ==/UserScript==
 
 (() => {

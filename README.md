@@ -9,7 +9,10 @@ A deliberately minimal mobile interface for Kapybara/Okoun.
 Install [bokoun.user.js](./bokoun.user.js) in Tampermonkey, Violentmonkey or
 another userscript manager, then open Kapybara on a phone:
 
-- [direct userscript install](https://raw.githubusercontent.com/hanenashi/bokoun/main/bokoun.user.js)
+- while signed into GitHub, open
+  [bokoun.user.js](https://github.com/hanenashi/bokoun/blob/main/bokoun.user.js),
+  use **Raw** / **Download raw file**, then import the downloaded file into the
+  userscript manager;
 - supported routes: `/fav/activity`, `/fav/topics` and `/boards/{club}`;
 - Bokoun activates automatically at viewport widths up to 760 px;
 - append `?bokoun=on` to a supported URL to try it on desktop;
@@ -26,8 +29,8 @@ Current prototype boundaries:
 - it shows the Favorites rows and posts already rendered by native Kapybara;
 - it does not yet request older pages or implement infinite loading;
 - it does not yet include reply/new-post controls;
-- automatic userscript updates may require manual installation while this
-  repository remains private.
+- automatic userscript updates are intentionally disabled while this repository
+  remains private; install a newer file manually when the version changes.
 
 The first practical test loop is:
 
