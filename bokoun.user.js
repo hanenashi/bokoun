@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.2.0
-// @description  Minimal read-only mobile interface for Kapybara/Okoun
+// @version      0.3.0
+// @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @match        https://kapybara.okoun.cz/*
 // @run-at       document-start
@@ -14,17 +14,20 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.0";
+  const VERSION = "0.3.0";
   const HOST_ID = "bokoun-host";
   const RETURN_HOST_ID = "bokoun-return";
   const BOOT_TIMEOUT_MS = 10_000;
   const PAGE_LOAD_TIMEOUT_MS = 15_000;
+  const COMPOSER_TIMEOUT_MS = 8_000;
+  const POST_CONFIRM_TIMEOUT_MS = 15_000;
   const ROUTE_POLL_MS = 150;
   const OLDER_TRIGGER_PX = 900;
   const MOBILE_QUERY = "(max-width: 760px)";
   const SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
   const SCROLL_KEY = "bokoun.scroll.v1";
   const PREF_ENABLED_KEY = "bokoun.enabled";
+  const DRAFTS_KEY = "bokoun.drafts.v1";
 
   const SELECTORS = Object.freeze({
     favoritesPage: ".favorites-page",
@@ -42,13 +45,26 @@
     postDate: ".post-header .date",
     postReplyReference: ".reply-ref",
     postBody: ".body .markdown, .body",
+    postReplyAction: ".reply-action",
     olderPosts: "a[aria-label^='Starší příspěvky'][href]",
+    newPostLauncher: "button.entry-placeholder, button.new-post",
+    newPostComposer: "section.new-post-composer[aria-label='Nový příspěvek']",
+    replyComposer: "section.reply-composer[aria-label='Odpověď']",
+    composerEditable: ".composer-content-editable[role='textbox'][contenteditable='true']",
+    composerModeToggle: "button.mode-toggle[aria-pressed]",
+    composerMarkdownNode: "code[data-language='markdown']",
   });
 
   const ICONS = Object.freeze({
     back: `
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M19 12H5M11 18l-6-6 6-6"></path>
+      </svg>
+    `,
+    write: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
       </svg>
     `,
   });
@@ -109,7 +125,7 @@
     }
 
     .topbar--board {
-      grid-template-columns: 44px minmax(0, 1fr) auto;
+      grid-template-columns: 44px minmax(0, 1fr) 44px auto;
       padding-left: 4px;
     }
 
@@ -354,6 +370,129 @@
       line-height: 1.45;
     }
 
+    .post-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .reply-button {
+      min-height: 36px;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .composer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 19;
+      background: rgba(23, 32, 51, 0.28);
+    }
+
+    .composer-panel {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 20;
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      box-shadow: 0 -12px 32px rgba(23, 32, 51, 0.16);
+    }
+
+    .composer-heading {
+      display: flex;
+      gap: 12px;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .composer-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .composer-kind {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .composer-target {
+      margin: -2px 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .composer-textarea {
+      display: block;
+      width: 100%;
+      min-height: 150px;
+      max-height: 42vh;
+      resize: vertical;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: #fff;
+      color: var(--text);
+      font: 400 16px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .composer-textarea:focus {
+      border-color: var(--accent);
+      outline: 1px solid var(--accent);
+    }
+
+    .composer-error {
+      margin-top: 10px;
+      color: #9b2c2c;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .composer-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .composer-action {
+      min-height: 42px;
+      padding: 0 16px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .composer-action--send {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .composer-action:disabled,
+    .composer-textarea:disabled {
+      cursor: default;
+      opacity: 0.58;
+    }
+
     .board-tail {
       display: grid;
       justify-items: center;
@@ -451,7 +590,8 @@
     }
 
     a:focus-visible,
-    button:focus-visible {
+    button:focus-visible,
+    textarea:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: -2px;
     }
@@ -506,6 +646,8 @@
     boardError: "",
     boardLoadAbort: null,
     boardAutoCooldownUntil: 0,
+    composer: null,
+    writeBusy: false,
   };
 
   const gmGet = typeof GM_getValue === "function"
@@ -557,6 +699,9 @@
       }
       html[data-bokoun-active="true"] body > :not(#${HOST_ID}) {
         display: none !important;
+      }
+      html[data-bokoun-active="true"][data-bokoun-bridge="true"] body > :not(#${HOST_ID}) {
+        display: revert !important;
       }
       html[data-bokoun-active="true"],
       html[data-bokoun-active="true"] body {
@@ -996,6 +1141,274 @@
     };
   }
 
+  function currentBoardId() {
+    const match = location.pathname.match(/^\/boards\/([^/]+)\/?$/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function composerDraftKey(kind, replyTo = "") {
+    return `${currentBoardId()}:${kind}:${replyTo || ""}`;
+  }
+
+  function getDrafts() {
+    const drafts = gmGet(DRAFTS_KEY, {});
+    return drafts && typeof drafts === "object" && !Array.isArray(drafts) ? drafts : {};
+  }
+
+  function loadDraft(kind, replyTo = "") {
+    const value = getDrafts()[composerDraftKey(kind, replyTo)];
+    return typeof value === "string" ? value : "";
+  }
+
+  function saveDraft(kind, replyTo, body) {
+    const drafts = getDrafts();
+    const key = composerDraftKey(kind, replyTo);
+    if (body) drafts[key] = body;
+    else delete drafts[key];
+    gmSet(DRAFTS_KEY, drafts);
+  }
+
+  function clearDraft(kind, replyTo = "") {
+    saveDraft(kind, replyTo, "");
+  }
+
+  function openComposer(kind, replyTo = "") {
+    if (state.writeBusy || routeType() !== "board") return;
+    const targetIndex = replyTo ? state.boardPostIndex.get(String(replyTo)) : undefined;
+    const target = targetIndex === undefined ? null : state.boardPosts[targetIndex];
+    state.composer = {
+      kind,
+      replyTo: replyTo ? String(replyTo) : "",
+      replyAuthor: target?.author || "",
+      body: loadDraft(kind, replyTo),
+      status: "editing",
+      error: "",
+      ambiguous: false,
+    };
+    scheduleRender({ force: true });
+    requestAnimationFrame(() => state.shadow?.querySelector(".composer-textarea")?.focus());
+  }
+
+  function closeComposer() {
+    if (state.writeBusy) return;
+    if (!state.composer?.ambiguous) dismissNativeComposers();
+    state.composer = null;
+    scheduleRender({ force: true });
+  }
+
+  function updateComposerBody(value) {
+    if (!state.composer || state.writeBusy) return;
+    state.composer.body = value;
+    state.composer.error = "";
+    saveDraft(state.composer.kind, state.composer.replyTo, value);
+  }
+
+  async function waitForNative(probe, timeout, message) {
+    const started = Date.now();
+    while (Date.now() - started < timeout) {
+      const result = probe();
+      if (result) return result;
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+    throw new Error(message);
+  }
+
+  function dismissNativeComposers() {
+    const selectors = `${SELECTORS.newPostComposer}, ${SELECTORS.replyComposer}`;
+    for (const section of document.querySelectorAll(selectors)) {
+      const cancel = [...section.querySelectorAll("button")]
+        .find((button) => text(button) === "Zrušit" || button.getAttribute("aria-label") === "Zrušit");
+      cancel?.click();
+    }
+  }
+
+  async function injectNativeMarkdown(section, body) {
+    const toggle = section.querySelector(SELECTORS.composerModeToggle);
+    if (!toggle) throw new Error("Native Markdown toggle is unavailable");
+    if (toggle.getAttribute("aria-pressed") !== "true") toggle.click();
+
+    const editable = await waitForNative(
+      () => {
+        const candidate = section.querySelector(SELECTORS.composerEditable);
+        return candidate?.querySelector(SELECTORS.composerMarkdownNode) ? candidate : null;
+      },
+      COMPOSER_TIMEOUT_MS,
+      "Native Markdown editor did not open",
+    );
+    editable.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editable);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const accepted = document.execCommand("insertText", false, body);
+    if (!accepted) throw new Error("Native editor rejected the draft");
+
+    await waitForNative(
+      () => normalizeEditorText(editable.innerText) === normalizeEditorText(body),
+      3_000,
+      "Native editor did not retain the draft",
+    );
+  }
+
+  function normalizeEditorText(value) {
+    return String(value || "")
+      .replace(/\r\n?/g, "\n")
+      .replace(/\u00a0/g, " ")
+      .trim();
+  }
+
+  function findCreatedPost(beforeIds, root = document) {
+    return [...root.querySelectorAll(SELECTORS.posts)]
+      .filter((post) => !beforeIds.has(post.getAttribute("data-post-id") || ""))
+      .sort((left, right) => (
+        Number(right.getAttribute("data-post-id") || 0)
+        - Number(left.getAttribute("data-post-id") || 0)
+      ))[0] || null;
+  }
+
+  async function waitForCreatedPost(beforeIds) {
+    const started = Date.now();
+    while (Date.now() - started < POST_CONFIRM_TIMEOUT_MS) {
+      const created = findCreatedPost(beforeIds);
+      if (created) return { created, root: document, pageHref: routeKey() };
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    }
+
+    const boardId = currentBoardId();
+    if (!boardId) return null;
+    const pageHref = `/boards/${encodeURIComponent(boardId)}`;
+    const response = await fetch(pageHref, {
+      credentials: "same-origin",
+      headers: { Accept: "text/html" },
+    });
+    if (!response.ok) return null;
+    const html = await response.text();
+    const root = new DOMParser().parseFromString(html, "text/html");
+    const created = findCreatedPost(beforeIds, root);
+    return created ? { created, root, pageHref } : null;
+  }
+
+  async function submitThroughNative(composer) {
+    const beforeIds = new Set([
+      ...state.boardPostIndex.keys(),
+      ...[...document.querySelectorAll(SELECTORS.posts)]
+        .map((post) => post.getAttribute("data-post-id") || ""),
+    ]);
+    let submitted = false;
+    let stage = "prepare";
+    document.documentElement.dataset.bokounBridge = "true";
+
+    try {
+      dismissNativeComposers();
+      let section;
+      let submitLabel;
+
+      if (composer.kind === "reply") {
+        stage = "open-reply";
+        const pageHref = state.boardPostPages.get(composer.replyTo) || routeKey();
+        if (!nativePostById(composer.replyTo)) {
+          await navigateNativeRoute(pageHref, composer.replyTo);
+        }
+        const target = nativePostById(composer.replyTo);
+        const reply = target?.querySelector(SELECTORS.postReplyAction);
+        if (!reply) throw new Error("Native reply action is unavailable");
+        reply.click();
+        section = await waitForNative(
+          () => document.querySelector(SELECTORS.replyComposer),
+          COMPOSER_TIMEOUT_MS,
+          "Native reply composer did not open",
+        );
+        submitLabel = "Odeslat";
+      } else {
+        stage = "open-new-post";
+        const launcher = document.querySelector(SELECTORS.newPostLauncher);
+        if (!launcher) throw new Error("Native new-post action is unavailable");
+        launcher.click();
+        section = await waitForNative(
+          () => document.querySelector(SELECTORS.newPostComposer),
+          COMPOSER_TIMEOUT_MS,
+          "Native new-post composer did not open",
+        );
+        submitLabel = "Odeslat příspěvek";
+      }
+
+      stage = "inject-markdown";
+      await injectNativeMarkdown(section, composer.body.trim());
+      const submit = [...section.querySelectorAll("button")]
+        .find((button) => button.type === "submit" && text(button) === submitLabel);
+      if (!submit || submit.disabled) throw new Error("Native submit action is unavailable");
+
+      stage = "submit";
+      submitted = true;
+      submit.click();
+      stage = "confirm";
+      const confirmation = await waitForCreatedPost(beforeIds);
+      if (!confirmation) throw new Error("Submitted post could not be confirmed");
+
+      const model = readBoard(confirmation.root, confirmation.pageHref);
+      const postId = confirmation.created.getAttribute("data-post-id") || "";
+      if (!postId || !model.posts.some((post) => post.id === postId)) {
+        throw new Error("Confirmed post could not be read");
+      }
+      return { postId, model, pageHref: confirmation.pageHref };
+    } catch (error) {
+      error.bokounSubmitted = submitted;
+      error.bokounStage = stage;
+      throw error;
+    } finally {
+      delete document.documentElement.dataset.bokounBridge;
+    }
+  }
+
+  async function submitComposer(event) {
+    event?.preventDefault();
+    if (!state.composer || state.writeBusy || state.composer.ambiguous) return;
+    const body = state.composer.body.trim();
+    if (!body) {
+      state.composer.error = "Napište nejdřív text příspěvku.";
+      scheduleRender({ force: true });
+      return;
+    }
+
+    state.composer.body = body;
+    state.composer.status = "sending";
+    state.composer.error = "";
+    state.writeBusy = true;
+    saveDraft(state.composer.kind, state.composer.replyTo, body);
+    scheduleRender({ force: true });
+
+    try {
+      const sent = { ...state.composer };
+      const result = await submitThroughNative(sent);
+      clearDraft(sent.kind, sent.replyTo);
+      state.composer = null;
+      state.writeBusy = false;
+      resetBoardAccumulator(result.model, result.pageHref);
+      state.currentSignature = "";
+      render({ force: true });
+      requestAnimationFrame(() => {
+        state.shadow
+          ?.querySelector(`[data-bokoun-post-id="${CSS.escape(result.postId)}"]`)
+          ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    } catch (error) {
+      state.writeBusy = false;
+      if (!state.composer) return;
+      state.composer.status = "error";
+      state.composer.ambiguous = Boolean(error?.bokounSubmitted);
+      state.composer.error = error?.bokounSubmitted
+        ? "Kapybara příspěvek převzala, ale Bokoun jej nedokázal potvrdit. Neodesílejte znovu; zkontrolujte plnou verzi."
+        : "Příspěvek se nepodařilo odeslat. Koncept zůstal uložený.";
+      scheduleRender({ force: true });
+      console.warn(
+        `[Bokoun ${VERSION}] Native write failed at ${error?.bokounStage || "unknown"}.`,
+        error?.name || "Error",
+      );
+    }
+  }
+
   function validatedOlderPage(value) {
     if (!value) return null;
     try {
@@ -1108,6 +1521,15 @@
       model.end,
       model.error,
       model.loadedPageCount,
+      state.composer
+        ? [
+            state.composer.kind,
+            state.composer.replyTo,
+            state.composer.status,
+            state.composer.error,
+            state.composer.ambiguous,
+          ].join(":")
+        : "",
     ].join("|");
   }
 
@@ -1154,6 +1576,9 @@
             </header>
             ${post.replyReference ? `<div class="reply-reference">${escapeHtml(post.replyReference)}</div>` : ""}
             <div class="post-body">${post.bodyHtml}</div>
+            <div class="post-actions">
+              <button class="reply-button" type="button" data-action="reply" data-post-id="${escapeHtml(post.id)}">Odpovědět</button>
+            </div>
           </article>
         `).join("")
       : `<div class="empty">V tomto klubu zatím nejsou příspěvky.</div>`;
@@ -1178,20 +1603,78 @@
       <header class="topbar topbar--board">
         <button class="icon-button" type="button" data-action="back" aria-label="Zpět do oblíbených">${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
+        <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
         ${fullButton()}
       </header>
       <section class="posts" aria-label="Příspěvky">${posts}</section>
       <footer class="board-tail">${tailState}${newest}</footer>
+      ${composerMarkup()}
+    `;
+  }
+
+  function composerMarkup() {
+    const composer = state.composer;
+    if (!composer) return "";
+    const busy = state.writeBusy || composer.status === "sending";
+    const disabled = busy || composer.ambiguous;
+    const title = composer.kind === "reply" ? "Odpověď" : "Nový příspěvek";
+    const target = composer.kind === "reply"
+      ? `<p class="composer-target">Odpověď na ${escapeHtml(composer.replyAuthor || `příspěvek ${composer.replyTo}`)}</p>`
+      : "";
+    const error = composer.error
+      ? `<div class="composer-error" role="alert">${escapeHtml(composer.error)}</div>`
+      : "";
+    const inspect = composer.ambiguous
+      ? '<button class="composer-action" type="button" data-action="inspect-write">Zkontrolovat plnou verzi</button>'
+      : "";
+
+    return `
+      <div class="composer-backdrop" aria-hidden="true"></div>
+      <section class="composer-panel" role="dialog" aria-modal="true" aria-labelledby="bokoun-composer-title">
+        <form class="composer-form">
+          <div class="composer-heading">
+            <h2 class="composer-title" id="bokoun-composer-title">${title}</h2>
+            <span class="composer-kind">Markdown</span>
+          </div>
+          ${target}
+          <label class="sr-only" for="bokoun-composer-body">Text příspěvku v Markdownu</label>
+          <textarea
+            class="composer-textarea"
+            id="bokoun-composer-body"
+            maxlength="20000"
+            placeholder="Napište Markdown…"
+            ${disabled ? "disabled" : ""}
+          >${escapeHtml(composer.body)}</textarea>
+          ${error}
+          <div class="composer-actions">
+            ${inspect}
+            <button class="composer-action" type="button" data-action="cancel-compose" ${busy ? "disabled" : ""}>Zrušit</button>
+            <button class="composer-action composer-action--send" type="submit" ${disabled ? "disabled" : ""}>
+              ${busy ? "Odesílám…" : "Odeslat"}
+            </button>
+          </div>
+        </form>
+      </section>
     `;
   }
 
   function attachUiEvents() {
     state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
+    state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
+    state.shadow.querySelector("[data-action='cancel-compose']")?.addEventListener("click", closeComposer);
+    state.shadow.querySelector("[data-action='inspect-write']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='load-older']")?.addEventListener("click", loadOlderPosts);
     state.shadow.querySelector("[data-action='newest']")?.addEventListener("click", () => {
       state.scroller?.scrollTo({ top: 0, behavior: "smooth" });
     });
+    state.shadow.querySelector(".composer-form")?.addEventListener("submit", submitComposer);
+    state.shadow.querySelector(".composer-textarea")?.addEventListener("input", (event) => {
+      updateComposerBody(event.currentTarget.value);
+    });
+    for (const button of state.shadow.querySelectorAll("[data-action='reply']")) {
+      button.addEventListener("click", () => openComposer("reply", button.dataset.postId));
+    }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {
         event.preventDefault();

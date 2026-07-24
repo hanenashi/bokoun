@@ -1,8 +1,8 @@
 {
   "name": "bokoun",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Minimal read-only mobile interface for Kapybara/Okoun",
+  "description": "Minimal mobile reading and Markdown writing interface for Kapybara/Okoun",
   "scripts": {
     "check": "node --check bokoun.user.js",
     "test": "node --test tests/*.test.js"

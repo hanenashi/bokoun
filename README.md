@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: read-only pre-alpha with endless loading (`0.2.0`).
+> Status: Markdown writing pre-alpha with endless loading (`0.3.0`).
 
 ## Install the first prototype
 
@@ -19,10 +19,11 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.2.0` prototype is intentionally read-only. It never calls GraphQL,
-never sends a post and does not copy credentials or private content into its
-storage. Unsupported routes and initialization failures restore normal
-Kapybara automatically.
+The `0.3.0` prototype adds explicit Markdown-only new posts and replies through
+Kapybara's hidden native Lexical composer. It never calls GraphQL directly and
+never stores credentials or mirrors read posts. Only explicit unsent drafts are
+kept locally on the device. Unsupported routes and initialization failures
+restore normal Kapybara automatically.
 
 Current prototype boundaries:
 
@@ -32,7 +33,11 @@ Current prototype boundaries:
 - loaded pages and sanitized post models live in memory only and disappear on
   a real page reload;
 - duplicate boundary posts are removed by `data-post-id`;
-- it does not yet include reply/new-post controls;
+- the pencil in the board header opens a plain Markdown new-post sheet;
+- every displayed post has a small **Odpovědět** action with its target shown;
+- unsent drafts survive Cancel and failures locally on that device;
+- native Kapybara validates and submits; Bokoun never handles auth headers;
+- an ambiguous submission is never retried automatically;
 - automatic userscript updates are intentionally disabled while this repository
   remains private; install a newer file manually when the version changes.
 
@@ -490,6 +495,13 @@ exact Favorites row and position on Android.
 
 Exit condition: a post and a reply can be safely created in
 `nepotrebny_pokus`, with no rich editor visible.
+
+Implemented in `0.3.0`. The bridge temporarily renders native Kapybara under
+Bokoun's opaque full-screen shell so its Lexical editor can accept real browser
+editing commands without flashing the rich composer. New posts and replies
+share one Markdown sheet, draft storage, single-flight send state and
+post-ID-based confirmation. Live reply `1074671043` verified the complete path
+in `nepotrebny_pokus` on 2026-07-25.
 
 ### Phase 3 — structured-data adapter
 

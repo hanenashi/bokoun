@@ -9,7 +9,7 @@ const source = fs.readFileSync(scriptPath, "utf8");
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.2\.0/);
+  assert.match(source, /@version\s+0\.3\.0/);
 });
 
 test("older pages use only the authenticated same-origin HTML route", () => {
@@ -64,4 +64,29 @@ test("scroll restoration happens after the lite content is rendered", () => {
   assert.ok(renderIndex > -1);
   assert.ok(restoreIndex > renderIndex);
   assert.match(source, /requestAnimationFrame\(\(\) => \{\s*requestAnimationFrame/);
+});
+
+test("simple writing uses hidden native Kapybara composers only", () => {
+  assert.match(source, /newPostLauncher: "button\.entry-placeholder, button\.new-post"/);
+  assert.match(source, /newPostComposer: "section\.new-post-composer/);
+  assert.match(source, /replyComposer: "section\.reply-composer/);
+  assert.match(source, /postReplyAction: "\.reply-action"/);
+  assert.match(source, /document\.execCommand\("insertText", false, body\)/);
+  assert.match(source, /composerMarkdownNode: "code\[data-language='markdown'\]"/);
+  assert.doesNotMatch(source, /\bAuthorization\b/);
+  assert.doesNotMatch(source, /X-API-Access-Code/);
+});
+
+test("composer preserves drafts and prevents ambiguous retries", () => {
+  assert.match(source, /const DRAFTS_KEY = "bokoun\.drafts\.v1"/);
+  assert.match(source, /saveDraft\(state\.composer\.kind, state\.composer\.replyTo, value\)/);
+  assert.match(source, /state\.composer\.ambiguous = Boolean\(error\?\.bokounSubmitted\)/);
+  assert.match(source, /Neodesílejte znovu/);
+});
+
+test("board UI exposes new-post and per-post reply actions", () => {
+  assert.match(source, /data-action="compose"/);
+  assert.match(source, /data-action="reply"/);
+  assert.match(source, /class="composer-textarea"/);
+  assert.match(source, /Markdown/);
 });
