@@ -9,10 +9,8 @@ A deliberately minimal mobile interface for Kapybara/Okoun.
 Install [bokoun.user.js](./bokoun.user.js) in Tampermonkey, Violentmonkey or
 another userscript manager, then open Kapybara on a phone:
 
-- while signed into GitHub, open
-  [bokoun.user.js](https://github.com/hanenashi/bokoun/blob/main/bokoun.user.js),
-  use **Raw** / **Download raw file**, then import the downloaded file into the
-  userscript manager;
+- [install Bokoun directly](https://github.com/hanenashi/bokoun/raw/refs/heads/main/bokoun.user.js)
+  while signed into GitHub;
 - supported routes: `/fav/activity`, `/fav/topics` and `/boards/{club}`;
 - Bokoun activates automatically at viewport widths up to 760 px;
 - append `?bokoun=on` to a supported URL to try it on desktop;
