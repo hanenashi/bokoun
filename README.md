@@ -335,6 +335,33 @@ Bokoun owns visible navigation even while Kapybara owns the underlying route.
 
 Back must mean "return to where I was," not merely "load the previous URL."
 
+### Endless reading and native handoff
+
+The next read-only milestone replaces visible page controls with native-backed
+endless loading:
+
+1. When Bokoun approaches the bottom of its post list, it asks hidden
+   Kapybara to load the next older batch.
+2. Only one batch may be in flight at a time.
+3. Newly rendered posts are normalized and deduplicated by `data-post-id`.
+4. The list exposes small loading, end-of-history and retry states.
+5. No direct GraphQL pagination is introduced at this stage.
+
+Switching interfaces must not discard the accumulated post window. Bokoun
+records the first fully visible post ID and its pixel offset, reveals the
+already-loaded native DOM without reloading, finds the matching native
+`article.post[data-post-id]`, and restores the same visual position. Returning
+through **B** performs the reverse handoff without a page reload.
+
+If the exact anchor is unavailable, recovery order is:
+
+1. nearest loaded post;
+2. oldest loaded post;
+3. newest post as an explicit final reset.
+
+Going to the newest post is therefore a deliberate action, not the automatic
+cost of switching between Bokoun and Kapybara.
+
 ## Storage and privacy
 
 Allowed local state:
@@ -437,12 +464,17 @@ content or depending on generated classes.
 - Full-screen mobile shell.
 - Compact Favorites.
 - Chronological board.
-- Pagination.
+- Native-backed endless loading of older post batches.
+- One in-flight load, post-ID deduplication and loading/end/retry states.
 - Native route synchronization.
 - Reliable Back and scroll restoration.
+- Post-ID anchor handoff to full Kapybara and back without reloading.
+- Explicit **Nejnovější** reset; never reset position merely because the
+  interface changed.
 
-Exit condition: Favorites -> club -> read -> Back returns to the exact row and
-position on Android.
+Exit condition: Favorites -> club -> load several older batches -> switch to
+full Kapybara and back -> continue at the same post; Back then returns to the
+exact Favorites row and position on Android.
 
 ### Phase 2 — simple writing
 
@@ -494,7 +526,10 @@ Every functional milestone should cover:
 | Launch on Favorites | Lite shell appears without a full-UI flash |
 | Open club | Correct board and post order |
 | Back | Exact Favorites position restored |
-| Pagination | No duplicated or missing posts |
+| Endless loading | One batch at a time; no duplicated or missing posts |
+| Switch to full UI | Same visible post and offset in native Kapybara |
+| Return through B | Same loaded window and reading anchor without reload |
+| Reset to newest | Happens only after an explicit user action |
 | Open reply | Correct target shown |
 | Cancel reply | No state or draft lost |
 | Send reply | One post created, clear success/error |
