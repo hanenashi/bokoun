@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.3.1
+// @version      0.3.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @match        https://kapybara.okoun.cz/*
@@ -14,13 +14,14 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.3.1";
+  const VERSION = "0.3.2";
   const HOST_ID = "bokoun-host";
   const RETURN_HOST_ID = "bokoun-return";
   const BOOT_TIMEOUT_MS = 10_000;
   const PAGE_LOAD_TIMEOUT_MS = 15_000;
   const COMPOSER_TIMEOUT_MS = 8_000;
   const POST_CONFIRM_TIMEOUT_MS = 15_000;
+  const WRITE_FEEDBACK_MS = 8_000;
   const ROUTE_POLL_MS = 150;
   const OLDER_TRIGGER_PX = 900;
   const MOBILE_QUERY = "(max-width: 760px)";
@@ -165,6 +166,10 @@
       white-space: nowrap;
     }
 
+    .full-label--short {
+      display: none;
+    }
+
     .icon-button {
       display: inline-grid;
       place-items: center;
@@ -275,6 +280,26 @@
     .post {
       padding: 20px 0 22px;
       border-bottom: 1px solid var(--border);
+      scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 56px);
+    }
+
+    .post--just-sent,
+    .post--reply-context {
+      margin-right: -12px;
+      margin-left: -12px;
+      padding-right: 12px;
+      padding-left: 12px;
+      transition: background 180ms ease, box-shadow 180ms ease;
+    }
+
+    .post--just-sent {
+      background: #fff8ed;
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .post--reply-context {
+      background: #faf7f2;
+      box-shadow: inset 2px 0 0 #d9b58e;
     }
 
     .post-header {
@@ -468,6 +493,37 @@
       line-height: 1.4;
     }
 
+    .composer-draft {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 34px;
+      margin-top: 5px;
+    }
+
+    .draft-status {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .draft-discard {
+      min-height: 34px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #8b3a3a;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .draft-discard[hidden] {
+      display: none;
+    }
+
     .composer-actions {
       display: flex;
       gap: 10px;
@@ -497,6 +553,35 @@
     .composer-textarea:disabled {
       cursor: default;
       opacity: 0.58;
+    }
+
+    .write-feedback {
+      position: sticky;
+      top: calc(var(--header-height) + env(safe-area-inset-top));
+      z-index: 9;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 48px;
+      padding: 8px 16px;
+      border-bottom: 1px solid #b7dfc5;
+      background: #ecf8f0;
+      color: #1e6338;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .write-feedback-dismiss {
+      min-width: 36px;
+      min-height: 36px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
     }
 
     .board-tail {
@@ -617,6 +702,34 @@
       }
     }
 
+    @media (max-width: 420px) {
+      .topbar--board {
+        grid-template-columns: 40px minmax(0, 1fr) 40px auto;
+      }
+
+      .topbar--board .title {
+        font-size: 20px;
+      }
+
+      .topbar--board .icon-button {
+        min-width: 40px;
+      }
+
+      .topbar--board .full-link {
+        min-width: 40px;
+        padding-left: 4px;
+        font-size: 14px;
+      }
+
+      .topbar--board .full-label--long {
+        display: none;
+      }
+
+      .topbar--board .full-label--short {
+        display: inline;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .loading::after {
         animation-duration: 1.8s;
@@ -636,6 +749,7 @@
     renderTimer: 0,
     routeTimer: 0,
     saveTimer: 0,
+    feedbackTimer: 0,
     observer: null,
     observing: false,
     nativeMode: false,
@@ -653,6 +767,7 @@
     boardLoadAbort: null,
     boardAutoCooldownUntil: 0,
     composer: null,
+    writeFeedback: null,
     writeBusy: false,
   };
 
@@ -1258,12 +1373,35 @@
     scheduleRender({ force: true });
   }
 
+  function discardComposerDraft() {
+    if (!state.composer || state.writeBusy) return;
+    const { kind, replyTo, boardId, ambiguous } = state.composer;
+    clearDraft(kind, replyTo, boardId);
+    forgetActiveComposer();
+    if (!ambiguous) dismissNativeComposers();
+    state.composer = null;
+    scheduleRender({ force: true });
+  }
+
+  function updateDraftUi(value) {
+    const hasDraft = Boolean(value);
+    const status = state.shadow?.querySelector("[data-draft-status]");
+    const discard = state.shadow?.querySelector("[data-action='discard-draft']");
+    if (status) {
+      status.textContent = hasDraft
+        ? "Koncept uložen v zařízení"
+        : "Koncept se ukládá automaticky";
+    }
+    if (discard) discard.hidden = !hasDraft;
+  }
+
   function updateComposerBody(value) {
     if (!state.composer || state.writeBusy) return;
     state.composer.body = value;
     state.composer.error = "";
     saveDraft(state.composer.kind, state.composer.replyTo, value, state.composer.boardId);
     rememberActiveComposer(state.composer);
+    updateDraftUi(value);
   }
 
   function persistComposerDraft() {
@@ -1277,6 +1415,25 @@
       state.composer.boardId,
     );
     rememberActiveComposer(state.composer);
+  }
+
+  function clearWriteFeedback({ render = true } = {}) {
+    clearTimeout(state.feedbackTimer);
+    state.feedbackTimer = 0;
+    state.writeFeedback = null;
+    if (render) scheduleRender({ force: true });
+  }
+
+  function showWriteFeedback(composer, postId) {
+    clearWriteFeedback({ render: false });
+    state.writeFeedback = {
+      boardId: composer.boardId,
+      kind: composer.kind,
+      postId,
+      replyTo: composer.replyTo,
+      message: composer.kind === "reply" ? "Odpověď odeslána." : "Příspěvek odeslán.",
+    };
+    state.feedbackTimer = window.setTimeout(clearWriteFeedback, WRITE_FEEDBACK_MS);
   }
 
   async function waitForNative(probe, timeout, message) {
@@ -1468,6 +1625,7 @@
       forgetActiveComposer();
       state.composer = null;
       state.writeBusy = false;
+      showWriteFeedback(sent, result.postId);
       resetBoardAccumulator(result.model, result.pageHref);
       state.currentSignature = "";
       render({ force: true });
@@ -1613,11 +1771,24 @@
             state.composer.ambiguous,
           ].join(":")
         : "",
+      state.writeFeedback
+        ? [
+            state.writeFeedback.boardId,
+            state.writeFeedback.postId,
+            state.writeFeedback.replyTo,
+            state.writeFeedback.message,
+          ].join(":")
+        : "",
     ].join("|");
   }
 
   function fullButton() {
-    return `<button class="full-link" type="button" data-action="full">Plná verze</button>`;
+    return `
+      <button class="full-link" type="button" data-action="full">
+        <span class="full-label--long">Plná verze</span>
+        <span class="full-label--short" aria-hidden="true">Plná</span>
+      </button>
+    `;
   }
 
   function favoritesMarkup(clubs) {
@@ -1652,11 +1823,35 @@
   function boardMarkup(board) {
     const replyingTo = state.composer?.kind === "reply" ? state.composer.replyTo : "";
     const newComposer = state.composer?.kind === "new" ? composerMarkup() : "";
+    const feedback = state.writeFeedback?.boardId === currentBoardId()
+      ? state.writeFeedback
+      : null;
+    const feedbackMarkup = feedback
+      ? `
+        <div class="write-feedback" role="status">
+          <span>${escapeHtml(feedback.message)}</span>
+          <button
+            class="write-feedback-dismiss"
+            type="button"
+            data-action="dismiss-feedback"
+            aria-label="Skrýt potvrzení"
+          >×</button>
+        </div>
+      `
+      : "";
     const posts = board.posts.length
       ? board.posts.map((post) => {
         const replyTarget = replyingTo === post.id;
+        const justSent = feedback?.postId === post.id;
+        const replyContext = feedback?.replyTo === post.id;
+        const postClasses = [
+          "post",
+          replyTarget ? "post--reply-target" : "",
+          justSent ? "post--just-sent" : "",
+          replyContext ? "post--reply-context" : "",
+        ].filter(Boolean).join(" ");
         return `
-          <article class="post${replyTarget ? " post--reply-target" : ""}" data-bokoun-post-id="${escapeHtml(post.id)}">
+          <article class="${postClasses}" data-bokoun-post-id="${escapeHtml(post.id)}">
             <header class="post-header">
               <span class="post-author">${escapeHtml(post.author)}</span>
               <time class="post-date" ${post.datetime ? `datetime="${escapeHtml(post.datetime)}"` : ""}>${escapeHtml(post.date)}</time>
@@ -1695,6 +1890,7 @@
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
         ${fullButton()}
       </header>
+      ${feedbackMarkup}
       ${newComposer}
       <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
       <footer class="board-tail">${tailState}${newest}</footer>
@@ -1716,6 +1912,7 @@
     const inspect = composer.ambiguous
       ? '<button class="composer-action" type="button" data-action="inspect-write">Zkontrolovat plnou verzi</button>'
       : "";
+    const hasDraft = Boolean(composer.body);
 
     return `
       <section
@@ -1737,6 +1934,17 @@
             ${disabled ? "disabled" : ""}
           >${escapeHtml(composer.body)}</textarea>
           ${error}
+          <div class="composer-draft">
+            <span class="draft-status" role="status" aria-live="polite" data-draft-status>
+              ${hasDraft ? "Koncept uložen v zařízení" : "Koncept se ukládá automaticky"}
+            </span>
+            <button
+              class="draft-discard"
+              type="button"
+              data-action="discard-draft"
+              ${hasDraft ? "" : "hidden"}
+            >Zahodit koncept</button>
+          </div>
           <div class="composer-actions">
             ${inspect}
             <button class="composer-action" type="button" data-action="cancel-compose" ${busy ? "disabled" : ""}>Zrušit</button>
@@ -1754,6 +1962,8 @@
     state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
     state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
     state.shadow.querySelector("[data-action='cancel-compose']")?.addEventListener("click", closeComposer);
+    state.shadow.querySelector("[data-action='discard-draft']")?.addEventListener("click", discardComposerDraft);
+    state.shadow.querySelector("[data-action='dismiss-feedback']")?.addEventListener("click", clearWriteFeedback);
     state.shadow.querySelector("[data-action='inspect-write']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='load-older']")?.addEventListener("click", loadOlderPosts);
     state.shadow.querySelector("[data-action='newest']")?.addEventListener("click", () => {

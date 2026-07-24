@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: inline Markdown writing pre-alpha with endless loading (`0.3.1`).
+> Status: polished inline Markdown writing pre-alpha with endless loading (`0.3.2`).
 
 ## Install the first prototype
 
@@ -19,7 +19,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.3.1` prototype adds explicit Markdown-only new posts and replies through
+The `0.3.2` prototype adds explicit Markdown-only new posts and replies through
 Kapybara's hidden native Lexical composer. It never calls GraphQL directly and
 never stores credentials or mirrors read posts. Only explicit unsent drafts are
 kept locally on the device. Unsupported routes and initialization failures
@@ -38,6 +38,10 @@ Current prototype boundaries:
   that post while surrounding posts dim, but the board remains scrollable;
 - half-written posts and replies reopen in the same place after navigation or a
   reload; Cancel closes the editor but keeps its draft locally;
+- the editor reports when a draft is saved and offers a separate
+  **Zahodit koncept** action for intentional deletion;
+- successful sends show a temporary confirmation and briefly highlight the new
+  post plus its reply target;
 - native Kapybara validates and submits; Bokoun never handles auth headers;
 - an ambiguous submission is never retried automatically;
 - automatic userscript updates are intentionally disabled while this repository
@@ -499,7 +503,8 @@ Exit condition: a post and a reply can be safely created in
 `nepotrebny_pokus`, with no rich editor visible.
 
 Implemented in `0.3.0`, with inline, reload-restoring composers added in
-`0.3.1`. The bridge temporarily renders native Kapybara under
+`0.3.1` and draft/send feedback polished in `0.3.2`. The bridge temporarily
+renders native Kapybara under
 Bokoun's opaque full-screen shell so its Lexical editor can accept real browser
 editing commands without flashing the rich composer. New posts appear above the
 board and replies inside their target post, with local draft and active-composer
@@ -554,7 +559,8 @@ Every functional milestone should cover:
 | Compose while reading | Board stays scrollable; other posts dim for a reply |
 | Reload or leave while composing | Editor and text reopen in the same place |
 | Cancel reply | Editor closes; draft remains available when reopened |
-| Send reply | One post created, clear success/error |
+| Discard draft | Draft is deleted and does not return |
+| Send reply | One post created, clear success and reply-context highlight |
 | Auth expires | Full native login restored |
 | Unknown route | Full Kapybara opens |
 | Disable Bokoun | Native page returns without reload loop |

@@ -9,7 +9,7 @@ const source = fs.readFileSync(scriptPath, "utf8");
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.3\.1/);
+  assert.match(source, /@version\s+0\.3\.2/);
 });
 
 test("older pages use only the authenticated same-origin HTML route", () => {
@@ -102,4 +102,21 @@ test("composers stay in the board flow and dim non-target posts while replying",
   assert.match(source, /\$\{newComposer\}\s+<section class="posts/);
   assert.doesNotMatch(source, /composer-backdrop/);
   assert.doesNotMatch(source, /aria-modal="true"/);
+});
+
+test("writing UX exposes saved drafts, explicit discard, and success context", () => {
+  assert.match(source, /Koncept uložen v zařízení/);
+  assert.match(source, /data-action="discard-draft"/);
+  assert.match(source, /function discardComposerDraft/);
+  assert.match(source, /function showWriteFeedback/);
+  assert.match(source, /Odpověď odeslána\./);
+  assert.match(source, /post--just-sent/);
+  assert.match(source, /post--reply-context/);
+  assert.match(source, /data-action="dismiss-feedback"/);
+});
+
+test("narrow board headers preserve more room for the title", () => {
+  assert.match(source, /@media \(max-width: 420px\)/);
+  assert.match(source, /full-label--short/);
+  assert.match(source, /<span class="full-label--short" aria-hidden="true">Plná<\/span>/);
 });
