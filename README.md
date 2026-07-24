@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: first read-only userscript prototype (`0.1.1`).
+> Status: read-only pre-alpha with endless loading (`0.2.0`).
 
 ## Install the first prototype
 
@@ -19,15 +19,19 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.1.1` prototype is intentionally read-only. It never calls GraphQL,
+The `0.2.0` prototype is intentionally read-only. It never calls GraphQL,
 never sends a post and does not copy credentials or private content into its
 storage. Unsupported routes and initialization failures restore normal
 Kapybara automatically.
 
 Current prototype boundaries:
 
-- it shows the Favorites rows and posts already rendered by native Kapybara;
-- it does not yet request older pages or implement infinite loading;
+- it shows Favorites and the first board page rendered by native Kapybara;
+- approaching the bottom loads older 50-post pages through Kapybara's
+  authenticated same-origin HTML route;
+- loaded pages and sanitized post models live in memory only and disappear on
+  a real page reload;
+- duplicate boundary posts are removed by `data-post-id`;
 - it does not yet include reply/new-post controls;
 - automatic userscript updates are intentionally disabled while this repository
   remains private; install a newer file manually when the version changes.
@@ -337,7 +341,7 @@ Back must mean "return to where I was," not merely "load the previous URL."
 
 ### Endless reading and native handoff
 
-The next read-only milestone replaces visible page controls with native-backed
+Implemented in `0.2.0`: visible page controls are replaced by native-backed
 endless loading:
 
 1. When Bokoun approaches the bottom of its post list, it asks hidden

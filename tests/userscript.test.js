@@ -9,11 +9,15 @@ const source = fs.readFileSync(scriptPath, "utf8");
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.1\.1/);
+  assert.match(source, /@version\s+0\.2\.0/);
 });
 
-test("first prototype is read-only and has no direct network transport", () => {
-  assert.doesNotMatch(source, /\bfetch\s*\(/);
+test("older pages use only the authenticated same-origin HTML route", () => {
+  assert.match(source, /fetch\(targetHref/);
+  assert.match(source, /credentials: "same-origin"/);
+  assert.match(source, /headers: \{ Accept: "text\/html" \}/);
+  assert.match(source, /url\.origin !== location\.origin/);
+  assert.match(source, /url\.pathname !== location\.pathname/);
   assert.doesNotMatch(source, /\bXMLHttpRequest\b/);
   assert.doesNotMatch(source, /\bCreatePost\b/);
   assert.doesNotMatch(source, /okapi\.okoun\.cz/);
@@ -34,8 +38,24 @@ test("failure and full-version paths reveal native Kapybara", () => {
 test("temporary full mode always provides a visible route back to Bokoun", () => {
   assert.match(source, /const RETURN_HOST_ID = "bokoun-return"/);
   assert.match(source, /function showReturnControl/);
+  assert.match(source, /function returnToBokoun/);
   assert.match(source, /aria-label="Zpět do Bokouna"/);
-  assert.match(source, /sessionStorage\.removeItem\(SESSION_DISABLED_KEY\);\s*location\.reload\(\)/);
+  assert.match(source, /state\.nativeMode = false/);
+});
+
+test("endless loading is single-flight, deduplicated, and recoverable", () => {
+  assert.match(source, /state\.boardLoading/);
+  assert.match(source, /state\.boardPostIndex\.get\(post\.id\)/);
+  assert.match(source, /data-action="load-older"/);
+  assert.match(source, /Starší příspěvky se nepodařilo načíst/);
+  assert.match(source, /data-action="newest"/);
+});
+
+test("full/native handoff follows the visible post without reloading", () => {
+  assert.match(source, /function captureBokounAnchor/);
+  assert.match(source, /function captureNativeAnchor/);
+  assert.match(source, /data-sveltekit-replacestate/);
+  assert.match(source, /state\.boardPostPages\.get\(postId\)/);
 });
 
 test("scroll restoration happens after the lite content is rendered", () => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.1.1
+// @version      0.2.0
 // @description  Minimal read-only mobile interface for Kapybara/Okoun
 // @author       BeeChan
 // @match        https://kapybara.okoun.cz/*
@@ -14,11 +14,13 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.1";
+  const VERSION = "0.2.0";
   const HOST_ID = "bokoun-host";
   const RETURN_HOST_ID = "bokoun-return";
   const BOOT_TIMEOUT_MS = 10_000;
+  const PAGE_LOAD_TIMEOUT_MS = 15_000;
   const ROUTE_POLL_MS = 150;
+  const OLDER_TRIGGER_PX = 900;
   const MOBILE_QUERY = "(max-width: 760px)";
   const SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
   const SCROLL_KEY = "bokoun.scroll.v1";
@@ -40,6 +42,7 @@
     postDate: ".post-header .date",
     postReplyReference: ".reply-ref",
     postBody: ".body .markdown, .body",
+    olderPosts: "a[aria-label^='Starší příspěvky'][href]",
   });
 
   const ICONS = Object.freeze({
@@ -351,6 +354,63 @@
       line-height: 1.45;
     }
 
+    .board-tail {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      min-height: 84px;
+      padding: 18px 16px max(28px, env(safe-area-inset-bottom));
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .tail-action {
+      min-width: 132px;
+      min-height: 42px;
+      padding: 0 16px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tail-action--accent {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .tail-loading {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      min-height: 42px;
+    }
+
+    .tail-loading::before {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      content: "";
+      animation: bokoun-spin 0.8s linear infinite;
+    }
+
+    .tail-error {
+      color: #9b2c2c;
+    }
+
+    .tail-end {
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+    }
+
     .empty {
       display: grid;
       min-height: 45vh;
@@ -431,6 +491,21 @@
     routeTimer: 0,
     saveTimer: 0,
     observer: null,
+    observing: false,
+    nativeMode: false,
+    pendingAnchor: null,
+    boardKey: "",
+    boardTitle: "",
+    boardPosts: [],
+    boardPostIndex: new Map(),
+    boardPostPages: new Map(),
+    boardLoadedPages: new Set(),
+    boardNextHref: "",
+    boardLoading: false,
+    boardEnd: false,
+    boardError: "",
+    boardLoadAbort: null,
+    boardAutoCooldownUntil: 0,
   };
 
   const gmGet = typeof GM_getValue === "function"
@@ -552,7 +627,7 @@
     state.host = host;
     state.shadow = shadow;
     state.scroller = shadow.querySelector(".app");
-    state.scroller.addEventListener("scroll", scheduleScrollSave, { passive: true });
+    state.scroller.addEventListener("scroll", handleBokounScroll, { passive: true });
     state.active = true;
     document.documentElement.dataset.bokounActive = "true";
     delete document.documentElement.dataset.bokounBooting;
@@ -577,13 +652,27 @@
       clearTimeout(state.renderTimer);
       clearInterval(state.routeTimer);
       state.observer?.disconnect();
+      state.observer = null;
+      state.observing = false;
     }
   }
 
-  function openFullKapybara() {
+  async function openFullKapybara() {
+    const anchor = captureBokounAnchor();
     sessionStorage.setItem(SESSION_DISABLED_KEY, "1");
-    revealNative({ stop: true });
+    state.nativeMode = true;
+
+    if (anchor?.pageHref) {
+      try {
+        await navigateNativeRoute(anchor.pageHref, anchor.postId);
+      } catch (error) {
+        console.warn(`[Bokoun ${VERSION}] Could not align the native page; using the closest loaded position.`, error?.name || "Error");
+      }
+    }
+
+    revealNative();
     showReturnControl();
+    restoreNativeAnchor(anchor);
   }
 
   function showReturnControl() {
@@ -625,19 +714,13 @@
       </style>
       <button type="button" aria-label="Zpět do Bokouna" title="Zpět do Bokouna">B</button>
     `;
-    shadow.querySelector("button").addEventListener("click", () => {
-      sessionStorage.removeItem(SESSION_DISABLED_KEY);
-      location.reload();
-    });
+    shadow.querySelector("button").addEventListener("click", returnToBokoun);
     document.body.append(host);
   }
 
   function registerMenus() {
     if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") {
-      gmMenu("Bokoun: zapnout v tomto panelu", () => {
-        sessionStorage.removeItem(SESSION_DISABLED_KEY);
-        location.reload();
-      });
+      gmMenu("Bokoun: zapnout v tomto panelu", returnToBokoun);
     } else {
       gmMenu("Bokoun: otevřít plnou Kapybaru", openFullKapybara);
     }
@@ -673,6 +756,11 @@
     state.saveTimer = window.setTimeout(saveScroll, 100);
   }
 
+  function handleBokounScroll() {
+    scheduleScrollSave();
+    maybeLoadOlder();
+  }
+
   function restoreScroll(key, fallback = 0) {
     const y = getScrollMap()[key] ?? fallback;
     requestAnimationFrame(() => {
@@ -703,6 +791,7 @@
   }
 
   function normalizeHref(value) {
+    if (!value) return "";
     try {
       const url = new URL(value, location.origin);
       return url.origin === location.origin ? `${url.pathname}${url.search}${url.hash}` : url.href;
@@ -830,10 +919,10 @@
     }).format(date);
   }
 
-  function readBoard() {
-    const title = text(document.querySelector(SELECTORS.boardTitle))
+  function readBoard(root = document, pageHref = routeKey()) {
+    const title = text(root.querySelector(SELECTORS.boardTitle))
       || decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "Klub");
-    const posts = [...document.querySelectorAll(SELECTORS.posts)].map((post) => {
+    const posts = [...root.querySelectorAll(SELECTORS.posts)].map((post) => {
       const body = post.querySelector(SELECTORS.postBody);
       return {
         id: post.getAttribute("data-post-id") || "",
@@ -842,9 +931,162 @@
         datetime: post.querySelector(SELECTORS.postTime)?.getAttribute("datetime") || "",
         replyReference: text(post.querySelector(SELECTORS.postReplyReference)),
         bodyHtml: sanitizeHtml(body?.innerHTML || ""),
+        pageHref: normalizeHref(pageHref),
       };
-    });
-    return { title, posts };
+    }).filter((post) => post.id);
+    const olderLinks = [...root.querySelectorAll(SELECTORS.olderPosts)];
+    const nextOlderHref = normalizeHref(olderLinks.at(-1)?.getAttribute("href") || "");
+    return { title, posts, nextOlderHref };
+  }
+
+  function resetBoardAccumulator(model, pageHref) {
+    state.boardLoadAbort?.abort();
+    state.boardLoadAbort = null;
+    state.boardKey = location.pathname;
+    state.boardTitle = model.title;
+    state.boardPosts = [];
+    state.boardPostIndex = new Map();
+    state.boardPostPages = new Map();
+    state.boardLoadedPages = new Set();
+    state.boardNextHref = "";
+    state.boardLoading = false;
+    state.boardEnd = false;
+    state.boardError = "";
+    state.boardAutoCooldownUntil = 0;
+    mergeBoardPage(model, pageHref, { setNext: true });
+  }
+
+  function mergeBoardPage(model, pageHref, { setNext = false } = {}) {
+    const normalizedPage = normalizeHref(pageHref);
+    let added = 0;
+
+    if (normalizedPage) state.boardLoadedPages.add(normalizedPage);
+    if (model.title) state.boardTitle = model.title;
+
+    for (const post of model.posts) {
+      const index = state.boardPostIndex.get(post.id);
+      if (index === undefined) {
+        const page = normalizedPage || post.pageHref || routeKey();
+        state.boardPostIndex.set(post.id, state.boardPosts.length);
+        state.boardPostPages.set(post.id, page);
+        state.boardPosts.push({ ...post, pageHref: page });
+        added += 1;
+      } else {
+        const page = state.boardPostPages.get(post.id) || normalizedPage || post.pageHref;
+        state.boardPosts[index] = { ...post, pageHref: page };
+      }
+    }
+
+    if (setNext) {
+      state.boardNextHref = model.nextOlderHref;
+      state.boardEnd = !model.nextOlderHref;
+    }
+    return added;
+  }
+
+  function boardViewModel() {
+    return {
+      title: state.boardTitle,
+      posts: state.boardPosts,
+      nextOlderHref: state.boardNextHref,
+      loading: state.boardLoading,
+      end: state.boardEnd,
+      error: state.boardError,
+      loadedPageCount: state.boardLoadedPages.size,
+    };
+  }
+
+  function validatedOlderPage(value) {
+    if (!value) return null;
+    try {
+      const url = new URL(value, location.origin);
+      if (url.origin !== location.origin) return null;
+      if (url.pathname !== location.pathname) return null;
+      if (!url.searchParams.has("f")) return null;
+      return url;
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadOlderPosts() {
+    if (
+      state.nativeMode
+      || state.boardLoading
+      || state.boardEnd
+      || routeType() !== "board"
+    ) return;
+
+    const target = validatedOlderPage(state.boardNextHref);
+    if (!target) {
+      state.boardEnd = true;
+      state.boardNextHref = "";
+      scheduleRender({ force: true });
+      return;
+    }
+
+    const targetHref = `${target.pathname}${target.search}`;
+    if (state.boardLoadedPages.has(targetHref)) {
+      state.boardEnd = true;
+      state.boardNextHref = "";
+      scheduleRender({ force: true });
+      return;
+    }
+
+    state.boardLoading = true;
+    state.boardError = "";
+    state.boardLoadAbort = new AbortController();
+    const timeout = window.setTimeout(() => state.boardLoadAbort?.abort(), PAGE_LOAD_TIMEOUT_MS);
+    scheduleRender({ force: true });
+
+    try {
+      const response = await fetch(targetHref, {
+        credentials: "same-origin",
+        headers: { Accept: "text/html" },
+        signal: state.boardLoadAbort.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const html = await response.text();
+      const page = new DOMParser().parseFromString(html, "text/html");
+      const model = readBoard(page, targetHref);
+      if (!model.posts.length || page.querySelector("#api-access-code")) {
+        throw new Error("Unexpected board page");
+      }
+
+      const added = mergeBoardPage(model, targetHref, { setNext: true });
+      if (added === 0) {
+        state.boardEnd = true;
+        state.boardNextHref = "";
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        state.boardError = "Starší příspěvky se nepodařilo načíst.";
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      state.boardLoading = false;
+      state.boardLoadAbort = null;
+      state.boardAutoCooldownUntil = Date.now() + 700;
+      scheduleRender({ force: true });
+    }
+  }
+
+  function maybeLoadOlder() {
+    if (
+      state.nativeMode
+      || routeType() !== "board"
+      || !state.scroller
+      || state.boardLoading
+      || state.boardEnd
+      || state.boardError
+      || Date.now() < state.boardAutoCooldownUntil
+    ) return;
+
+    const remaining = state.scroller.scrollHeight
+      - state.scroller.scrollTop
+      - state.scroller.clientHeight;
+    if (remaining <= OLDER_TRIGGER_PX) loadOlderPosts();
   }
 
   function escapeHtml(value) {
@@ -857,7 +1099,16 @@
     if (type === "favorites") {
       return `${routeKey()}|${model.length}|${model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")}`;
     }
-    return `${routeKey()}|${model.title}|${model.posts.map((post) => post.id).join(",")}`;
+    return [
+      location.pathname,
+      model.title,
+      model.posts.map((post) => post.id).join(","),
+      model.nextOlderHref,
+      model.loading,
+      model.end,
+      model.error,
+      model.loadedPageCount,
+    ].join("|");
   }
 
   function fullButton() {
@@ -906,6 +1157,22 @@
           </article>
         `).join("")
       : `<div class="empty">V tomto klubu zatím nejsou příspěvky.</div>`;
+    let tailState = "";
+    if (board.loading) {
+      tailState = '<div class="tail-loading" role="status">Načítám starší příspěvky…</div>';
+    } else if (board.error) {
+      tailState = `
+        <div class="tail-error" role="alert">${escapeHtml(board.error)}</div>
+        <button class="tail-action tail-action--accent" type="button" data-action="load-older">Zkusit znovu</button>
+      `;
+    } else if (board.end) {
+      tailState = '<div class="tail-end">Začátek klubu.</div>';
+    } else {
+      tailState = '<button class="tail-action" type="button" data-action="load-older">Načíst starší</button>';
+    }
+    const newest = board.loadedPageCount > 1
+      ? '<button class="tail-action tail-action--accent" type="button" data-action="newest">↑ Nejnovější</button>'
+      : "";
 
     return `
       <header class="topbar topbar--board">
@@ -914,12 +1181,17 @@
         ${fullButton()}
       </header>
       <section class="posts" aria-label="Příspěvky">${posts}</section>
+      <footer class="board-tail">${tailState}${newest}</footer>
     `;
   }
 
   function attachUiEvents() {
     state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
+    state.shadow.querySelector("[data-action='load-older']")?.addEventListener("click", loadOlderPosts);
+    state.shadow.querySelector("[data-action='newest']")?.addEventListener("click", () => {
+      state.scroller?.scrollTo({ top: 0, behavior: "smooth" });
+    });
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {
         event.preventDefault();
@@ -963,8 +1235,117 @@
     }
   }
 
+  function captureBokounAnchor() {
+    if (routeType() !== "board" || !state.scroller || !state.shadow) return null;
+    const scrollerRect = state.scroller.getBoundingClientRect();
+    const headerHeight = state.shadow.querySelector(".topbar--board")?.getBoundingClientRect().height || 0;
+    const visibleTop = scrollerRect.top + headerHeight;
+    const posts = [...state.shadow.querySelectorAll("[data-bokoun-post-id]")];
+    const post = posts.find((item) => item.getBoundingClientRect().bottom > visibleTop) || posts.at(-1);
+    if (!post) return null;
+
+    const postId = post.getAttribute("data-bokoun-post-id");
+    return {
+      postId,
+      offset: post.getBoundingClientRect().top - scrollerRect.top,
+      pageHref: state.boardPostPages.get(postId) || routeKey(),
+    };
+  }
+
+  function captureNativeAnchor() {
+    if (routeType() !== "board") return null;
+    const posts = [...document.querySelectorAll(SELECTORS.posts)];
+    const post = posts.find((item) => item.getBoundingClientRect().bottom > 0) || posts.at(-1);
+    if (!post) return null;
+    return {
+      postId: post.getAttribute("data-post-id"),
+      offset: post.getBoundingClientRect().top,
+      pageHref: routeKey(),
+    };
+  }
+
+  function nativePostById(postId) {
+    return [...document.querySelectorAll(SELECTORS.posts)]
+      .find((post) => post.getAttribute("data-post-id") === String(postId)) || null;
+  }
+
+  function restoreNativeAnchor(anchor) {
+    if (!anchor || routeType() !== "board") return;
+    const apply = () => {
+      const target = nativePostById(anchor.postId)
+        || [...document.querySelectorAll(SELECTORS.posts)].at(-1);
+      if (!target) return;
+      const delta = target.getBoundingClientRect().top - anchor.offset;
+      window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: "auto" });
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        apply();
+        window.setTimeout(apply, 250);
+      });
+    });
+  }
+
+  function restoreBokounAnchor(anchor) {
+    if (!anchor || !state.scroller || !state.shadow || routeType() !== "board") return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const posts = [...state.shadow.querySelectorAll("[data-bokoun-post-id]")];
+        const target = posts.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId))
+          || posts.at(-1);
+        if (!target || !state.scroller) return;
+        const scrollerRect = state.scroller.getBoundingClientRect();
+        const delta = target.getBoundingClientRect().top - scrollerRect.top - anchor.offset;
+        state.scroller.scrollTo({
+          top: Math.max(0, state.scroller.scrollTop + delta),
+          behavior: "auto",
+        });
+      });
+    });
+  }
+
+  async function navigateNativeRoute(href, postId) {
+    const target = new URL(href, location.origin);
+    if (target.origin !== location.origin || routeType(target.pathname) !== "board") {
+      throw new Error("Unsafe native route");
+    }
+    const targetKey = `${target.pathname}${target.search}`;
+    if (routeKey() === targetKey && (!postId || nativePostById(postId))) return;
+
+    const link = document.createElement("a");
+    link.href = target.href;
+    link.hidden = true;
+    link.setAttribute("data-sveltekit-replacestate", "");
+    document.body.append(link);
+    link.click();
+    window.setTimeout(() => link.remove(), 0);
+
+    const started = Date.now();
+    while (Date.now() - started < BOOT_TIMEOUT_MS) {
+      if (routeKey() === targetKey && nativeReady("board") && (!postId || nativePostById(postId))) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
+    }
+    throw new Error("Native route timeout");
+  }
+
+  async function returnToBokoun() {
+    const anchor = captureNativeAnchor();
+    sessionStorage.removeItem(SESSION_DISABLED_KEY);
+    document.getElementById(RETURN_HOST_ID)?.remove();
+    state.nativeMode = false;
+    state.disabled = false;
+
+    if (!isMobileEligible() || routeType() === "unsupported") return;
+    await waitForBody();
+    mountShell();
+    state.currentRouteKey = routeKey();
+    observeNative();
+    render({ force: true });
+    restoreBokounAnchor(anchor);
+  }
+
   function render({ force = false } = {}) {
-    if (state.disabled) return;
+    if (state.disabled || state.nativeMode) return;
     const type = routeType();
 
     if (type === "unsupported" || !isMobileEligible()) {
@@ -978,7 +1359,18 @@
     const previousKey = state.currentRouteKey;
     const key = routeKey();
     const previousY = state.scroller?.scrollTop || 0;
-    const model = type === "favorites" ? readFavorites() : readBoard();
+    let model;
+    if (type === "favorites") {
+      model = readFavorites();
+    } else {
+      const nativeModel = readBoard(document, key);
+      if (state.boardKey !== location.pathname) {
+        resetBoardAccumulator(nativeModel, key);
+      } else {
+        mergeBoardPage(nativeModel, key);
+      }
+      model = boardViewModel();
+    }
     const signature = signatureFor(type, model);
     if (!force && signature === state.currentSignature) return;
 
@@ -997,7 +1389,7 @@
   }
 
   function handleRouteChange() {
-    if (state.disabled) return;
+    if (state.disabled || state.nativeMode) return;
     const key = routeKey();
     if (key === state.currentRouteKey) return;
 
@@ -1017,11 +1409,13 @@
   }
 
   function observeNative() {
+    if (state.observing) return;
     state.observer = new MutationObserver(() => scheduleRender());
     state.observer.observe(document.body, { childList: true, subtree: true });
     state.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS);
     window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
     window.addEventListener("pagehide", saveScroll);
+    state.observing = true;
   }
 
   async function boot() {
