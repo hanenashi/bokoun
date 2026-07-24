@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: polished inline Markdown writing pre-alpha with endless loading (`0.3.2`).
+> Status: structured-data reading and inline Markdown writing pre-alpha (`0.4.0`).
 
 ## Install the first prototype
 
@@ -19,20 +19,25 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.3.2` prototype adds explicit Markdown-only new posts and replies through
-Kapybara's hidden native Lexical composer. It never calls GraphQL directly and
-never stores credentials or mirrors read posts. Only explicit unsent drafts are
-kept locally on the device. Unsupported routes and initialization failures
-restore normal Kapybara automatically.
+The `0.4.0` prototype reads Favorites, boards and older post pages from
+Kapybara's authenticated SvelteKit data transport, then normalizes them into
+Bokoun's own small view model. It still sends explicit Markdown-only posts and
+replies through Kapybara's hidden native Lexical composer. Bokoun never calls
+GraphQL directly, stores credentials or mirrors read posts. Only explicit
+unsent drafts are kept locally on the device. Unsupported routes and
+initialization failures restore normal Kapybara automatically.
 
 Current prototype boundaries:
 
-- it shows Favorites and the first board page rendered by native Kapybara;
-- approaching the bottom loads older 50-post pages through Kapybara's
-  authenticated same-origin HTML route;
+- it reads Favorites and boards from authenticated same-origin
+  `text/sveltekit-data` routes;
+- approaching the bottom loads older post batches through the same structured
+  transport;
+- if the structured contract or request fails, semantic DOM readers take over
+  automatically instead of leaving a blank interface;
 - loaded pages and sanitized post models live in memory only and disappear on
   a real page reload;
-- duplicate boundary posts are removed by `data-post-id`;
+- duplicate boundary posts are removed by normalized post ID;
 - the pencil in the board header opens a plain Markdown editor above the posts;
 - every displayed post has a small **Odpovědět** action; its editor opens inside
   that post while surrounding posts dim, but the board remains scrollable;
@@ -204,9 +209,8 @@ The SvelteKit data is backed by Okoun's existing GraphQL service:
 https://okapi.okoun.cz/graphql
 ```
 
-This means Bokoun does not need to scrape the visual post DOM forever. A DOM
-adapter can bootstrap the first version, while a structured-data adapter can
-replace it later.
+Since `0.4.0`, this structured transport is Bokoun's primary read adapter. The
+older semantic DOM adapter remains as a fail-open compatibility path.
 
 ### Writes
 
@@ -265,18 +269,17 @@ Kapybara page
     └── full-screen lite UI
 ```
 
-The UI and the data source must be separated from the beginning. A `BoardView`
-should consume normalized Bokoun post objects, not raw Kapybara elements. That
-allows the backing adapter to change later:
+The UI and the data source are separated. A `BoardView` consumes normalized
+Bokoun post objects, not raw Kapybara elements. The primary path is now:
 
 ```text
-native DOM -> normalized Bokoun model -> lite UI
+SvelteKit data -> normalized Bokoun model -> lite UI
 ```
 
-then:
+with a compatibility fallback:
 
 ```text
-SvelteKit data/GraphQL -> normalized Bokoun model -> same lite UI
+semantic native DOM -> normalized Bokoun model -> same lite UI
 ```
 
 ## How the first version works
@@ -285,21 +288,23 @@ SvelteKit data/GraphQL -> normalized Bokoun model -> same lite UI
 
 1. The userscript starts on `kapybara.okoun.cz`.
 2. It immediately hides page paint to prevent a flash of the full interface.
-3. Kapybara is allowed to complete authentication and route rendering.
-4. Bokoun recognizes supported routes.
+3. Kapybara is allowed to initialize its authenticated runtime.
+4. Bokoun recognizes supported routes and starts the structured request without
+   waiting for native post/Favorites selectors.
 5. The lite shell mounts in an isolated Shadow DOM.
-6. Native Kapybara remains hidden but available to the adapter.
+6. Native Kapybara remains hidden for read-state behavior, posting and fallback.
 
 The script must have a clear timeout. If Bokoun cannot initialize, it restores
 normal Kapybara automatically.
 
 ### Reading a board
 
-1. The adapter observes Kapybara's completed board render.
-2. Semantic post fields are normalized into Bokoun objects.
+1. The adapter fetches Kapybara's authenticated `__data.json` stream.
+2. SvelteKit chunks are defensively decoded and normalized into Bokoun objects.
 3. Bokoun renders its own list.
-4. Route changes or pagination update the normalized model.
+4. Route changes, periodic refreshes and pagination update the normalized model.
 5. Kapybara continues owning server synchronization and read-state behavior.
+6. A decode/request failure transparently selects the semantic DOM adapter.
 
 Post bodies must be treated as untrusted even when supplied as server-rendered
 HTML. Bokoun should apply a small explicit sanitization policy before inserting
@@ -308,7 +313,7 @@ HTML into its Shadow DOM.
 ### Opening Favorites
 
 1. Native Kapybara loads the authenticated Favorites route.
-2. The adapter extracts normalized club rows.
+2. Bokoun decodes the route's SvelteKit board list.
 3. Bokoun renders a compact list.
 4. Bokoun stores its own scroll position per history entry.
 5. Back restoration waits until the list is rendered and tall enough before
@@ -352,15 +357,15 @@ Back must mean "return to where I was," not merely "load the previous URL."
 
 ### Endless reading and native handoff
 
-Implemented in `0.2.0`: visible page controls are replaced by native-backed
-endless loading:
+Implemented in `0.2.0` and moved to structured reads in `0.4.0`: visible page
+controls are replaced by endless loading:
 
-1. When Bokoun approaches the bottom of its post list, it asks hidden
-   Kapybara to load the next older batch.
+1. When Bokoun approaches the bottom of its post list, it requests Kapybara's
+   next authenticated structured-data page.
 2. Only one batch may be in flight at a time.
-3. Newly rendered posts are normalized and deduplicated by `data-post-id`.
+3. Newly decoded posts are normalized and deduplicated by post ID.
 4. The list exposes small loading, end-of-history and retry states.
-5. No direct GraphQL pagination is introduced at this stage.
+5. No direct GraphQL pagination or credential handling is introduced.
 
 Switching interfaces must not discard the accumulated post window. Bokoun
 records the first fully visible post ID and its pixel offset, reveals the
@@ -522,6 +527,13 @@ in `nepotrebny_pokus` on 2026-07-25.
 Exit condition: native post and Favorites DOM can change without affecting the
 visible Bokoun UI.
 
+Implemented in `0.4.0`. Bokoun decodes newline-delimited SvelteKit data chunks,
+uses structured board/Favorites/pagination models by default, refreshes them
+periodically, reports the active adapter through `data-read-source`, and falls
+back to semantic DOM reads after a request or contract failure. Structured boot
+does not depend on the old native post/Favorites selectors. Synthetic fixtures
+exercise the transport without retaining private club content.
+
 ### Phase 4 — direct transport experiment
 
 - Document `CreatePost` input shape.
@@ -573,7 +585,7 @@ The first coding milestone should not touch GraphQL.
 
 1. Create a document-start userscript with an emergency disable switch.
 2. Let Kapybara boot normally but hide its paint.
-3. Normalize Favorites and board DOM through one adapter.
+3. Normalize Favorites and boards through one adapter.
 4. Render a plain Shadow DOM shell.
 5. Implement Bokoun-owned history and delayed scroll restoration.
 6. Test the complete read-only loop on Android.

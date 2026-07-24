@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.3.2
+// @version      0.4.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @match        https://kapybara.okoun.cz/*
@@ -14,7 +14,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.3.2";
+  const VERSION = "0.4.0";
   const HOST_ID = "bokoun-host";
   const RETURN_HOST_ID = "bokoun-return";
   const BOOT_TIMEOUT_MS = 10_000;
@@ -22,6 +22,7 @@
   const COMPOSER_TIMEOUT_MS = 8_000;
   const POST_CONFIRM_TIMEOUT_MS = 15_000;
   const WRITE_FEEDBACK_MS = 8_000;
+  const STRUCTURED_REFRESH_MS = 30_000;
   const ROUTE_POLL_MS = 150;
   const OLDER_TRIGGER_PX = 900;
   const MOBILE_QUERY = "(max-width: 760px)";
@@ -766,6 +767,10 @@
     boardError: "",
     boardLoadAbort: null,
     boardAutoCooldownUntil: 0,
+    boardStructuredReady: false,
+    structuredCache: new Map(),
+    structuredPending: new Map(),
+    structuredFailures: new Map(),
     composer: null,
     writeFeedback: null,
     writeBusy: false,
@@ -1073,11 +1078,7 @@
     return match ? Number.parseInt(match[0], 10) : 0;
   }
 
-  function relativeActivity(row) {
-    const nativeRelative = text(row.querySelector(SELECTORS.favoriteRelativeTime));
-    if (nativeRelative) return nativeRelative;
-
-    const datetime = row.querySelector(SELECTORS.favoriteTime)?.getAttribute("datetime");
+  function relativeActivityFromTimestamp(datetime) {
     if (!datetime) return "";
     const timestamp = Date.parse(datetime);
     if (!Number.isFinite(timestamp)) return "";
@@ -1090,7 +1091,15 @@
     return `před ${Math.floor(seconds / 86_400)} dny`;
   }
 
-  function readFavorites() {
+  function relativeActivity(row) {
+    const nativeRelative = text(row.querySelector(SELECTORS.favoriteRelativeTime));
+    if (nativeRelative) return nativeRelative;
+    return relativeActivityFromTimestamp(
+      row.querySelector(SELECTORS.favoriteTime)?.getAttribute("datetime"),
+    );
+  }
+
+  function readFavoritesFromDom() {
     return [...document.querySelectorAll(SELECTORS.favoriteRows)]
       .map((row) => ({
         href: normalizeHref(row.getAttribute("href")),
@@ -1099,6 +1108,246 @@
         activity: relativeActivity(row),
       }))
       .filter((club) => club.href && club.name);
+  }
+
+  function decodeSvelteDataValues(values) {
+    if (!Array.isArray(values) || !values.length) {
+      throw new Error("Invalid Svelte data values");
+    }
+
+    const hydrated = new Array(values.length);
+    const hasHydrated = new Set();
+    const special = new Map([
+      [-1, undefined],
+      [-2, undefined],
+      [-3, Number.NaN],
+      [-4, Number.POSITIVE_INFINITY],
+      [-5, Number.NEGATIVE_INFINITY],
+      [-6, -0],
+    ]);
+
+    const hydrate = (index) => {
+      if (special.has(index)) return special.get(index);
+      if (!Number.isInteger(index) || index < 0 || index >= values.length) {
+        throw new Error("Invalid Svelte data reference");
+      }
+      if (hasHydrated.has(index)) return hydrated[index];
+
+      const encoded = values[index];
+      if (encoded === null || typeof encoded !== "object") {
+        hasHydrated.add(index);
+        hydrated[index] = encoded;
+        return encoded;
+      }
+
+      if (Array.isArray(encoded) && typeof encoded[0] === "string") {
+        const tag = encoded[0];
+        let decoded;
+        if (tag === "Date") decoded = new Date(encoded[1]);
+        else if (tag === "BigInt") decoded = BigInt(encoded[1]);
+        else if (tag === "RegExp") decoded = new RegExp(encoded[1], encoded[2] || "");
+        else throw new Error(`Unsupported Svelte data type: ${tag}`);
+        hasHydrated.add(index);
+        hydrated[index] = decoded;
+        return decoded;
+      }
+
+      const decoded = Array.isArray(encoded) ? [] : Object.create(null);
+      hasHydrated.add(index);
+      hydrated[index] = decoded;
+
+      if (Array.isArray(encoded)) {
+        for (const reference of encoded) decoded.push(hydrate(reference));
+      } else {
+        for (const [key, reference] of Object.entries(encoded)) {
+          if (["__proto__", "constructor", "prototype"].includes(key)) continue;
+          decoded[key] = hydrate(reference);
+        }
+      }
+      return decoded;
+    };
+
+    return hydrate(0);
+  }
+
+  function decodeSvelteDataText(raw) {
+    const roots = [];
+    const lines = String(raw || "").split(/\r?\n/).filter(Boolean);
+    for (const line of lines) {
+      const packet = JSON.parse(line);
+      if (packet?.type === "chunk" && Array.isArray(packet.data)) {
+        roots.push(decodeSvelteDataValues(packet.data));
+      }
+    }
+    if (!roots.length) throw new Error("Svelte data contained no chunks");
+    return roots;
+  }
+
+  function formatPragueParts(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const parts = Object.create(null);
+    for (const part of new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Prague",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date)) {
+      if (part.type !== "literal") parts[part.type] = part.value;
+    }
+    return parts;
+  }
+
+  function formatPostTimestamp(value) {
+    const parts = formatPragueParts(value);
+    if (!parts) return "";
+    return `${Number(parts.day)}.${Number(parts.month)}.${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`;
+  }
+
+  function formatPaginationCursor(value) {
+    const parts = formatPragueParts(value);
+    if (!parts) return "";
+    return `${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}${parts.second}`;
+  }
+
+  function olderHrefFromPagination(pagination, pageHref) {
+    if (!pagination || pagination.isOldest) return "";
+    const boundary = pagination.olderBoundaries?.[0];
+    const cursor = formatPaginationCursor(boundary?.date);
+    if (!cursor) return "";
+    const url = new URL(pageHref, "https://kapybara.okoun.cz");
+    const query = new URLSearchParams();
+    query.set("f", cursor);
+    const threaded = url.searchParams.get("t");
+    if (threaded) query.set("t", threaded);
+    return `${url.pathname}?${query}`;
+  }
+
+  function normalizedStructuredPageHref(pageHref) {
+    const url = new URL(pageHref, "https://kapybara.okoun.cz");
+    return url.origin === "https://kapybara.okoun.cz"
+      ? `${url.pathname}${url.search}${url.hash}`
+      : "";
+  }
+
+  function boardModelFromSvelteRoots(
+    roots,
+    pageHref,
+    { sanitize = sanitizeHtml } = {},
+  ) {
+    const boardRoot = roots.find((root) => root?.board && typeof root.board === "object");
+    const pageRoot = roots
+      .filter((root) => Array.isArray(root?.posts) && root.pagination)
+      .at(-1);
+    if (!boardRoot?.board || !pageRoot || boardRoot.apiAccessRequired || pageRoot.postsError) {
+      throw new Error("Incomplete structured board data");
+    }
+
+    const posts = pageRoot.posts.map((post) => {
+      const parentAuthor = post?.parent?.author?.login;
+      const parentDate = formatPostTimestamp(post?.parent?.posted);
+      return {
+        id: String(post?.id || ""),
+        author: String(post?.author?.login || "neznámý"),
+        date: formatPostTimestamp(post?.posted),
+        datetime: typeof post?.posted === "string" ? post.posted : "",
+        replyReference: post?.parent
+          ? `Reakce na ${parentAuthor || "neznámý"}${parentDate ? `, ${parentDate}` : ""}`
+          : "",
+        bodyHtml: sanitize(typeof post?.htmlBody === "string" ? post.htmlBody : ""),
+        pageHref: normalizedStructuredPageHref(pageHref),
+      };
+    }).filter((post) => post.id);
+
+    return {
+      title: String(boardRoot.board.name || boardRoot.board.slug || "Klub"),
+      posts,
+      nextOlderHref: olderHrefFromPagination(pageRoot.pagination, pageHref),
+    };
+  }
+
+  function favoritesModelFromSvelteRoots(roots) {
+    const root = roots.filter((candidate) => Array.isArray(candidate?.boards)).at(-1);
+    if (!root || root.apiAccessRequired || root.error) {
+      throw new Error("Incomplete structured Favorites data");
+    }
+    return root.boards.map((board) => ({
+      href: `/boards/${encodeURIComponent(String(board?.slug || ""))}`,
+      name: String(board?.name || ""),
+      unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
+      activity: relativeActivityFromTimestamp(board?.lastPosted),
+    })).filter((club) => club.href !== "/boards/" && club.name);
+  }
+
+  function structuredDataUrl(pageHref) {
+    const url = new URL(pageHref, location.origin);
+    if (url.origin !== location.origin) throw new Error("Unsafe structured data URL");
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
+    url.searchParams.delete("bokoun");
+    url.hash = "";
+    return url;
+  }
+
+  async function fetchStructuredModel(type, pageHref, { signal } = {}) {
+    const response = await fetch(structuredDataUrl(pageHref), {
+      credentials: "same-origin",
+      headers: { Accept: "text/sveltekit-data" },
+      signal,
+    });
+    if (!response.ok || !response.headers.get("content-type")?.includes("text/sveltekit-data")) {
+      throw new Error(`Structured data HTTP ${response.status}`);
+    }
+    const roots = decodeSvelteDataText(await response.text());
+    const model = type === "favorites"
+      ? favoritesModelFromSvelteRoots(roots)
+      : boardModelFromSvelteRoots(roots, pageHref);
+    return { type, model, fetchedAt: Date.now() };
+  }
+
+  function structuredCacheKey(type, pageHref) {
+    return `${type}:${normalizeHref(pageHref)}`;
+  }
+
+  function cachedStructuredModel(type, pageHref) {
+    return state.structuredCache.get(structuredCacheKey(type, pageHref))?.model || null;
+  }
+
+  function primeStructuredModel(type, pageHref) {
+    const cacheKey = structuredCacheKey(type, pageHref);
+    const cached = state.structuredCache.get(cacheKey);
+    if (
+      (cached && Date.now() - cached.fetchedAt < STRUCTURED_REFRESH_MS)
+      || state.structuredPending.has(cacheKey)
+    ) return;
+    const lastFailure = state.structuredFailures.get(cacheKey) || 0;
+    if (Date.now() - lastFailure < 30_000) return;
+
+    const pending = fetchStructuredModel(type, pageHref)
+      .then((entry) => {
+        state.structuredCache.set(cacheKey, entry);
+        state.structuredFailures.delete(cacheKey);
+        state.currentSignature = "";
+        scheduleRender({ force: true });
+      })
+      .catch((error) => {
+        state.structuredFailures.set(cacheKey, Date.now());
+        console.warn(
+          `[Bokoun ${VERSION}] Structured ${type} data unavailable; using DOM fallback.`,
+          error?.name || "Error",
+        );
+      })
+      .finally(() => state.structuredPending.delete(cacheKey));
+    state.structuredPending.set(cacheKey, pending);
+  }
+
+  function invalidateStructuredModel(type, pageHref) {
+    const cacheKey = structuredCacheKey(type, pageHref);
+    state.structuredCache.delete(cacheKey);
+    state.structuredFailures.delete(cacheKey);
   }
 
   function sanitizeHtml(html) {
@@ -1185,7 +1434,7 @@
     }).format(date);
   }
 
-  function readBoard(root = document, pageHref = routeKey()) {
+  function readBoardFromDom(root = document, pageHref = routeKey()) {
     const title = text(root.querySelector(SELECTORS.boardTitle))
       || decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "Klub");
     const posts = [...root.querySelectorAll(SELECTORS.posts)].map((post) => {
@@ -1205,7 +1454,7 @@
     return { title, posts, nextOlderHref };
   }
 
-  function resetBoardAccumulator(model, pageHref) {
+  function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
     state.boardLoadAbort?.abort();
     state.boardLoadAbort = null;
     state.boardKey = location.pathname;
@@ -1219,6 +1468,7 @@
     state.boardEnd = false;
     state.boardError = "";
     state.boardAutoCooldownUntil = 0;
+    state.boardStructuredReady = structured;
     mergeBoardPage(model, pageHref, { setNext: true });
   }
 
@@ -1248,6 +1498,39 @@
       state.boardEnd = !model.nextOlderHref;
     }
     return added;
+  }
+
+  function refreshBoardNewestPage(model, pageHref) {
+    const normalizedPage = normalizeHref(pageHref);
+    const freshIds = new Set(model.posts.map((post) => post.id));
+    const older = state.boardPosts
+      .filter((post) => !freshIds.has(post.id))
+      .map((post) => ({
+        post,
+        pageHref: state.boardPostPages.get(post.id) || post.pageHref,
+      }));
+
+    state.boardPosts = [];
+    state.boardPostIndex = new Map();
+    state.boardPostPages = new Map();
+    if (normalizedPage) state.boardLoadedPages.add(normalizedPage);
+    if (model.title) state.boardTitle = model.title;
+
+    for (const post of model.posts) {
+      state.boardPostIndex.set(post.id, state.boardPosts.length);
+      state.boardPostPages.set(post.id, normalizedPage || post.pageHref);
+      state.boardPosts.push({ ...post, pageHref: normalizedPage || post.pageHref });
+    }
+    for (const { post, pageHref: olderPageHref } of older) {
+      state.boardPostIndex.set(post.id, state.boardPosts.length);
+      state.boardPostPages.set(post.id, olderPageHref);
+      state.boardPosts.push(post);
+    }
+
+    if (!state.boardStructuredReady || state.boardLoadedPages.size <= 1) {
+      state.boardNextHref = model.nextOlderHref;
+      state.boardEnd = !model.nextOlderHref;
+    }
   }
 
   function boardViewModel() {
@@ -1580,7 +1863,7 @@
       const confirmation = await waitForCreatedPost(beforeIds);
       if (!confirmation) throw new Error("Submitted post could not be confirmed");
 
-      const model = readBoard(confirmation.root, confirmation.pageHref);
+      const model = readBoardFromDom(confirmation.root, confirmation.pageHref);
       const postId = confirmation.created.getAttribute("data-post-id") || "";
       if (!postId || !model.posts.some((post) => post.id === postId)) {
         throw new Error("Confirmed post could not be read");
@@ -1626,6 +1909,7 @@
       state.composer = null;
       state.writeBusy = false;
       showWriteFeedback(sent, result.postId);
+      invalidateStructuredModel("board", result.pageHref);
       resetBoardAccumulator(result.model, result.pageHref);
       state.currentSignature = "";
       render({ force: true });
@@ -1694,18 +1978,28 @@
     scheduleRender({ force: true });
 
     try {
-      const response = await fetch(targetHref, {
-        credentials: "same-origin",
-        headers: { Accept: "text/html" },
-        signal: state.boardLoadAbort.signal,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      let model;
+      try {
+        const entry = await fetchStructuredModel("board", targetHref, {
+          signal: state.boardLoadAbort.signal,
+        });
+        model = entry.model;
+        state.structuredCache.set(structuredCacheKey("board", targetHref), entry);
+      } catch (structuredError) {
+        if (structuredError?.name === "AbortError") throw structuredError;
+        const response = await fetch(targetHref, {
+          credentials: "same-origin",
+          headers: { Accept: "text/html" },
+          signal: state.boardLoadAbort.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const html = await response.text();
-      const page = new DOMParser().parseFromString(html, "text/html");
-      const model = readBoard(page, targetHref);
-      if (!model.posts.length || page.querySelector("#api-access-code")) {
-        throw new Error("Unexpected board page");
+        const html = await response.text();
+        const page = new DOMParser().parseFromString(html, "text/html");
+        model = readBoardFromDom(page, targetHref);
+        if (!model.posts.length || page.querySelector("#api-access-code")) {
+          throw new Error("Unexpected board page");
+        }
       }
 
       const added = mergeBoardPage(model, targetHref, { setNext: true });
@@ -2137,21 +2431,38 @@
       return;
     }
 
-    if (!nativeReady(type)) return;
     if (!state.host?.isConnected) mountShell();
 
     const previousKey = state.currentRouteKey;
     const key = routeKey();
+    primeStructuredModel(type, key);
+    const structuredRouteModel = cachedStructuredModel(type, key);
+    if (!structuredRouteModel && !nativeReady(type)) return;
     const previousY = state.scroller?.scrollTop || 0;
     let model;
+    let readSource = "dom";
     if (type === "favorites") {
-      model = readFavorites();
+      model = structuredRouteModel;
+      if (model) readSource = "structured";
+      else model = readFavoritesFromDom();
     } else {
-      const nativeModel = readBoard(document, key);
+      const structuredModel = structuredRouteModel;
+      const nativeModel = structuredModel || readBoardFromDom(document, key);
+      const structured = Boolean(structuredModel);
+      if (structured) readSource = "structured";
       if (state.boardKey !== location.pathname) {
-        resetBoardAccumulator(nativeModel, key);
+        resetBoardAccumulator(nativeModel, key, { structured });
+      } else if (
+        structured
+        && !new URL(key, location.origin).searchParams.has("f")
+      ) {
+        refreshBoardNewestPage(nativeModel, key);
+        state.boardStructuredReady = true;
       } else {
-        mergeBoardPage(nativeModel, key);
+        mergeBoardPage(nativeModel, key, {
+          setNext: structured && !state.boardStructuredReady,
+        });
+        if (structured) state.boardStructuredReady = true;
       }
       restoreActiveComposer();
       model = boardViewModel();
@@ -2161,6 +2472,7 @@
 
     state.currentRouteKey = key;
     state.currentSignature = signature;
+    state.host.dataset.readSource = readSource;
     const inner = state.shadow.querySelector(".app-inner");
     inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
     attachUiEvents();
@@ -2176,7 +2488,11 @@
   function handleRouteChange() {
     if (state.disabled || state.nativeMode) return;
     const key = routeKey();
-    if (key === state.currentRouteKey) return;
+    if (key === state.currentRouteKey) {
+      const type = routeType();
+      if (type !== "unsupported") primeStructuredModel(type, key);
+      return;
+    }
 
     saveScroll();
     state.currentSignature = "";
@@ -2230,11 +2546,28 @@
     render({ force: true });
 
     state.bootTimer = window.setTimeout(() => {
-      if (!nativeReady(routeType())) {
+      const type = routeType();
+      if (!nativeReady(type) && !cachedStructuredModel(type, routeKey())) {
         console.warn(`[Bokoun ${VERSION}] Native page was not ready; restored full Kapybara.`);
         revealNative({ stop: true });
       }
     }, BOOT_TIMEOUT_MS);
+  }
+
+  if (
+    typeof module === "object"
+    && module?.exports
+    && typeof process === "object"
+    && process?.versions?.node
+  ) {
+    module.exports = {
+      boardModelFromSvelteRoots,
+      decodeSvelteDataText,
+      favoritesModelFromSvelteRoots,
+      formatPaginationCursor,
+      olderHrefFromPagination,
+    };
+    return;
   }
 
   waitForDocumentElement().then(() => {

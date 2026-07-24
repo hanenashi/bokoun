@@ -5,14 +5,19 @@ const test = require("node:test");
 
 const scriptPath = path.join(__dirname, "..", "bokoun.user.js");
 const source = fs.readFileSync(scriptPath, "utf8");
+const structured = require(scriptPath);
+
+function fixture(name) {
+  return fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");
+}
 
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.3\.2/);
+  assert.match(source, /@version\s+0\.4\.0/);
 });
 
-test("older pages use only the authenticated same-origin HTML route", () => {
+test("older-page fallback stays authenticated and same-origin", () => {
   assert.match(source, /fetch\(targetHref/);
   assert.match(source, /credentials: "same-origin"/);
   assert.match(source, /headers: \{ Accept: "text\/html" \}/);
@@ -119,4 +124,50 @@ test("narrow board headers preserve more room for the title", () => {
   assert.match(source, /@media \(max-width: 420px\)/);
   assert.match(source, /full-label--short/);
   assert.match(source, /<span class="full-label--short" aria-hidden="true">Plná<\/span>/);
+});
+
+test("decodes a sanitized streamed SvelteKit board contract", () => {
+  const roots = structured.decodeSvelteDataText(fixture("board.svelte-data.ndjson"));
+  const model = structured.boardModelFromSvelteRoots(
+    roots,
+    "/boards/fixture-board",
+    { sanitize: (html) => html },
+  );
+
+  assert.equal(model.title, "Fixture Board");
+  assert.equal(model.posts.length, 1);
+  assert.deepEqual(model.posts[0], {
+    id: "1001",
+    author: "fixture-user",
+    date: "25.7.2026 12:00:00",
+    datetime: "2026-07-25T10:00:00.000Z",
+    replyReference: "Reakce na parent-user, 25.7.2026 11:00:00",
+    bodyHtml: "<p>Fixture <strong>body</strong></p>",
+    pageHref: "/boards/fixture-board",
+  });
+  assert.equal(
+    model.nextOlderHref,
+    "/boards/fixture-board?f=20260724-120000",
+  );
+});
+
+test("decodes a sanitized streamed SvelteKit Favorites contract", () => {
+  const roots = structured.decodeSvelteDataText(fixture("favorites.svelte-data.ndjson"));
+  const model = structured.favoritesModelFromSvelteRoots(roots);
+
+  assert.equal(model.length, 1);
+  assert.equal(model[0].href, "/boards/fixture-club");
+  assert.equal(model[0].name, "Fixture Club");
+  assert.equal(model[0].unread, 3);
+  assert.match(model[0].activity, /^před \d+ dny$/);
+});
+
+test("structured reads are primary and retain an explicit DOM fallback", () => {
+  assert.match(source, /headers: \{ Accept: "text\/sveltekit-data" \}/);
+  assert.match(source, /cachedStructuredModel\(type, key\)/);
+  assert.match(source, /if \(!structuredRouteModel && !nativeReady\(type\)\) return/);
+  assert.match(source, /!nativeReady\(type\) && !cachedStructuredModel\(type, routeKey\(\)\)/);
+  assert.match(source, /else model = readFavoritesFromDom\(\)/);
+  assert.match(source, /structuredModel \|\| readBoardFromDom\(document, key\)/);
+  assert.match(source, /Structured \$\{type\} data unavailable; using DOM fallback/);
 });
