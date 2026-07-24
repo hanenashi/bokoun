@@ -9,7 +9,7 @@ const source = fs.readFileSync(scriptPath, "utf8");
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.3\.0/);
+  assert.match(source, /@version\s+0\.3\.1/);
 });
 
 test("older pages use only the authenticated same-origin HTML route", () => {
@@ -79,7 +79,11 @@ test("simple writing uses hidden native Kapybara composers only", () => {
 
 test("composer preserves drafts and prevents ambiguous retries", () => {
   assert.match(source, /const DRAFTS_KEY = "bokoun\.drafts\.v1"/);
-  assert.match(source, /saveDraft\(state\.composer\.kind, state\.composer\.replyTo, value\)/);
+  assert.match(source, /const ACTIVE_COMPOSER_KEY = "bokoun\.active-composer\.v1"/);
+  assert.match(source, /saveDraft\(state\.composer\.kind, state\.composer\.replyTo, value, state\.composer\.boardId\)/);
+  assert.match(source, /function rememberActiveComposer/);
+  assert.match(source, /function restoreActiveComposer/);
+  assert.match(source, /function persistComposerDraft/);
   assert.match(source, /state\.composer\.ambiguous = Boolean\(error\?\.bokounSubmitted\)/);
   assert.match(source, /Neodesílejte znovu/);
 });
@@ -89,4 +93,13 @@ test("board UI exposes new-post and per-post reply actions", () => {
   assert.match(source, /data-action="reply"/);
   assert.match(source, /class="composer-textarea"/);
   assert.match(source, /Markdown/);
+});
+
+test("composers stay in the board flow and dim non-target posts while replying", () => {
+  assert.match(source, /composer-panel composer-panel--\$\{composer\.kind === "reply" \? "reply" : "new"\}/);
+  assert.match(source, /\.posts\.is-replying \.post:not\(\.post--reply-target\)/);
+  assert.match(source, /replyTarget \? composerMarkup\(\) : ""/);
+  assert.match(source, /\$\{newComposer\}\s+<section class="posts/);
+  assert.doesNotMatch(source, /composer-backdrop/);
+  assert.doesNotMatch(source, /aria-modal="true"/);
 });

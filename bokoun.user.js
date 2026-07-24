@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.3.0
+// @version      0.3.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @match        https://kapybara.okoun.cz/*
@@ -14,7 +14,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.3.0";
+  const VERSION = "0.3.1";
   const HOST_ID = "bokoun-host";
   const RETURN_HOST_ID = "bokoun-return";
   const BOOT_TIMEOUT_MS = 10_000;
@@ -28,6 +28,7 @@
   const SCROLL_KEY = "bokoun.scroll.v1";
   const PREF_ENABLED_KEY = "bokoun.enabled";
   const DRAFTS_KEY = "bokoun.drafts.v1";
+  const ACTIVE_COMPOSER_KEY = "bokoun.active-composer.v1";
 
   const SELECTORS = Object.freeze({
     favoritesPage: ".favorites-page",
@@ -387,25 +388,30 @@
       cursor: pointer;
     }
 
-    .composer-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 19;
-      background: rgba(23, 32, 51, 0.28);
+    .posts.is-replying .post {
+      transition: opacity 140ms ease;
+    }
+
+    .posts.is-replying .post:not(.post--reply-target) {
+      opacity: 0.34;
     }
 
     .composer-panel {
-      position: fixed;
-      right: 0;
-      bottom: 0;
-      left: 0;
-      z-index: 20;
-      width: min(100%, 720px);
-      margin: 0 auto;
-      padding: 16px 16px max(16px, env(safe-area-inset-bottom));
-      border-top: 1px solid var(--border);
+      position: relative;
+      z-index: 2;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
       background: var(--bg);
-      box-shadow: 0 -12px 32px rgba(23, 32, 51, 0.16);
+    }
+
+    .composer-panel--new {
+      margin: 16px 16px 0;
+    }
+
+    .composer-panel--reply {
+      margin-top: 14px;
+      background: #f8f9fb;
     }
 
     .composer-heading {
@@ -1146,8 +1152,8 @@
     return match ? decodeURIComponent(match[1]) : "";
   }
 
-  function composerDraftKey(kind, replyTo = "") {
-    return `${currentBoardId()}:${kind}:${replyTo || ""}`;
+  function composerDraftKey(kind, replyTo = "", boardId = currentBoardId()) {
+    return `${boardId}:${kind}:${replyTo || ""}`;
   }
 
   function getDrafts() {
@@ -1155,43 +1161,99 @@
     return drafts && typeof drafts === "object" && !Array.isArray(drafts) ? drafts : {};
   }
 
-  function loadDraft(kind, replyTo = "") {
-    const value = getDrafts()[composerDraftKey(kind, replyTo)];
+  function loadDraft(kind, replyTo = "", boardId = currentBoardId()) {
+    const value = getDrafts()[composerDraftKey(kind, replyTo, boardId)];
     return typeof value === "string" ? value : "";
   }
 
-  function saveDraft(kind, replyTo, body) {
+  function saveDraft(kind, replyTo, body, boardId = currentBoardId()) {
     const drafts = getDrafts();
-    const key = composerDraftKey(kind, replyTo);
+    const key = composerDraftKey(kind, replyTo, boardId);
     if (body) drafts[key] = body;
     else delete drafts[key];
     gmSet(DRAFTS_KEY, drafts);
   }
 
-  function clearDraft(kind, replyTo = "") {
-    saveDraft(kind, replyTo, "");
+  function clearDraft(kind, replyTo = "", boardId = currentBoardId()) {
+    saveDraft(kind, replyTo, "", boardId);
   }
 
-  function openComposer(kind, replyTo = "") {
-    if (state.writeBusy || routeType() !== "board") return;
-    const targetIndex = replyTo ? state.boardPostIndex.get(String(replyTo)) : undefined;
+  function getActiveComposer() {
+    const active = gmGet(ACTIVE_COMPOSER_KEY, null);
+    return active && typeof active === "object" && !Array.isArray(active) ? active : null;
+  }
+
+  function rememberActiveComposer(composer) {
+    if (!composer) return;
+    gmSet(ACTIVE_COMPOSER_KEY, {
+      boardId: composer.boardId,
+      kind: composer.kind,
+      replyTo: composer.replyTo,
+      replyAuthor: composer.replyAuthor,
+    });
+  }
+
+  function forgetActiveComposer() {
+    gmSet(ACTIVE_COMPOSER_KEY, null);
+  }
+
+  function restoreActiveComposer() {
+    const boardId = currentBoardId();
+    if (!boardId || state.writeBusy) return;
+    if (state.composer?.boardId === boardId) return;
+    if (state.composer && state.composer.boardId !== boardId) state.composer = null;
+
+    const active = getActiveComposer();
+    if (!active || active.boardId !== boardId || !["new", "reply"].includes(active.kind)) return;
+    const replyTo = active.replyTo ? String(active.replyTo) : "";
+    if (active.kind === "reply" && !state.boardPostIndex.has(replyTo)) return;
+    const body = loadDraft(active.kind, replyTo, boardId);
+    if (!body) return;
+
+    const targetIndex = replyTo ? state.boardPostIndex.get(replyTo) : undefined;
     const target = targetIndex === undefined ? null : state.boardPosts[targetIndex];
     state.composer = {
-      kind,
-      replyTo: replyTo ? String(replyTo) : "",
-      replyAuthor: target?.author || "",
-      body: loadDraft(kind, replyTo),
+      boardId,
+      kind: active.kind,
+      replyTo,
+      replyAuthor: target?.author || active.replyAuthor || "",
+      body,
       status: "editing",
       error: "",
       ambiguous: false,
     };
+  }
+
+  function openComposer(kind, replyTo = "") {
+    if (state.writeBusy || routeType() !== "board") return;
+    const boardId = currentBoardId();
+    const targetIndex = replyTo ? state.boardPostIndex.get(String(replyTo)) : undefined;
+    const target = targetIndex === undefined ? null : state.boardPosts[targetIndex];
+    state.composer = {
+      boardId,
+      kind,
+      replyTo: replyTo ? String(replyTo) : "",
+      replyAuthor: target?.author || "",
+      body: loadDraft(kind, replyTo, boardId),
+      status: "editing",
+      error: "",
+      ambiguous: false,
+    };
+    rememberActiveComposer(state.composer);
     scheduleRender({ force: true });
-    requestAnimationFrame(() => state.shadow?.querySelector(".composer-textarea")?.focus());
+    window.setTimeout(() => {
+      const targetPost = state.composer?.kind === "reply"
+        ? state.shadow?.querySelector(`[data-bokoun-post-id="${CSS.escape(state.composer.replyTo)}"]`)
+        : state.shadow?.querySelector(".composer-panel--new");
+      targetPost?.scrollIntoView({ block: "center", behavior: "smooth" });
+      state.shadow?.querySelector(".composer-textarea")?.focus();
+    }, 100);
   }
 
   function closeComposer() {
     if (state.writeBusy) return;
     if (!state.composer?.ambiguous) dismissNativeComposers();
+    forgetActiveComposer();
     state.composer = null;
     scheduleRender({ force: true });
   }
@@ -1200,7 +1262,21 @@
     if (!state.composer || state.writeBusy) return;
     state.composer.body = value;
     state.composer.error = "";
-    saveDraft(state.composer.kind, state.composer.replyTo, value);
+    saveDraft(state.composer.kind, state.composer.replyTo, value, state.composer.boardId);
+    rememberActiveComposer(state.composer);
+  }
+
+  function persistComposerDraft() {
+    if (!state.composer) return;
+    const textarea = state.shadow?.querySelector(".composer-textarea");
+    if (textarea) state.composer.body = textarea.value;
+    saveDraft(
+      state.composer.kind,
+      state.composer.replyTo,
+      state.composer.body,
+      state.composer.boardId,
+    );
+    rememberActiveComposer(state.composer);
   }
 
   async function waitForNative(probe, timeout, message) {
@@ -1376,13 +1452,20 @@
     state.composer.status = "sending";
     state.composer.error = "";
     state.writeBusy = true;
-    saveDraft(state.composer.kind, state.composer.replyTo, body);
+    saveDraft(
+      state.composer.kind,
+      state.composer.replyTo,
+      body,
+      state.composer.boardId,
+    );
+    rememberActiveComposer(state.composer);
     scheduleRender({ force: true });
 
     try {
       const sent = { ...state.composer };
       const result = await submitThroughNative(sent);
-      clearDraft(sent.kind, sent.replyTo);
+      clearDraft(sent.kind, sent.replyTo, sent.boardId);
+      forgetActiveComposer();
       state.composer = null;
       state.writeBusy = false;
       resetBoardAccumulator(result.model, result.pageHref);
@@ -1567,9 +1650,13 @@
   }
 
   function boardMarkup(board) {
+    const replyingTo = state.composer?.kind === "reply" ? state.composer.replyTo : "";
+    const newComposer = state.composer?.kind === "new" ? composerMarkup() : "";
     const posts = board.posts.length
-      ? board.posts.map((post) => `
-          <article class="post" data-bokoun-post-id="${escapeHtml(post.id)}">
+      ? board.posts.map((post) => {
+        const replyTarget = replyingTo === post.id;
+        return `
+          <article class="post${replyTarget ? " post--reply-target" : ""}" data-bokoun-post-id="${escapeHtml(post.id)}">
             <header class="post-header">
               <span class="post-author">${escapeHtml(post.author)}</span>
               <time class="post-date" ${post.datetime ? `datetime="${escapeHtml(post.datetime)}"` : ""}>${escapeHtml(post.date)}</time>
@@ -1579,8 +1666,10 @@
             <div class="post-actions">
               <button class="reply-button" type="button" data-action="reply" data-post-id="${escapeHtml(post.id)}">Odpovědět</button>
             </div>
+            ${replyTarget ? composerMarkup() : ""}
           </article>
-        `).join("")
+        `;
+      }).join("")
       : `<div class="empty">V tomto klubu zatím nejsou příspěvky.</div>`;
     let tailState = "";
     if (board.loading) {
@@ -1606,9 +1695,9 @@
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
         ${fullButton()}
       </header>
-      <section class="posts" aria-label="Příspěvky">${posts}</section>
+      ${newComposer}
+      <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
       <footer class="board-tail">${tailState}${newest}</footer>
-      ${composerMarkup()}
     `;
   }
 
@@ -1629,8 +1718,10 @@
       : "";
 
     return `
-      <div class="composer-backdrop" aria-hidden="true"></div>
-      <section class="composer-panel" role="dialog" aria-modal="true" aria-labelledby="bokoun-composer-title">
+      <section
+        class="composer-panel composer-panel--${composer.kind === "reply" ? "reply" : "new"}"
+        aria-labelledby="bokoun-composer-title"
+      >
         <form class="composer-form">
           <div class="composer-heading">
             <h2 class="composer-title" id="bokoun-composer-title">${title}</h2>
@@ -1852,6 +1943,7 @@
       } else {
         mergeBoardPage(nativeModel, key);
       }
+      restoreActiveComposer();
       model = boardViewModel();
     }
     const signature = signatureFor(type, model);
@@ -1897,7 +1989,10 @@
     state.observer.observe(document.body, { childList: true, subtree: true });
     state.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS);
     window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
-    window.addEventListener("pagehide", saveScroll);
+    window.addEventListener("pagehide", () => {
+      persistComposerDraft();
+      saveScroll();
+    });
     state.observing = true;
   }
 

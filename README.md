@@ -2,7 +2,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: Markdown writing pre-alpha with endless loading (`0.3.0`).
+> Status: inline Markdown writing pre-alpha with endless loading (`0.3.1`).
 
 ## Install the first prototype
 
@@ -19,7 +19,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.3.0` prototype adds explicit Markdown-only new posts and replies through
+The `0.3.1` prototype adds explicit Markdown-only new posts and replies through
 Kapybara's hidden native Lexical composer. It never calls GraphQL directly and
 never stores credentials or mirrors read posts. Only explicit unsent drafts are
 kept locally on the device. Unsupported routes and initialization failures
@@ -33,9 +33,11 @@ Current prototype boundaries:
 - loaded pages and sanitized post models live in memory only and disappear on
   a real page reload;
 - duplicate boundary posts are removed by `data-post-id`;
-- the pencil in the board header opens a plain Markdown new-post sheet;
-- every displayed post has a small **Odpovědět** action with its target shown;
-- unsent drafts survive Cancel and failures locally on that device;
+- the pencil in the board header opens a plain Markdown editor above the posts;
+- every displayed post has a small **Odpovědět** action; its editor opens inside
+  that post while surrounding posts dim, but the board remains scrollable;
+- half-written posts and replies reopen in the same place after navigation or a
+  reload; Cancel closes the editor but keeps its draft locally;
 - native Kapybara validates and submits; Bokoun never handles auth headers;
 - an ambiguous submission is never retried automatically;
 - automatic userscript updates are intentionally disabled while this repository
@@ -380,7 +382,7 @@ Allowed local state:
 - avatar visibility;
 - Favorites filter preference;
 - per-route scroll positions;
-- unsent local drafts.
+- unsent local drafts and the currently open composer identity.
 
 Not allowed:
 
@@ -496,10 +498,12 @@ exact Favorites row and position on Android.
 Exit condition: a post and a reply can be safely created in
 `nepotrebny_pokus`, with no rich editor visible.
 
-Implemented in `0.3.0`. The bridge temporarily renders native Kapybara under
+Implemented in `0.3.0`, with inline, reload-restoring composers added in
+`0.3.1`. The bridge temporarily renders native Kapybara under
 Bokoun's opaque full-screen shell so its Lexical editor can accept real browser
-editing commands without flashing the rich composer. New posts and replies
-share one Markdown sheet, draft storage, single-flight send state and
+editing commands without flashing the rich composer. New posts appear above the
+board and replies inside their target post, with local draft and active-composer
+storage, single-flight send state and
 post-ID-based confirmation. Live reply `1074671043` verified the complete path
 in `nepotrebny_pokus` on 2026-07-25.
 
@@ -547,7 +551,9 @@ Every functional milestone should cover:
 | Return through B | Same loaded window and reading anchor without reload |
 | Reset to newest | Happens only after an explicit user action |
 | Open reply | Correct target shown |
-| Cancel reply | No state or draft lost |
+| Compose while reading | Board stays scrollable; other posts dim for a reply |
+| Reload or leave while composing | Editor and text reopen in the same place |
+| Cancel reply | Editor closes; draft remains available when reopened |
 | Send reply | One post created, clear success/error |
 | Auth expires | Full native login restored |
 | Unknown route | Full Kapybara opens |
