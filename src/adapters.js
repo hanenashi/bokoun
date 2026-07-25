@@ -22,6 +22,19 @@ export function installAdapters(ctx) {
     }
   }
 
+  function normalizeImageHref(value) {
+    if (!value) return "";
+    try {
+      const url = new URL(value, "https://kapybara.okoun.cz");
+      if (!["http:", "https:"].includes(url.protocol)) return "";
+      return url.origin === "https://kapybara.okoun.cz"
+        ? `${url.pathname}${url.search}${url.hash}`
+        : url.href;
+    } catch {
+      return "";
+    }
+  }
+
   function unreadCount(row) {
     const compact = text(row.querySelector(SELECTORS.favoriteUnreadCompact));
     const full = text(row.querySelector(SELECTORS.favoriteUnreadFull));
@@ -204,6 +217,7 @@ export function installAdapters(ctx) {
       return {
         id: String(post?.id || ""),
         author: String(post?.author?.login || "neznámý"),
+        avatarUrl: normalizeImageHref(post?.author?.iconUrl),
         date: formatPostTimestamp(post?.posted),
         datetime: typeof post?.posted === "string" ? post.posted : "",
         replyReference: post?.parent
@@ -393,6 +407,9 @@ export function installAdapters(ctx) {
       return {
         id: post.getAttribute("data-post-id") || "",
         author: text(post.querySelector(SELECTORS.postAuthor)) || "neznámý",
+        avatarUrl: normalizeImageHref(
+          post.querySelector(SELECTORS.postAvatar)?.getAttribute("src"),
+        ),
         date: compactDate(post),
         datetime: post.querySelector(SELECTORS.postTime)?.getAttribute("datetime") || "",
         replyReference: text(post.querySelector(SELECTORS.postReplyReference)),
@@ -408,6 +425,7 @@ export function installAdapters(ctx) {
   Object.assign(ctx, {
     text,
     normalizeHref,
+    normalizeImageHref,
     unreadCount,
     relativeActivityFromTimestamp,
     relativeActivity,

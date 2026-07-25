@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.4.2";
+export const VERSION = "0.5.0";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;
@@ -17,6 +17,8 @@ export const SCROLL_KEY = "bokoun.scroll.v1";
 export const PREF_ENABLED_KEY = "bokoun.enabled";
 export const DRAFTS_KEY = "bokoun.drafts.v1";
 export const ACTIVE_COMPOSER_KEY = "bokoun.active-composer.v1";
+export const DISPLAY_SETTINGS_KEY = "bokoun.display.v1";
+export const FONT_SETTINGS_KEY = "bokoun.fonts.v1";
 
 export const SELECTORS = Object.freeze({
   favoritesPage: ".favorites-page",
@@ -30,6 +32,7 @@ export const SELECTORS = Object.freeze({
   boardTitle: "header.board-header .title-link h1, header.board-header h1",
   posts: "article.post[data-post-id]",
   postAuthor: ".post-header .author",
+  postAvatar: ".avatar img",
   postTime: ".post-header time[datetime]",
   postDate: ".post-header .date",
   postReplyReference: ".reply-ref",
@@ -93,6 +96,11 @@ export const state = {
   composer: null,
   writeFeedback: null,
   writeBusy: false,
+  displaySettings: null,
+  fontSettings: null,
+  openHeaderPanel: "",
+  openPostMenuId: "",
+  suppressFontClickUntil: 0,
 };
 
 export const gmGet = typeof GM_getValue === "function"

@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { installAdapters } from "../src/adapters.js";
+import { installSettings } from "../src/settings.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
@@ -26,7 +27,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.4\.2/);
+  assert.match(source, /@version\s+0\.5\.0/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -47,6 +48,7 @@ test("older-page fallback stays authenticated and same-origin", () => {
 test("compatibility layer uses semantic selectors, not generated Svelte classes", () => {
   assert.match(source, /favoriteRows: ".favorites-page a\[href\^='\/boards\/'\]"/);
   assert.match(source, /posts: "article.post\[data-post-id\]"/);
+  assert.match(source, /postAvatar: "\.avatar img"/);
   assert.doesNotMatch(source, /🇸-/);
 });
 
@@ -109,11 +111,61 @@ test("composer preserves drafts and prevents ambiguous retries", () => {
   assert.match(source, /Neodesílejte znovu/);
 });
 
-test("board UI exposes new-post and per-post reply actions", () => {
+test("board UI exposes new-post and avatar-triggered post actions", () => {
   assert.match(source, /data-action="compose"/);
+  assert.match(source, /data-action="post-menu"/);
   assert.match(source, /data-action="reply"/);
+  assert.match(source, /class="post-menu"/);
   assert.match(source, /class="composer-textarea"/);
   assert.match(source, /Markdown/);
+});
+
+test("post display settings persist avatar layout and safe font controls", () => {
+  const stored = new Map();
+  const settings = {
+    DISPLAY_SETTINGS_KEY: "display",
+    FONT_SETTINGS_KEY: "fonts",
+    gmGet: (key, fallback) => stored.get(key) ?? fallback,
+    gmSet: (key, value) => stored.set(key, value),
+    state: {
+      currentSignature: "",
+      displaySettings: null,
+      fontSettings: null,
+      scroller: null,
+    },
+    scheduleRender() {},
+  };
+  installSettings(settings);
+
+  assert.deepEqual(settings.currentDisplaySettings(), {
+    showAvatars: true,
+    avatarPosition: "inline",
+  });
+  settings.updateDisplaySettings({ avatarPosition: "left" });
+  assert.equal(stored.get("display").avatarPosition, "left");
+  assert.equal(settings.normalizeFontSize("18.26"), 18.5);
+  assert.equal(settings.normalizeFontSize(100), 72);
+  assert.equal(
+    settings.fontStack("classic-okoun"),
+    'Verdana, "Bitstream Vera Sans", Arial, sans-serif',
+  );
+  assert.equal(
+    settings.normalizeCustomFamily('  "Atkinson   Hyperlegible", Arial,sans-serif  '),
+    '"Atkinson Hyperlegible", Arial, sans-serif',
+  );
+  assert.equal(settings.normalizeCustomFamily("url(evil), serif"), "");
+});
+
+test("reply metadata follows the body and reply moved into the popout menu", () => {
+  const bodyIndex = source.indexOf('<div class="post-body">${post.bodyHtml}</div>');
+  const referenceIndex = source.indexOf("post.replyReference", bodyIndex);
+  const menuIndex = source.indexOf('class="post-menu"');
+  const replyIndex = source.indexOf('data-action="reply"', menuIndex);
+  assert.ok(bodyIndex > -1);
+  assert.ok(referenceIndex > bodyIndex);
+  assert.ok(menuIndex > -1);
+  assert.ok(replyIndex > menuIndex);
+  assert.doesNotMatch(source, /<div class="post-actions">\s*<button class="reply-button"/);
 });
 
 test("composers stay in the board flow and dim non-target posts while replying", () => {
@@ -155,6 +207,7 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   assert.deepEqual(model.posts[0], {
     id: "1001",
     author: "fixture-user",
+    avatarUrl: "/avatars/fixture-user.png",
     date: "25.7.2026 12:00:00",
     datetime: "2026-07-25T10:00:00.000Z",
     replyReference: "Reakce na parent-user, 25.7.2026 11:00:00",

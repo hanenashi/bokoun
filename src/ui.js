@@ -15,6 +15,14 @@ export function installUi(ctx) {
   const loadOlderPosts = (...args) => ctx.loadOlderPosts(...args);
   const navigateNative = (...args) => ctx.navigateNative(...args);
   const goBack = (...args) => ctx.goBack(...args);
+  const scheduleRender = (...args) => ctx.scheduleRender(...args);
+  const currentDisplaySettings = (...args) => ctx.currentDisplaySettings(...args);
+  const currentFontSettings = (...args) => ctx.currentFontSettings(...args);
+  const updateDisplaySettings = (...args) => ctx.updateDisplaySettings(...args);
+  const updateFontSettings = (...args) => ctx.updateFontSettings(...args);
+  const resetFontSettings = (...args) => ctx.resetFontSettings(...args);
+  const displayFontSize = (...args) => ctx.displayFontSize(...args);
+  const normalizeCustomFamily = (...args) => ctx.normalizeCustomFamily(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -35,6 +43,10 @@ export function installUi(ctx) {
       model.end,
       model.error,
       model.loadedPageCount,
+      state.openHeaderPanel,
+      state.openPostMenuId,
+      JSON.stringify(currentDisplaySettings()),
+      JSON.stringify(currentFontSettings()),
       state.composer
         ? [
             state.composer.kind,
@@ -93,7 +105,164 @@ export function installUi(ctx) {
     `;
   }
 
+  function setHeaderPanel(panel = "") {
+    state.openHeaderPanel = state.openHeaderPanel === panel ? "" : panel;
+    state.openPostMenuId = "";
+    state.currentSignature = "";
+    scheduleRender({ force: true });
+  }
+
+  function setPostMenu(postId = "") {
+    state.openPostMenuId = state.openPostMenuId === String(postId) ? "" : String(postId);
+    state.openHeaderPanel = "";
+    state.currentSignature = "";
+    scheduleRender({ force: true });
+  }
+
+  function fontControlMarkup() {
+    const open = state.openHeaderPanel === "font";
+    return `
+      <div class="header-control">
+        <button
+          class="font-toggle"
+          type="button"
+          data-action="font-panel"
+          aria-label="Písmo příspěvků"
+          aria-expanded="${open ? "true" : "false"}"
+          title="Písmo příspěvků"
+        >f</button>
+        ${open ? fontPanelMarkup() : ""}
+        ${state.openHeaderPanel === "display" ? displayPanelMarkup() : ""}
+      </div>
+    `;
+  }
+
+  function fontPanelMarkup() {
+    const font = currentFontSettings();
+    const custom = font.family === "custom";
+    const options = ctx.fontFamilies.map(({ value, label, stack }) => `
+      <option
+        value="${escapeHtml(value)}"
+        ${font.family === value ? "selected" : ""}
+        ${stack ? `style="font-family:${escapeHtml(stack)}"` : ""}
+      >${escapeHtml(label)}</option>
+    `).join("");
+    const normalizedCustom = normalizeCustomFamily(font.customFamily);
+    const invalidCustom = Boolean(font.customFamily.trim() && !normalizedCustom);
+
+    return `
+      <section class="header-panel font-panel" aria-label="Nastavení písma">
+        <header class="panel-head">
+          <strong>Písmo příspěvků</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
+        <label class="settings-field">
+          <span>Písmo</span>
+          <select data-setting="font-family" aria-label="Písmo příspěvků">${options}</select>
+        </label>
+        <label class="settings-field settings-field--custom" ${custom ? "" : "hidden"}>
+          <span>Vlastní</span>
+          <span class="custom-font-wrap">
+            <input
+              type="text"
+              maxlength="160"
+              autocomplete="off"
+              spellcheck="false"
+              value="${escapeHtml(font.customFamily)}"
+              aria-label="Vlastní rodina písma"
+              aria-invalid="${invalidCustom ? "true" : "false"}"
+              placeholder='"Atkinson Hyperlegible", Arial, sans-serif'
+            >
+            <small>${invalidCustom ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami"}</small>
+          </span>
+        </label>
+        <div class="settings-field">
+          <span>Velikost</span>
+          <span class="font-size-controls">
+            <input
+              type="range"
+              min="10"
+              max="32"
+              step="0.5"
+              value="${escapeHtml(Math.min(32, Math.max(10, font.size)))}"
+              aria-label="Velikost písma posuvníkem"
+            >
+            <input
+              type="number"
+              min="8"
+              max="72"
+              step="0.5"
+              inputmode="decimal"
+              value="${escapeHtml(displayFontSize(font.size))}"
+              aria-label="Velikost písma v pixelech"
+            >
+            <span>px</span>
+          </span>
+        </div>
+        <div class="panel-actions">
+          <button type="button" data-action="display-panel">Zobrazení…</button>
+          <button type="button" data-action="reset-font">Obnovit</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function displayPanelMarkup() {
+    const display = currentDisplaySettings();
+    return `
+      <section class="header-panel display-panel" aria-label="Nastavení zobrazení">
+        <header class="panel-head">
+          <strong>Zobrazení příspěvků</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
+        <label class="settings-switch">
+          <span>Zobrazovat avatary</span>
+          <input
+            type="checkbox"
+            data-setting="show-avatars"
+            ${display.showAvatars ? "checked" : ""}
+          >
+        </label>
+        <label class="settings-field">
+          <span>Pozice</span>
+          <select
+            data-setting="avatar-position"
+            aria-label="Pozice avataru"
+            ${display.showAvatars ? "" : "disabled"}
+          >
+            <option value="inline" ${display.avatarPosition === "inline" ? "selected" : ""}>Malý u jména</option>
+            <option value="left" ${display.avatarPosition === "left" ? "selected" : ""}>Vlevo od příspěvku</option>
+          </select>
+        </label>
+        <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
+        <div class="panel-actions">
+          <button type="button" data-action="font-panel">← Písmo</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function avatarImageMarkup(post, className = "") {
+    return post.avatarUrl
+      ? `<img class="${className}" src="${escapeHtml(post.avatarUrl)}" alt="" loading="lazy" decoding="async">`
+      : `<span class="${className} avatar-fallback" aria-hidden="true">${escapeHtml(post.author.slice(0, 1).toUpperCase())}</span>`;
+  }
+
+  function postMenuMarkup(post) {
+    return `
+      <div class="post-menu" role="menu" aria-label="Akce příspěvku">
+        <button
+          type="button"
+          role="menuitem"
+          data-action="reply"
+          data-post-id="${escapeHtml(post.id)}"
+        >Odpovědět</button>
+      </div>
+    `;
+  }
+
   function boardMarkup(board) {
+    const display = currentDisplaySettings();
     const replyingTo = state.composer?.kind === "reply" ? state.composer.replyTo : "";
     const newComposer = state.composer?.kind === "new" ? composerMarkup() : "";
     const feedback = state.writeFeedback?.boardId === currentBoardId()
@@ -119,22 +288,50 @@ export function installUi(ctx) {
         const replyContext = feedback?.replyTo === post.id;
         const postClasses = [
           "post",
+          display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
           replyContext ? "post--reply-context" : "",
         ].filter(Boolean).join(" ");
+        const menuOpen = state.openPostMenuId === post.id;
+        const leftAvatar = display.showAvatars && display.avatarPosition === "left"
+          ? `
+            <button
+              class="post-avatar-trigger post-menu-trigger"
+              type="button"
+              data-action="post-menu"
+              data-post-id="${escapeHtml(post.id)}"
+              aria-label="Nabídka příspěvku od ${escapeHtml(post.author)}"
+              aria-haspopup="menu"
+              aria-expanded="${menuOpen ? "true" : "false"}"
+            >${avatarImageMarkup(post, "post-avatar post-avatar--left")}</button>
+          `
+          : "";
+        const inlineAvatar = display.showAvatars && display.avatarPosition === "inline"
+          ? avatarImageMarkup(post, "post-avatar post-avatar--inline")
+          : "";
         return `
           <article class="${postClasses}" data-bokoun-post-id="${escapeHtml(post.id)}">
-            <header class="post-header">
-              <span class="post-author">${escapeHtml(post.author)}</span>
-              <time class="post-date" ${post.datetime ? `datetime="${escapeHtml(post.datetime)}"` : ""}>${escapeHtml(post.date)}</time>
-            </header>
-            ${post.replyReference ? `<div class="reply-reference">${escapeHtml(post.replyReference)}</div>` : ""}
-            <div class="post-body">${post.bodyHtml}</div>
-            <div class="post-actions">
-              <button class="reply-button" type="button" data-action="reply" data-post-id="${escapeHtml(post.id)}">Odpovědět</button>
+            <div class="post-layout">
+              ${leftAvatar}
+              <div class="post-content">
+                <header class="post-header">
+                  <button
+                    class="post-author post-menu-trigger"
+                    type="button"
+                    data-action="post-menu"
+                    data-post-id="${escapeHtml(post.id)}"
+                    aria-haspopup="menu"
+                    aria-expanded="${menuOpen ? "true" : "false"}"
+                  >${inlineAvatar}<span>${escapeHtml(post.author)}</span></button>
+                  <time class="post-date" ${post.datetime ? `datetime="${escapeHtml(post.datetime)}"` : ""}>${escapeHtml(post.date)}</time>
+                  ${menuOpen ? postMenuMarkup(post) : ""}
+                </header>
+                <div class="post-body">${post.bodyHtml}</div>
+                ${post.replyReference ? `<div class="reply-reference">${escapeHtml(post.replyReference)}</div>` : ""}
+                ${replyTarget ? composerMarkup() : ""}
+              </div>
             </div>
-            ${replyTarget ? composerMarkup() : ""}
           </article>
         `;
       }).join("")
@@ -160,6 +357,7 @@ export function installUi(ctx) {
       <header class="topbar topbar--board">
         <button class="icon-button" type="button" data-action="back" aria-label="Zpět do oblíbených">${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
+        ${fontControlMarkup()}
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
         ${fullButton()}
       </header>
@@ -234,6 +432,89 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
     state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
+    const fontToggle = state.shadow.querySelector(".font-toggle");
+    fontToggle?.addEventListener("click", (event) => {
+      if (Date.now() < state.suppressFontClickUntil) {
+        event.preventDefault();
+        return;
+      }
+      setHeaderPanel("font");
+    });
+    fontToggle?.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      setHeaderPanel("display");
+    });
+    if (fontToggle) {
+      let longPressTimer = 0;
+      let start = null;
+      const cancelLongPress = () => {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = 0;
+        start = null;
+      };
+      fontToggle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.pointerType === "mouse") return;
+        cancelLongPress();
+        start = { x: event.clientX, y: event.clientY };
+        longPressTimer = window.setTimeout(() => {
+          state.suppressFontClickUntil = Date.now() + 800;
+          setHeaderPanel("display");
+        }, 520);
+      });
+      fontToggle.addEventListener("pointermove", (event) => {
+        if (!start) return;
+        if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelLongPress();
+      });
+      fontToggle.addEventListener("pointerup", cancelLongPress);
+      fontToggle.addEventListener("pointercancel", cancelLongPress);
+    }
+    state.shadow.querySelectorAll("[data-action='font-panel']").forEach((button) => {
+      if (button === fontToggle) return;
+      button.addEventListener("click", () => setHeaderPanel("font"));
+    });
+    state.shadow.querySelector("[data-action='display-panel']")?.addEventListener("click", () => setHeaderPanel("display"));
+    state.shadow.querySelector("[data-action='close-header-panel']")?.addEventListener("click", () => setHeaderPanel(""));
+    state.shadow.querySelector("[data-action='reset-font']")?.addEventListener("click", resetFontSettings);
+    state.shadow.querySelector("[data-setting='font-family']")?.addEventListener("change", (event) => {
+      updateFontSettings({ family: event.currentTarget.value }, { render: true });
+    });
+    state.shadow.querySelector("[aria-label='Vlastní rodina písma']")?.addEventListener("input", (event) => {
+      updateFontSettings({ customFamily: event.currentTarget.value });
+      const normalized = normalizeCustomFamily(event.currentTarget.value);
+      const invalid = Boolean(event.currentTarget.value.trim() && !normalized);
+      event.currentTarget.setAttribute("aria-invalid", invalid ? "true" : "false");
+      const hint = event.currentTarget.parentElement?.querySelector("small");
+      if (hint) {
+        hint.textContent = invalid
+          ? "Použijte jen názvy písem oddělené čárkami"
+          : "Místní písma, oddělená čárkami";
+      }
+    });
+    const fontRange = state.shadow.querySelector("[aria-label='Velikost písma posuvníkem']");
+    const fontNumber = state.shadow.querySelector("[aria-label='Velikost písma v pixelech']");
+    fontRange?.addEventListener("input", (event) => {
+      updateFontSettings({ size: event.currentTarget.value });
+      if (fontNumber) fontNumber.value = displayFontSize(event.currentTarget.value);
+    });
+    fontNumber?.addEventListener("input", (event) => {
+      if (event.currentTarget.value === "") return;
+      updateFontSettings({ size: event.currentTarget.value });
+      if (fontRange) {
+        fontRange.value = String(Math.min(32, Math.max(10, Number(event.currentTarget.value))));
+      }
+    });
+    fontNumber?.addEventListener("change", (event) => {
+      updateFontSettings({ size: event.currentTarget.value }, { render: true });
+    });
+    state.shadow.querySelector("[data-setting='show-avatars']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ showAvatars: event.currentTarget.checked });
+    });
+    state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ avatarPosition: event.currentTarget.value });
+    });
+    for (const button of state.shadow.querySelectorAll("[data-action='post-menu']")) {
+      button.addEventListener("click", () => setPostMenu(button.dataset.postId));
+    }
     state.shadow.querySelector("[data-action='cancel-compose']")?.addEventListener("click", closeComposer);
     state.shadow.querySelector("[data-action='discard-draft']")?.addEventListener("click", discardComposerDraft);
     state.shadow.querySelector("[data-action='dismiss-feedback']")?.addEventListener("click", clearWriteFeedback);
@@ -247,7 +528,10 @@ export function installUi(ctx) {
       updateComposerBody(event.currentTarget.value);
     });
     for (const button of state.shadow.querySelectorAll("[data-action='reply']")) {
-      button.addEventListener("click", () => openComposer("reply", button.dataset.postId));
+      button.addEventListener("click", () => {
+        state.openPostMenuId = "";
+        openComposer("reply", button.dataset.postId);
+      });
     }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {
@@ -255,6 +539,22 @@ export function installUi(ctx) {
         navigateNative(link.getAttribute("data-native-href"));
       });
     }
+    const inner = state.shadow.querySelector(".app-inner");
+    inner.onpointerdown = (event) => {
+      if (
+        state.openPostMenuId
+        && !event.target.closest(".post-menu, .post-menu-trigger")
+      ) setPostMenu("");
+      if (
+        state.openHeaderPanel
+        && !event.target.closest(".header-panel, .font-toggle")
+      ) setHeaderPanel("");
+    };
+    state.shadow.onkeydown = (event) => {
+      if (event.key !== "Escape") return;
+      if (state.openPostMenuId) setPostMenu("");
+      else if (state.openHeaderPanel) setHeaderPanel("");
+    };
   }
 
   Object.assign(ctx, {
@@ -265,5 +565,12 @@ export function installUi(ctx) {
     boardMarkup,
     composerMarkup,
     attachUiEvents,
+    setHeaderPanel,
+    setPostMenu,
+    fontControlMarkup,
+    fontPanelMarkup,
+    displayPanelMarkup,
+    avatarImageMarkup,
+    postMenuMarkup,
   });
 }

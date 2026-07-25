@@ -32,6 +32,7 @@ export function installController(ctx) {
   const favoritesMarkup = (...args) => ctx.favoritesMarkup(...args);
   const boardMarkup = (...args) => ctx.boardMarkup(...args);
   const attachUiEvents = (...args) => ctx.attachUiEvents(...args);
+  const applyVisualSettings = (...args) => ctx.applyVisualSettings(...args);
 
   function render({ force = false } = {}) {
     if (state.disabled || state.nativeMode) return;
@@ -43,6 +44,7 @@ export function installController(ctx) {
     }
 
     if (!state.host?.isConnected) mountShell();
+    applyVisualSettings();
 
     const previousKey = state.currentRouteKey;
     const key = routeKey();
