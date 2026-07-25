@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.5.1`).
+> Status: structured-data reading, compact threaded clubs, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.0`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.5.1` prototype reads Favorites, boards and older post pages from
+The `0.6.0` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun never calls
@@ -46,6 +46,8 @@ Current prototype boundaries:
   or use a persistent touch-friendly manual order;
 - unread counts can appear as numbers, a pale green/violet/coral heat scale,
   both, or neither; exact counts remain available to assistive technology;
+- Favorites always use Kapybara's Activity feed; the redundant Activity/Topics
+  tab row is removed to recover mobile height;
 - the pencil in the board header opens a plain Markdown editor above the posts;
 - every displayed post has a small **Odpovědět** action; its editor opens inside
   that post while surrounding posts dim, but the board remains scrollable;
@@ -59,7 +61,11 @@ Current prototype boundaries:
   can move it to a left column or hide avatars entirely;
 - tapping an avatar or author opens the post action menu, where **Odpovědět**
   now lives instead of occupying a permanent row below every post;
-- reply metadata such as `Reakce na …` follows the post body;
+- replies use a compact lower-right `re: author` footer; settings can include
+  the parent timestamp, show only the author, or hide the footer;
+- tapping `re: author` opens a root-first chronological thread view backed by
+  Kapybara's authenticated `rootId` route; Back returns to the normal club and
+  its saved reading position;
 - the italic **f** in the board header opens persistent font family, custom
   stack and font-size controls adapted from Cudloun; **Zobrazení…** opens the
   avatar settings, while long-press/right-click goes there directly;
@@ -152,7 +158,7 @@ Bokoun should feel like a quiet reader, not a miniature social network.
 
 - One compact row per club.
 - Club name, unread count and last activity only.
-- Activity and topic ordering if both remain useful.
+- Activity ordering only; Bokoun omits the extra tab row.
 - Optional "only with unread posts" filter.
 - Exact scroll position restored after returning from a club.
 - No decorative cards or secondary metadata walls.
@@ -581,6 +587,15 @@ or use a persistent manual order with touch drag handles. Unread activity can
 be shown as an exact number, a restrained color heat scale, both, or hidden
 visually while remaining in each row's accessible label.
 
+Version `0.6.0` moves clubs toward the supplied classic-Okoun mobile reading
+shape: larger inline avatars and authors, edge-to-edge separated posts, and
+compact configurable reply footers. Structured posts retain parent and root
+IDs. Opening a reply footer navigates through Kapybara's authenticated
+`rootId` anchor route, filters the returned window to that root and its replies,
+and presents them root-first in chronological order. The board Back button
+returns to the unfiltered club. Favorites now always use Activity and no longer
+spend a second sticky row on Activity/Topics tabs.
+
 ### Phase 4 — direct transport experiment
 
 - Document `CreatePost` input shape.
@@ -615,6 +630,8 @@ Every functional milestone should cover:
 | Return through B | Same loaded window and reading anchor without reload |
 | Reset to newest | Happens only after an explicit user action |
 | Open reply | Correct target shown |
+| Open `re: author` | Root and replies appear as one chronological thread |
+| Back from thread | Normal club and saved reading position return |
 | Compose while reading | Board stays scrollable; other posts dim for a reply |
 | Reload or leave while composing | Editor and text reopen in the same place |
 | Cancel reply | Editor closes; draft remains available when reopened |

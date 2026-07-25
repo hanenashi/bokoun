@@ -28,6 +28,8 @@ export function installUi(ctx) {
   const saveFavoriteOrder = (...args) => ctx.saveFavoriteOrder(...args);
   const resetFavoriteOrder = (...args) => ctx.resetFavoriteOrder(...args);
   const unreadHeat = (...args) => ctx.unreadHeat(...args);
+  const openThread = (...args) => ctx.openThread(...args);
+  const closeThread = (...args) => ctx.closeThread(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -76,6 +78,7 @@ export function installUi(ctx) {
             state.writeFeedback.message,
           ].join(":")
         : "",
+      model.threadRootId,
     ].join("|");
   }
 
@@ -89,7 +92,6 @@ export function installUi(ctx) {
   }
 
   function favoritesMarkup(clubs) {
-    const selectedActivity = location.pathname === "/fav/activity";
     const favorites = currentFavoritesSettings();
     const editing = favorites.sort === "manual" && state.editingFavoriteOrder;
     const showCount = ["count", "both"].includes(favorites.unreadMode);
@@ -141,10 +143,6 @@ export function installUi(ctx) {
         ${favoritesControlMarkup()}
         ${fullButton()}
       </header>
-      <nav class="tabs" aria-label="Řazení oblíbených klubů">
-        <a class="tab" href="/fav/activity" data-native-href="/fav/activity" ${selectedActivity ? 'aria-current="page"' : ""}>Aktivita</a>
-        <a class="tab" href="/fav/topics" data-native-href="/fav/topics" ${selectedActivity ? "" : 'aria-current="page"'}>Témata</a>
-      </nav>
       <ul class="favorites">${rows}</ul>
     `;
   }
@@ -341,6 +339,14 @@ export function installUi(ctx) {
             <option value="left" ${display.avatarPosition === "left" ? "selected" : ""}>Vlevo od příspěvku</option>
           </select>
         </label>
+        <label class="settings-field">
+          <span>Reakce</span>
+          <select data-setting="reply-meta" aria-label="Zobrazení odkazu na původní příspěvek">
+            <option value="full" ${display.replyMeta === "full" ? "selected" : ""}>Jméno + čas</option>
+            <option value="compact" ${display.replyMeta === "compact" ? "selected" : ""}>Jen jméno</option>
+            <option value="hidden" ${display.replyMeta === "hidden" ? "selected" : ""}>Skrýt</option>
+          </select>
+        </label>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
         <div class="panel-actions">
           <button type="button" data-action="font-panel">← Písmo</button>
@@ -364,12 +370,43 @@ export function installUi(ctx) {
           data-action="reply"
           data-post-id="${escapeHtml(post.id)}"
         >Odpovědět</button>
+        ${post.rootId ? `
+          <button
+            type="button"
+            role="menuitem"
+            data-action="thread"
+            data-root-id="${escapeHtml(post.rootId)}"
+          >Vlákno</button>
+        ` : ""}
       </div>
     `;
   }
 
+  function replyMetaMarkup(post, display) {
+    if (display.replyMeta === "hidden" || !post.replyReference) return "";
+    const author = post.parentAuthor
+      || post.replyReference.replace(/^Reakce na\s+/i, "").split(/,\s*\d{1,2}\./)[0]
+      || "neznámý";
+    const time = display.replyMeta === "full" && post.parentDate
+      ? `<time>${escapeHtml(post.parentDate)}</time>`
+      : "";
+    const content = `<span class="reply-prefix">re:</span> <strong>${escapeHtml(author)}</strong>${time}`;
+    return post.rootId
+      ? `
+        <button
+          class="reply-reference"
+          type="button"
+          data-action="thread"
+          data-root-id="${escapeHtml(post.rootId)}"
+          aria-label="Zobrazit vlákno reakce na ${escapeHtml(author)}"
+        >${content}</button>
+      `
+      : `<div class="reply-reference">${content}</div>`;
+  }
+
   function boardMarkup(board) {
     const display = currentDisplaySettings();
+    const threadMode = Boolean(board.threadRootId);
     const replyingTo = state.composer?.kind === "reply" ? state.composer.replyTo : "";
     const newComposer = state.composer?.kind === "new" ? composerMarkup() : "";
     const feedback = state.writeFeedback?.boardId === currentBoardId()
@@ -396,6 +433,8 @@ export function installUi(ctx) {
         const postClasses = [
           "post",
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
+          threadMode && post.id === board.threadRootId ? "post--thread-root" : "",
+          threadMode && post.id !== board.threadRootId ? "post--thread-reply" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
           replyContext ? "post--reply-context" : "",
@@ -418,7 +457,11 @@ export function installUi(ctx) {
           ? avatarImageMarkup(post, "post-avatar post-avatar--inline")
           : "";
         return `
-          <article class="${postClasses}" data-bokoun-post-id="${escapeHtml(post.id)}">
+          <article
+            class="${postClasses}"
+            data-bokoun-post-id="${escapeHtml(post.id)}"
+            ${threadMode ? `data-thread-depth="${escapeHtml(post.depth)}"` : ""}
+          >
             <div class="post-layout">
               ${leftAvatar}
               <div class="post-content">
@@ -435,7 +478,7 @@ export function installUi(ctx) {
                   ${menuOpen ? postMenuMarkup(post) : ""}
                 </header>
                 <div class="post-body">${post.bodyHtml}</div>
-                ${post.replyReference ? `<div class="reply-reference">${escapeHtml(post.replyReference)}</div>` : ""}
+                ${replyMetaMarkup(post, display)}
                 ${replyTarget ? composerMarkup() : ""}
               </div>
             </div>
@@ -452,22 +495,28 @@ export function installUi(ctx) {
         <button class="tail-action tail-action--accent" type="button" data-action="load-older">Zkusit znovu</button>
       `;
     } else if (board.end) {
-      tailState = '<div class="tail-end">Začátek klubu.</div>';
+      tailState = `<div class="tail-end">${threadMode ? "Celé vlákno." : "Začátek klubu."}</div>`;
     } else {
       tailState = '<button class="tail-action" type="button" data-action="load-older">Načíst starší</button>';
     }
-    const newest = board.loadedPageCount > 1
+    const newest = !threadMode && board.loadedPageCount > 1
       ? '<button class="tail-action tail-action--accent" type="button" data-action="newest">↑ Nejnovější</button>'
       : "";
 
     return `
       <header class="topbar topbar--board">
-        <button class="icon-button" type="button" data-action="back" aria-label="Zpět do oblíbených">${ICONS.back}</button>
+        <button
+          class="icon-button"
+          type="button"
+          data-action="${threadMode ? "thread-back" : "back"}"
+          aria-label="${threadMode ? "Zpět do klubu" : "Zpět do oblíbených"}"
+        >${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         ${fontControlMarkup()}
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
         ${fullButton()}
       </header>
+      ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
       ${feedbackMarkup}
       ${newComposer}
       <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
@@ -538,6 +587,7 @@ export function installUi(ctx) {
   function attachUiEvents() {
     state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
+    state.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", closeThread);
     state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
     state.shadow.querySelector("[data-action='favorites-panel']")?.addEventListener("click", () => {
       setHeaderPanel("favorites");
@@ -622,6 +672,9 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });
     });
+    state.shadow.querySelector("[data-setting='reply-meta']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ replyMeta: event.currentTarget.value });
+    });
     state.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
       updateFavoritesSettings(
         { sort: event.currentTarget.value },
@@ -661,6 +714,9 @@ export function installUi(ctx) {
         state.openPostMenuId = "";
         openComposer("reply", button.dataset.postId);
       });
+    }
+    for (const button of state.shadow.querySelectorAll("[data-action='thread']")) {
+      button.addEventListener("click", () => openThread(button.dataset.rootId));
     }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {
@@ -763,6 +819,7 @@ export function installUi(ctx) {
     displayPanelMarkup,
     avatarImageMarkup,
     postMenuMarkup,
+    replyMetaMarkup,
     attachFavoriteReordering,
   });
 }

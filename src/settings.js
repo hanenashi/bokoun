@@ -1,6 +1,7 @@
 const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   showAvatars: true,
   avatarPosition: "inline",
+  replyMeta: "full",
 });
 
 const DEFAULT_FONT_SETTINGS = Object.freeze({
@@ -39,6 +40,7 @@ const FONT_FAMILIES = Object.freeze([
 ]);
 
 const AVATAR_POSITIONS = new Set(["inline", "left"]);
+const REPLY_META_MODES = new Set(["full", "compact", "hidden"]);
 const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
 const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -92,6 +94,9 @@ export function installSettings(ctx) {
       avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition)
         ? value.avatarPosition
         : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
+      replyMeta: REPLY_META_MODES.has(value.replyMeta)
+        ? value.replyMeta
+        : DEFAULT_DISPLAY_SETTINGS.replyMeta,
     };
   }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.5.1
+// @version      0.6.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -172,41 +172,6 @@
     stroke-width: 1.8;
   }
 
-  .tabs {
-    position: sticky;
-    top: calc(var(--header-height) + env(safe-area-inset-top));
-    z-index: 9;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    height: 48px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.98);
-  }
-
-  .tab {
-    position: relative;
-    display: grid;
-    place-items: center;
-    color: var(--muted);
-    font-size: 15px;
-    font-weight: 500;
-    text-decoration: none;
-  }
-
-  .tab[aria-current="page"] {
-    color: var(--accent);
-  }
-
-  .tab[aria-current="page"]::after {
-    position: absolute;
-    right: 12px;
-    bottom: -1px;
-    left: 12px;
-    height: 2px;
-    background: var(--accent);
-    content: "";
-  }
-
   .favorites {
     margin: 0;
     padding: 0 16px max(24px, env(safe-area-inset-bottom));
@@ -328,21 +293,17 @@
   }
 
   .posts {
-    padding: 0 16px max(28px, env(safe-area-inset-bottom));
+    padding: 0 0 max(28px, env(safe-area-inset-bottom));
   }
 
   .post {
-    padding: 20px 0 22px;
-    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 16px;
+    border-bottom: 1px solid #c7cfdb;
     scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 56px);
   }
 
   .post--just-sent,
   .post--reply-context {
-    margin-right: -12px;
-    margin-left: -12px;
-    padding-right: 12px;
-    padding-left: 12px;
     transition: background 180ms ease, box-shadow 180ms ease;
   }
 
@@ -356,44 +317,106 @@
     box-shadow: inset 2px 0 0 #d9b58e;
   }
 
+  .post--thread-root {
+    background: #fff;
+    box-shadow: inset 3px 0 #a85a00;
+  }
+
+  .post--thread-reply {
+    background: #edf4ff;
+    box-shadow: inset 3px 0 #8baee8;
+  }
+
+  .thread-banner {
+    position: sticky;
+    top: calc(var(--header-height) + env(safe-area-inset-top));
+    z-index: 9;
+    min-height: 36px;
+    padding: 9px 16px 8px;
+    border-bottom: 1px solid #b8cae8;
+    background: rgba(237, 244, 255, 0.98);
+    color: #415b82;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+  }
+
   .post-header {
     position: relative;
     display: flex;
-    flex-wrap: wrap;
-    gap: 5px 12px;
+    gap: 8px 12px;
     align-items: center;
-    margin-bottom: 11px;
+    margin-bottom: 13px;
   }
 
   .post-author {
     display: inline-flex;
-    gap: 7px;
+    gap: 10px;
     align-items: center;
     min-width: 0;
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--text);
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.3;
+    font-size: 20px;
+    font-weight: 750;
+    line-height: 1.2;
     cursor: pointer;
     text-align: left;
   }
 
+  .post-author > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .post-date {
+    margin-left: auto;
     color: var(--muted);
-    font-size: 14px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     font-weight: 400;
     line-height: 1.3;
   }
 
   .reply-reference {
-    margin: 10px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 7px;
+    align-items: center;
+    justify-content: flex-end;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 30px;
+    margin: 10px 0 -5px auto;
+    padding: 3px 0 0 10px;
+    border: 0;
+    background: transparent;
     color: var(--muted);
-    font-size: 14px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.3;
+    text-align: right;
+  }
+
+  button.reply-reference {
+    color: #53657f;
+    cursor: pointer;
+  }
+
+  button.reply-reference:hover,
+  button.reply-reference:focus-visible {
+    color: var(--accent);
+  }
+
+  .reply-reference strong {
+    font-weight: 700;
+  }
+
+  .reply-reference time {
+    padding-left: 7px;
+    border-left: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
   }
 
   .post-body {
@@ -503,11 +526,11 @@
   }
 
   .post-avatar--inline {
-    width: 26px;
-    height: 26px;
-    flex: 0 0 26px;
-    font-size: 12px;
-    line-height: 26px;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    font-size: 15px;
+    line-height: 40px;
   }
 
   .post-avatar--left {
@@ -1090,6 +1113,10 @@
   }
 
   @media (max-width: 420px) {
+    .app {
+      scrollbar-gutter: auto;
+    }
+
     .topbar--board {
       grid-template-columns: 40px minmax(0, 1fr) 36px 40px auto;
     }
@@ -1140,7 +1167,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.5.1";
+  var VERSION = "0.6.0";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1704,8 +1731,8 @@
       const url = new URL(pageHref, "https://kapybara.okoun.cz");
       const query = new URLSearchParams();
       query.set("f", cursor);
-      const threaded = url.searchParams.get("t");
-      if (threaded) query.set("t", threaded);
+      const threadRoot = url.searchParams.get("rootId");
+      if (threadRoot) query.set("rootId", threadRoot);
       return `${url.pathname}?${query}`;
     }
     function normalizedStructuredPageHref(pageHref) {
@@ -1721,12 +1748,20 @@
       const posts = pageRoot.posts.map((post) => {
         const parentAuthor = post?.parent?.author?.login;
         const parentDate = formatPostTimestamp(post?.parent?.posted);
+        const parentId = post?.parent?.id ? String(post.parent.id) : "";
+        const rootId = post?.rootId ? String(post.rootId) : parentId;
         return {
           id: String(post?.id || ""),
           author: String(post?.author?.login || "neznámý"),
           avatarUrl: normalizeImageHref(post?.author?.iconUrl),
           date: formatPostTimestamp(post?.posted),
           datetime: typeof post?.posted === "string" ? post.posted : "",
+          parentId,
+          parentAuthor: String(parentAuthor || ""),
+          parentDate,
+          rootId,
+          depth: Math.max(0, Number(post?.depth) || 0),
+          sequence: Number(post?.sequence) || 0,
           replyReference: post?.parent ? `Reakce na ${parentAuthor || "neznámý"}${parentDate ? `, ${parentDate}` : ""}` : "",
           bodyHtml: sanitize(typeof post?.htmlBody === "string" ? post.htmlBody : ""),
           pageHref: normalizedStructuredPageHref(pageHref)
@@ -1903,10 +1938,29 @@
         minute: "2-digit"
       }).format(date);
     }
+    function replyReferenceParts(value) {
+      const reference = String(value || "").trim();
+      const match = reference.match(
+        /^Reakce na\s+(.+?)(?:,\s*(\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?))?$/i
+      );
+      return {
+        author: match?.[1]?.trim() || "",
+        date: match?.[2]?.trim() || ""
+      };
+    }
     function readBoardFromDom(root = document, pageHref = routeKey()) {
       const title = text(root.querySelector(SELECTORS2.boardTitle)) || decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "Klub");
       const posts = [...root.querySelectorAll(SELECTORS2.posts)].map((post) => {
         const body = post.querySelector(SELECTORS2.postBody);
+        const replyReference = text(post.querySelector(SELECTORS2.postReplyReference));
+        const replyParts = replyReferenceParts(replyReference);
+        const threadHref = post.querySelector('a[href*="rootId="]')?.getAttribute("href") || "";
+        let rootId = "";
+        try {
+          rootId = new URL(threadHref, location.origin).searchParams.get("rootId") || "";
+        } catch {
+          rootId = "";
+        }
         return {
           id: post.getAttribute("data-post-id") || "",
           author: text(post.querySelector(SELECTORS2.postAuthor)) || "neznámý",
@@ -1915,7 +1969,13 @@
           ),
           date: compactDate(post),
           datetime: post.querySelector(SELECTORS2.postTime)?.getAttribute("datetime") || "",
-          replyReference: text(post.querySelector(SELECTORS2.postReplyReference)),
+          parentId: "",
+          parentAuthor: replyParts.author,
+          parentDate: replyParts.date,
+          rootId,
+          depth: 0,
+          sequence: 0,
+          replyReference,
           bodyHtml: sanitizeHtml(body?.innerHTML || ""),
           pageHref: normalizeHref(pageHref)
         };
@@ -1950,6 +2010,7 @@
       sanitizeHtml,
       safeUrl,
       compactDate,
+      replyReferenceParts,
       readBoardFromDom
     });
   }
@@ -1961,10 +2022,32 @@
     } = ctx2;
     const routeKey = (...args) => ctx2.routeKey(...args);
     const normalizeHref = (...args) => ctx2.normalizeHref(...args);
+    function boardRouteIdentity(pageHref = routeKey()) {
+      const url = new URL(pageHref, location.origin);
+      const rootId = url.searchParams.get("rootId") || "";
+      return `${url.pathname}${rootId ? `?rootId=${encodeURIComponent(rootId)}` : ""}`;
+    }
+    function threadRootId(pageHref = routeKey()) {
+      try {
+        return new URL(pageHref, location.origin).searchParams.get("rootId") || "";
+      } catch {
+        return "";
+      }
+    }
+    function threadPosts(posts, rootId) {
+      if (!rootId) return [...posts];
+      return posts.filter((post) => post.id === rootId || post.rootId === rootId).sort((left, right) => {
+        if (left.id === rootId) return -1;
+        if (right.id === rootId) return 1;
+        const leftTime = Date.parse(left.datetime) || 0;
+        const rightTime = Date.parse(right.datetime) || 0;
+        return leftTime - rightTime || left.sequence - right.sequence || Number(left.id) - Number(right.id);
+      });
+    }
     function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
       state2.boardLoadAbort?.abort();
       state2.boardLoadAbort = null;
-      state2.boardKey = location.pathname;
+      state2.boardKey = boardRouteIdentity(pageHref);
       state2.boardTitle = model.title;
       state2.boardPosts = [];
       state2.boardPostIndex = /* @__PURE__ */ new Map();
@@ -2030,9 +2113,13 @@
       }
     }
     function boardViewModel() {
+      const activeRootId = threadRootId();
+      const posts = threadPosts(state2.boardPosts, activeRootId);
       return {
         title: state2.boardTitle,
-        posts: state2.boardPosts,
+        posts,
+        threadRootId: activeRootId,
+        threadCount: posts.length,
         nextOlderHref: state2.boardNextHref,
         loading: state2.boardLoading,
         end: state2.boardEnd,
@@ -2041,6 +2128,9 @@
       };
     }
     Object.assign(ctx2, {
+      boardRouteIdentity,
+      threadRootId,
+      threadPosts,
       resetBoardAccumulator,
       mergeBoardPage,
       refreshBoardNewestPage,
@@ -2536,7 +2626,8 @@
   // src/settings.js
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
     showAvatars: true,
-    avatarPosition: "inline"
+    avatarPosition: "inline",
+    replyMeta: "full"
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
     family: "default",
@@ -2571,6 +2662,7 @@
     { value: "custom", label: "Custom…", stack: "" }
   ]);
   var AVATAR_POSITIONS = /* @__PURE__ */ new Set(["inline", "left"]);
+  var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -2617,7 +2709,8 @@
     function normalizeDisplaySettings(value = {}) {
       return {
         showAvatars: value.showAvatars !== false,
-        avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition
+        avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
+        replyMeta: REPLY_META_MODES.has(value.replyMeta) ? value.replyMeta : DEFAULT_DISPLAY_SETTINGS.replyMeta
       };
     }
     function normalizeFontSettings(value = {}) {
@@ -2860,6 +2953,8 @@
     const saveFavoriteOrder = (...args) => ctx2.saveFavoriteOrder(...args);
     const resetFavoriteOrder = (...args) => ctx2.resetFavoriteOrder(...args);
     const unreadHeat = (...args) => ctx2.unreadHeat(...args);
+    const openThread = (...args) => ctx2.openThread(...args);
+    const closeThread = (...args) => ctx2.closeThread(...args);
     function escapeHtml(value) {
       const div = document.createElement("div");
       div.textContent = value ?? "";
@@ -2901,7 +2996,8 @@
           state2.writeFeedback.postId,
           state2.writeFeedback.replyTo,
           state2.writeFeedback.message
-        ].join(":") : ""
+        ].join(":") : "",
+        model.threadRootId
       ].join("|");
     }
     function fullButton() {
@@ -2913,7 +3009,6 @@
     `;
     }
     function favoritesMarkup(clubs) {
-      const selectedActivity = location.pathname === "/fav/activity";
       const favorites = currentFavoritesSettings();
       const editing = favorites.sort === "manual" && state2.editingFavoriteOrder;
       const showCount = ["count", "both"].includes(favorites.unreadMode);
@@ -2960,10 +3055,6 @@
         ${favoritesControlMarkup()}
         ${fullButton()}
       </header>
-      <nav class="tabs" aria-label="Řazení oblíbených klubů">
-        <a class="tab" href="/fav/activity" data-native-href="/fav/activity" ${selectedActivity ? 'aria-current="page"' : ""}>Aktivita</a>
-        <a class="tab" href="/fav/topics" data-native-href="/fav/topics" ${selectedActivity ? "" : 'aria-current="page"'}>Témata</a>
-      </nav>
       <ul class="favorites">${rows}</ul>
     `;
     }
@@ -3152,6 +3243,14 @@
             <option value="left" ${display.avatarPosition === "left" ? "selected" : ""}>Vlevo od příspěvku</option>
           </select>
         </label>
+        <label class="settings-field">
+          <span>Reakce</span>
+          <select data-setting="reply-meta" aria-label="Zobrazení odkazu na původní příspěvek">
+            <option value="full" ${display.replyMeta === "full" ? "selected" : ""}>Jméno + čas</option>
+            <option value="compact" ${display.replyMeta === "compact" ? "selected" : ""}>Jen jméno</option>
+            <option value="hidden" ${display.replyMeta === "hidden" ? "selected" : ""}>Skrýt</option>
+          </select>
+        </label>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
         <div class="panel-actions">
           <button type="button" data-action="font-panel">← Písmo</button>
@@ -3171,11 +3270,35 @@
           data-action="reply"
           data-post-id="${escapeHtml(post.id)}"
         >Odpovědět</button>
+        ${post.rootId ? `
+          <button
+            type="button"
+            role="menuitem"
+            data-action="thread"
+            data-root-id="${escapeHtml(post.rootId)}"
+          >Vlákno</button>
+        ` : ""}
       </div>
     `;
     }
+    function replyMetaMarkup(post, display) {
+      if (display.replyMeta === "hidden" || !post.replyReference) return "";
+      const author = post.parentAuthor || post.replyReference.replace(/^Reakce na\s+/i, "").split(/,\s*\d{1,2}\./)[0] || "neznámý";
+      const time = display.replyMeta === "full" && post.parentDate ? `<time>${escapeHtml(post.parentDate)}</time>` : "";
+      const content = `<span class="reply-prefix">re:</span> <strong>${escapeHtml(author)}</strong>${time}`;
+      return post.rootId ? `
+        <button
+          class="reply-reference"
+          type="button"
+          data-action="thread"
+          data-root-id="${escapeHtml(post.rootId)}"
+          aria-label="Zobrazit vlákno reakce na ${escapeHtml(author)}"
+        >${content}</button>
+      ` : `<div class="reply-reference">${content}</div>`;
+    }
     function boardMarkup(board) {
       const display = currentDisplaySettings();
+      const threadMode = Boolean(board.threadRootId);
       const replyingTo = state2.composer?.kind === "reply" ? state2.composer.replyTo : "";
       const newComposer = state2.composer?.kind === "new" ? composerMarkup() : "";
       const feedback = state2.writeFeedback?.boardId === currentBoardId() ? state2.writeFeedback : null;
@@ -3197,6 +3320,8 @@
         const postClasses = [
           "post",
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
+          threadMode && post.id === board.threadRootId ? "post--thread-root" : "",
+          threadMode && post.id !== board.threadRootId ? "post--thread-reply" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
           replyContext ? "post--reply-context" : ""
@@ -3215,7 +3340,11 @@
           ` : "";
         const inlineAvatar = display.showAvatars && display.avatarPosition === "inline" ? avatarImageMarkup(post, "post-avatar post-avatar--inline") : "";
         return `
-          <article class="${postClasses}" data-bokoun-post-id="${escapeHtml(post.id)}">
+          <article
+            class="${postClasses}"
+            data-bokoun-post-id="${escapeHtml(post.id)}"
+            ${threadMode ? `data-thread-depth="${escapeHtml(post.depth)}"` : ""}
+          >
             <div class="post-layout">
               ${leftAvatar}
               <div class="post-content">
@@ -3232,7 +3361,7 @@
                   ${menuOpen ? postMenuMarkup(post) : ""}
                 </header>
                 <div class="post-body">${post.bodyHtml}</div>
-                ${post.replyReference ? `<div class="reply-reference">${escapeHtml(post.replyReference)}</div>` : ""}
+                ${replyMetaMarkup(post, display)}
                 ${replyTarget ? composerMarkup() : ""}
               </div>
             </div>
@@ -3248,19 +3377,25 @@
         <button class="tail-action tail-action--accent" type="button" data-action="load-older">Zkusit znovu</button>
       `;
       } else if (board.end) {
-        tailState = '<div class="tail-end">Začátek klubu.</div>';
+        tailState = `<div class="tail-end">${threadMode ? "Celé vlákno." : "Začátek klubu."}</div>`;
       } else {
         tailState = '<button class="tail-action" type="button" data-action="load-older">Načíst starší</button>';
       }
-      const newest = board.loadedPageCount > 1 ? '<button class="tail-action tail-action--accent" type="button" data-action="newest">↑ Nejnovější</button>' : "";
+      const newest = !threadMode && board.loadedPageCount > 1 ? '<button class="tail-action tail-action--accent" type="button" data-action="newest">↑ Nejnovější</button>' : "";
       return `
       <header class="topbar topbar--board">
-        <button class="icon-button" type="button" data-action="back" aria-label="Zpět do oblíbených">${ICONS2.back}</button>
+        <button
+          class="icon-button"
+          type="button"
+          data-action="${threadMode ? "thread-back" : "back"}"
+          aria-label="${threadMode ? "Zpět do klubu" : "Zpět do oblíbených"}"
+        >${ICONS2.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         ${fontControlMarkup()}
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS2.write}</button>
         ${fullButton()}
       </header>
+      ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
       ${feedbackMarkup}
       ${newComposer}
       <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
@@ -3322,6 +3457,7 @@
     function attachUiEvents() {
       state2.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
       state2.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
+      state2.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", closeThread);
       state2.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
       state2.shadow.querySelector("[data-action='favorites-panel']")?.addEventListener("click", () => {
         setHeaderPanel("favorites");
@@ -3404,6 +3540,9 @@
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });
       });
+      state2.shadow.querySelector("[data-setting='reply-meta']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ replyMeta: event.currentTarget.value });
+      });
       state2.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
         updateFavoritesSettings(
           { sort: event.currentTarget.value },
@@ -3443,6 +3582,9 @@
           state2.openPostMenuId = "";
           openComposer("reply", button.dataset.postId);
         });
+      }
+      for (const button of state2.shadow.querySelectorAll("[data-action='thread']")) {
+        button.addEventListener("click", () => openThread(button.dataset.rootId));
       }
       for (const link of state2.shadow.querySelectorAll("[data-native-href]")) {
         link.addEventListener("click", (event) => {
@@ -3529,6 +3671,7 @@
       displayPanelMarkup,
       avatarImageMarkup,
       postMenuMarkup,
+      replyMetaMarkup,
       attachFavoriteReordering
     });
   }
@@ -3581,6 +3724,21 @@
       } else {
         navigateNative("/fav/activity");
       }
+    }
+    function openThread(rootId) {
+      const normalized = String(rootId || "");
+      if (!/^\d+$/.test(normalized) || routeType() !== "board") return;
+      const target = new URL(routeKey(), location.origin);
+      target.searchParams.delete("f");
+      target.searchParams.set("rootId", normalized);
+      navigateNative(`${target.pathname}${target.search}`);
+    }
+    function closeThread() {
+      if (routeType() !== "board") return;
+      const target = new URL(routeKey(), location.origin);
+      target.searchParams.delete("f");
+      target.searchParams.delete("rootId");
+      navigateNative(`${target.pathname}${target.search}`);
     }
     function captureBokounAnchor() {
       if (routeType() !== "board" || !state2.scroller || !state2.shadow) return null;
@@ -3680,6 +3838,8 @@
     Object.assign(ctx2, {
       navigateNative,
       goBack,
+      openThread,
+      closeThread,
       captureBokounAnchor,
       captureNativeAnchor,
       nativePostById,
@@ -3727,11 +3887,17 @@
     const attachUiEvents = (...args) => ctx2.attachUiEvents(...args);
     const applyVisualSettings = (...args) => ctx2.applyVisualSettings(...args);
     const sortFavorites = (...args) => ctx2.sortFavorites(...args);
+    const boardRouteIdentity = (...args) => ctx2.boardRouteIdentity(...args);
+    const navigateNative = (...args) => ctx2.navigateNative(...args);
     function render({ force = false } = {}) {
       if (state2.disabled || state2.nativeMode) return;
       const type = routeType();
       if (type === "unsupported" || !isMobileEligible()) {
         revealNative();
+        return;
+      }
+      if (type === "favorites" && location.pathname !== "/fav/activity") {
+        navigateNative("/fav/activity");
         return;
       }
       if (!state2.host?.isConnected) mountShell();
@@ -3756,7 +3922,7 @@
         const nativeModel = structuredModel || readBoardFromDom(document, key);
         const structured = Boolean(structuredModel);
         if (structured) readSource = "structured";
-        if (state2.boardKey !== location.pathname) {
+        if (state2.boardKey !== boardRouteIdentity(key)) {
           resetBoardAccumulator(nativeModel, key, { structured });
         } else if (structured && !new URL(key, location.origin).searchParams.has("f")) {
           refreshBoardNewestPage(nativeModel, key);

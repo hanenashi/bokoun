@@ -34,6 +34,8 @@ export function installController(ctx) {
   const attachUiEvents = (...args) => ctx.attachUiEvents(...args);
   const applyVisualSettings = (...args) => ctx.applyVisualSettings(...args);
   const sortFavorites = (...args) => ctx.sortFavorites(...args);
+  const boardRouteIdentity = (...args) => ctx.boardRouteIdentity(...args);
+  const navigateNative = (...args) => ctx.navigateNative(...args);
 
   function render({ force = false } = {}) {
     if (state.disabled || state.nativeMode) return;
@@ -41,6 +43,10 @@ export function installController(ctx) {
 
     if (type === "unsupported" || !isMobileEligible()) {
       revealNative();
+      return;
+    }
+    if (type === "favorites" && location.pathname !== "/fav/activity") {
+      navigateNative("/fav/activity");
       return;
     }
 
@@ -67,7 +73,7 @@ export function installController(ctx) {
       const nativeModel = structuredModel || readBoardFromDom(document, key);
       const structured = Boolean(structuredModel);
       if (structured) readSource = "structured";
-      if (state.boardKey !== location.pathname) {
+      if (state.boardKey !== boardRouteIdentity(key)) {
         resetBoardAccumulator(nativeModel, key, { structured });
       } else if (
         structured

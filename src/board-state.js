@@ -5,10 +5,39 @@ export function installBoardState(ctx) {
   const routeKey = (...args) => ctx.routeKey(...args);
   const normalizeHref = (...args) => ctx.normalizeHref(...args);
 
+  function boardRouteIdentity(pageHref = routeKey()) {
+    const url = new URL(pageHref, location.origin);
+    const rootId = url.searchParams.get("rootId") || "";
+    return `${url.pathname}${rootId ? `?rootId=${encodeURIComponent(rootId)}` : ""}`;
+  }
+
+  function threadRootId(pageHref = routeKey()) {
+    try {
+      return new URL(pageHref, location.origin).searchParams.get("rootId") || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function threadPosts(posts, rootId) {
+    if (!rootId) return [...posts];
+    return posts
+      .filter((post) => post.id === rootId || post.rootId === rootId)
+      .sort((left, right) => {
+        if (left.id === rootId) return -1;
+        if (right.id === rootId) return 1;
+        const leftTime = Date.parse(left.datetime) || 0;
+        const rightTime = Date.parse(right.datetime) || 0;
+        return leftTime - rightTime
+          || left.sequence - right.sequence
+          || Number(left.id) - Number(right.id);
+      });
+  }
+
   function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
     state.boardLoadAbort?.abort();
     state.boardLoadAbort = null;
-    state.boardKey = location.pathname;
+    state.boardKey = boardRouteIdentity(pageHref);
     state.boardTitle = model.title;
     state.boardPosts = [];
     state.boardPostIndex = new Map();
@@ -85,9 +114,13 @@ export function installBoardState(ctx) {
   }
 
   function boardViewModel() {
+    const activeRootId = threadRootId();
+    const posts = threadPosts(state.boardPosts, activeRootId);
     return {
       title: state.boardTitle,
-      posts: state.boardPosts,
+      posts,
+      threadRootId: activeRootId,
+      threadCount: posts.length,
       nextOlderHref: state.boardNextHref,
       loading: state.boardLoading,
       end: state.boardEnd,
@@ -97,6 +130,9 @@ export function installBoardState(ctx) {
   }
 
   Object.assign(ctx, {
+    boardRouteIdentity,
+    threadRootId,
+    threadPosts,
     resetBoardAccumulator,
     mergeBoardPage,
     refreshBoardNewestPage,

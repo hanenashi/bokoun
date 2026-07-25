@@ -52,6 +52,23 @@ export function installNavigation(ctx) {
     }
   }
 
+  function openThread(rootId) {
+    const normalized = String(rootId || "");
+    if (!/^\d+$/.test(normalized) || routeType() !== "board") return;
+    const target = new URL(routeKey(), location.origin);
+    target.searchParams.delete("f");
+    target.searchParams.set("rootId", normalized);
+    navigateNative(`${target.pathname}${target.search}`);
+  }
+
+  function closeThread() {
+    if (routeType() !== "board") return;
+    const target = new URL(routeKey(), location.origin);
+    target.searchParams.delete("f");
+    target.searchParams.delete("rootId");
+    navigateNative(`${target.pathname}${target.search}`);
+  }
+
   function captureBokounAnchor() {
     if (routeType() !== "board" || !state.scroller || !state.shadow) return null;
     const scrollerRect = state.scroller.getBoundingClientRect();
@@ -164,6 +181,8 @@ export function installNavigation(ctx) {
   Object.assign(ctx, {
     navigateNative,
     goBack,
+    openThread,
+    closeThread,
     captureBokounAnchor,
     captureNativeAnchor,
     nativePostById,

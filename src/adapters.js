@@ -186,8 +186,8 @@ export function installAdapters(ctx) {
     const url = new URL(pageHref, "https://kapybara.okoun.cz");
     const query = new URLSearchParams();
     query.set("f", cursor);
-    const threaded = url.searchParams.get("t");
-    if (threaded) query.set("t", threaded);
+    const threadRoot = url.searchParams.get("rootId");
+    if (threadRoot) query.set("rootId", threadRoot);
     return `${url.pathname}?${query}`;
   }
 
@@ -214,12 +214,22 @@ export function installAdapters(ctx) {
     const posts = pageRoot.posts.map((post) => {
       const parentAuthor = post?.parent?.author?.login;
       const parentDate = formatPostTimestamp(post?.parent?.posted);
+      const parentId = post?.parent?.id ? String(post.parent.id) : "";
+      const rootId = post?.rootId
+        ? String(post.rootId)
+        : parentId;
       return {
         id: String(post?.id || ""),
         author: String(post?.author?.login || "neznámý"),
         avatarUrl: normalizeImageHref(post?.author?.iconUrl),
         date: formatPostTimestamp(post?.posted),
         datetime: typeof post?.posted === "string" ? post.posted : "",
+        parentId,
+        parentAuthor: String(parentAuthor || ""),
+        parentDate,
+        rootId,
+        depth: Math.max(0, Number(post?.depth) || 0),
+        sequence: Number(post?.sequence) || 0,
         replyReference: post?.parent
           ? `Reakce na ${parentAuthor || "neznámý"}${parentDate ? `, ${parentDate}` : ""}`
           : "",
@@ -399,11 +409,31 @@ export function installAdapters(ctx) {
     }).format(date);
   }
 
+  function replyReferenceParts(value) {
+    const reference = String(value || "").trim();
+    const match = reference.match(
+      /^Reakce na\s+(.+?)(?:,\s*(\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?))?$/i,
+    );
+    return {
+      author: match?.[1]?.trim() || "",
+      date: match?.[2]?.trim() || "",
+    };
+  }
+
   function readBoardFromDom(root = document, pageHref = routeKey()) {
     const title = text(root.querySelector(SELECTORS.boardTitle))
       || decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "Klub");
     const posts = [...root.querySelectorAll(SELECTORS.posts)].map((post) => {
       const body = post.querySelector(SELECTORS.postBody);
+      const replyReference = text(post.querySelector(SELECTORS.postReplyReference));
+      const replyParts = replyReferenceParts(replyReference);
+      const threadHref = post.querySelector('a[href*="rootId="]')?.getAttribute("href") || "";
+      let rootId = "";
+      try {
+        rootId = new URL(threadHref, location.origin).searchParams.get("rootId") || "";
+      } catch {
+        rootId = "";
+      }
       return {
         id: post.getAttribute("data-post-id") || "",
         author: text(post.querySelector(SELECTORS.postAuthor)) || "neznámý",
@@ -412,7 +442,13 @@ export function installAdapters(ctx) {
         ),
         date: compactDate(post),
         datetime: post.querySelector(SELECTORS.postTime)?.getAttribute("datetime") || "",
-        replyReference: text(post.querySelector(SELECTORS.postReplyReference)),
+        parentId: "",
+        parentAuthor: replyParts.author,
+        parentDate: replyParts.date,
+        rootId,
+        depth: 0,
+        sequence: 0,
+        replyReference,
         bodyHtml: sanitizeHtml(body?.innerHTML || ""),
         pageHref: normalizeHref(pageHref),
       };
@@ -448,6 +484,7 @@ export function installAdapters(ctx) {
     sanitizeHtml,
     safeUrl,
     compactDate,
+    replyReferenceParts,
     readBoardFromDom,
   });
 }

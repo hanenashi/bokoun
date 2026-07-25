@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { installAdapters } from "../src/adapters.js";
+import { installBoardState } from "../src/board-state.js";
 import { installSettings } from "../src/settings.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.5\.1/);
+  assert.match(source, /@version\s+0\.6\.0/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -72,6 +73,8 @@ test("endless loading is single-flight, deduplicated, and recoverable", () => {
   assert.match(source, /data-action="load-older"/);
   assert.match(source, /Starší příspěvky se nepodařilo načíst/);
   assert.match(source, /data-action="newest"/);
+  assert.match(source, /searchParams\.get\("rootId"\)/);
+  assert.doesNotMatch(source, /searchParams\.get\("t"\)/);
 });
 
 test("full/native handoff follows the visible post without reloading", () => {
@@ -146,9 +149,12 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.deepEqual(settings.currentDisplaySettings(), {
     showAvatars: true,
     avatarPosition: "inline",
+    replyMeta: "full",
   });
   settings.updateDisplaySettings({ avatarPosition: "left" });
   assert.equal(stored.get("display").avatarPosition, "left");
+  settings.updateDisplaySettings({ replyMeta: "compact" });
+  assert.equal(stored.get("display").replyMeta, "compact");
   assert.equal(settings.normalizeFontSize("18.26"), 18.5);
   assert.equal(settings.normalizeFontSize(100), 72);
   assert.equal(
@@ -233,11 +239,13 @@ test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering
   assert.match(source, /favorite-row--heat-most/);
   assert.match(source, /data-unread-count=/);
   assert.match(source, /aria-label="\$\{escapeHtml\(`\$\{club\.name\}, \$\{unreadLabel\}/);
+  assert.doesNotMatch(source, /<nav class="tabs"/);
+  assert.match(source, /location\.pathname !== "\/fav\/activity"/);
 });
 
 test("reply metadata follows the body and reply moved into the popout menu", () => {
   const bodyIndex = source.indexOf('<div class="post-body">${post.bodyHtml}</div>');
-  const referenceIndex = source.indexOf("post.replyReference", bodyIndex);
+  const referenceIndex = source.indexOf("replyMetaMarkup(post, display)", bodyIndex);
   const menuIndex = source.indexOf('class="post-menu"');
   const replyIndex = source.indexOf('data-action="reply"', menuIndex);
   assert.ok(bodyIndex > -1);
@@ -245,6 +253,9 @@ test("reply metadata follows the body and reply moved into the popout menu", () 
   assert.ok(menuIndex > -1);
   assert.ok(replyIndex > menuIndex);
   assert.doesNotMatch(source, /<div class="post-actions">\s*<button class="reply-button"/);
+  assert.match(source, /data-setting="reply-meta"/);
+  assert.match(source, /data-action="thread"/);
+  assert.match(source, /threadMode \? "thread-back" : "back"/);
 });
 
 test("composers stay in the board flow and dim non-target posts while replying", () => {
@@ -289,6 +300,12 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
     avatarUrl: "/avatars/fixture-user.png",
     date: "25.7.2026 12:00:00",
     datetime: "2026-07-25T10:00:00.000Z",
+    parentId: "999",
+    parentAuthor: "parent-user",
+    parentDate: "25.7.2026 11:00:00",
+    rootId: "999",
+    depth: 1,
+    sequence: 1001,
     replyReference: "Reakce na parent-user, 25.7.2026 11:00:00",
     bodyHtml: "<p>Fixture <strong>body</strong></p>",
     pageHref: "/boards/fixture-board",
@@ -296,6 +313,21 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   assert.equal(
     model.nextOlderHref,
     "/boards/fixture-board?f=20260724-120000",
+  );
+});
+
+test("thread view keeps the root first and orders its replies chronologically", () => {
+  const board = { state: {} };
+  installBoardState(board);
+  const posts = [
+    { id: "103", rootId: "100", datetime: "2026-07-25T11:00:00.000Z", sequence: 3 },
+    { id: "900", rootId: "800", datetime: "2026-07-25T08:00:00.000Z", sequence: 1 },
+    { id: "100", rootId: "", datetime: "2026-07-25T09:00:00.000Z", sequence: 1 },
+    { id: "102", rootId: "100", datetime: "2026-07-25T10:30:00.000Z", sequence: 2 },
+  ];
+  assert.deepEqual(
+    board.threadPosts(posts, "100").map((post) => post.id),
+    ["100", "102", "103"],
   );
 });
 

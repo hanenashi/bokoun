@@ -118,41 +118,6 @@ export const STYLES = `
     stroke-width: 1.8;
   }
 
-  .tabs {
-    position: sticky;
-    top: calc(var(--header-height) + env(safe-area-inset-top));
-    z-index: 9;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    height: 48px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.98);
-  }
-
-  .tab {
-    position: relative;
-    display: grid;
-    place-items: center;
-    color: var(--muted);
-    font-size: 15px;
-    font-weight: 500;
-    text-decoration: none;
-  }
-
-  .tab[aria-current="page"] {
-    color: var(--accent);
-  }
-
-  .tab[aria-current="page"]::after {
-    position: absolute;
-    right: 12px;
-    bottom: -1px;
-    left: 12px;
-    height: 2px;
-    background: var(--accent);
-    content: "";
-  }
-
   .favorites {
     margin: 0;
     padding: 0 16px max(24px, env(safe-area-inset-bottom));
@@ -274,21 +239,17 @@ export const STYLES = `
   }
 
   .posts {
-    padding: 0 16px max(28px, env(safe-area-inset-bottom));
+    padding: 0 0 max(28px, env(safe-area-inset-bottom));
   }
 
   .post {
-    padding: 20px 0 22px;
-    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 16px;
+    border-bottom: 1px solid #c7cfdb;
     scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 56px);
   }
 
   .post--just-sent,
   .post--reply-context {
-    margin-right: -12px;
-    margin-left: -12px;
-    padding-right: 12px;
-    padding-left: 12px;
     transition: background 180ms ease, box-shadow 180ms ease;
   }
 
@@ -302,44 +263,106 @@ export const STYLES = `
     box-shadow: inset 2px 0 0 #d9b58e;
   }
 
+  .post--thread-root {
+    background: #fff;
+    box-shadow: inset 3px 0 #a85a00;
+  }
+
+  .post--thread-reply {
+    background: #edf4ff;
+    box-shadow: inset 3px 0 #8baee8;
+  }
+
+  .thread-banner {
+    position: sticky;
+    top: calc(var(--header-height) + env(safe-area-inset-top));
+    z-index: 9;
+    min-height: 36px;
+    padding: 9px 16px 8px;
+    border-bottom: 1px solid #b8cae8;
+    background: rgba(237, 244, 255, 0.98);
+    color: #415b82;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+  }
+
   .post-header {
     position: relative;
     display: flex;
-    flex-wrap: wrap;
-    gap: 5px 12px;
+    gap: 8px 12px;
     align-items: center;
-    margin-bottom: 11px;
+    margin-bottom: 13px;
   }
 
   .post-author {
     display: inline-flex;
-    gap: 7px;
+    gap: 10px;
     align-items: center;
     min-width: 0;
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--text);
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.3;
+    font-size: 20px;
+    font-weight: 750;
+    line-height: 1.2;
     cursor: pointer;
     text-align: left;
   }
 
+  .post-author > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .post-date {
+    margin-left: auto;
     color: var(--muted);
-    font-size: 14px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     font-weight: 400;
     line-height: 1.3;
   }
 
   .reply-reference {
-    margin: 10px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 7px;
+    align-items: center;
+    justify-content: flex-end;
+    width: fit-content;
+    max-width: 100%;
+    min-height: 30px;
+    margin: 10px 0 -5px auto;
+    padding: 3px 0 0 10px;
+    border: 0;
+    background: transparent;
     color: var(--muted);
-    font-size: 14px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.3;
+    text-align: right;
+  }
+
+  button.reply-reference {
+    color: #53657f;
+    cursor: pointer;
+  }
+
+  button.reply-reference:hover,
+  button.reply-reference:focus-visible {
+    color: var(--accent);
+  }
+
+  .reply-reference strong {
+    font-weight: 700;
+  }
+
+  .reply-reference time {
+    padding-left: 7px;
+    border-left: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
   }
 
   .post-body {
@@ -449,11 +472,11 @@ export const STYLES = `
   }
 
   .post-avatar--inline {
-    width: 26px;
-    height: 26px;
-    flex: 0 0 26px;
-    font-size: 12px;
-    line-height: 26px;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    font-size: 15px;
+    line-height: 40px;
   }
 
   .post-avatar--left {
@@ -1036,6 +1059,10 @@ export const STYLES = `
   }
 
   @media (max-width: 420px) {
+    .app {
+      scrollbar-gutter: auto;
+    }
+
     .topbar--board {
       grid-template-columns: 40px minmax(0, 1fr) 36px 40px auto;
     }
