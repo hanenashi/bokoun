@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.5.0
+// @version      0.5.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -26,6 +26,8 @@
     COMPOSER_TIMEOUT_MS: () => COMPOSER_TIMEOUT_MS,
     DISPLAY_SETTINGS_KEY: () => DISPLAY_SETTINGS_KEY,
     DRAFTS_KEY: () => DRAFTS_KEY,
+    FAVORITES_ORDER_KEY: () => FAVORITES_ORDER_KEY,
+    FAVORITES_SETTINGS_KEY: () => FAVORITES_SETTINGS_KEY,
     FONT_SETTINGS_KEY: () => FONT_SETTINGS_KEY,
     HOST_ID: () => HOST_ID,
     ICONS: () => ICONS,
@@ -108,6 +110,10 @@
   .topbar--board {
     grid-template-columns: 44px minmax(0, 1fr) 36px 44px auto;
     padding-left: 4px;
+  }
+
+  .topbar--favorites {
+    grid-template-columns: minmax(0, 1fr) 44px auto;
   }
 
   .title {
@@ -207,15 +213,84 @@
     list-style: none;
   }
 
+  .favorite-item {
+    position: relative;
+  }
+
   .favorite-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 14px;
     align-items: center;
     min-height: 72px;
+    padding-right: 0;
+    padding-left: 0;
     border-bottom: 1px solid var(--border);
     color: inherit;
     text-decoration: none;
+    transition:
+      background-color 120ms ease,
+      box-shadow 120ms ease,
+      padding 120ms ease;
+  }
+
+  .favorite-row--heat-few {
+    padding-left: 12px;
+    background: #edf8f0;
+    box-shadow: inset 3px 0 #5a9f6b;
+  }
+
+  .favorite-row--heat-more {
+    padding-left: 12px;
+    background: #f4efff;
+    box-shadow: inset 3px 0 #8864bc;
+  }
+
+  .favorite-row--heat-most {
+    padding-left: 12px;
+    background: #fff0ef;
+    box-shadow: inset 3px 0 #c65353;
+  }
+
+  .favorite-item--editing .favorite-row {
+    padding-right: 52px;
+    cursor: default;
+  }
+
+  .favorite-drag-handle {
+    position: absolute;
+    top: 10px;
+    right: 0;
+    bottom: 10px;
+    display: grid;
+    width: 48px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.78);
+    color: var(--muted);
+    cursor: grab;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .favorite-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .favorite-item--dragging {
+    z-index: 2;
+    opacity: 0.88;
+    filter: drop-shadow(0 8px 10px rgba(18, 27, 43, 0.2));
+  }
+
+  .favorites--dragging .favorite-item:not(.favorite-item--dragging) {
+    transition: transform 100ms ease;
   }
 
   .favorite-main {
@@ -487,6 +562,16 @@
     place-items: center;
   }
 
+  .favorites-control {
+    width: 44px;
+  }
+
+  .favorites-settings-toggle[aria-expanded="true"] {
+    border-radius: 50%;
+    background: #fff6e8;
+    color: var(--accent);
+  }
+
   .font-toggle {
     display: grid;
     width: 36px;
@@ -523,6 +608,11 @@
     color: var(--text);
     box-shadow: 0 12px 32px rgba(18, 27, 43, 0.24);
     font: 14px/1.35 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .favorites-panel {
+    right: -70px;
+    width: min(310px, calc(100vw - 20px));
   }
 
   .panel-head {
@@ -641,6 +731,41 @@
   .settings-note {
     margin: 12px 0 4px;
     line-height: 1.45;
+  }
+
+  .heat-legend {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 10px 0 4px 67px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .heat-legend span {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .heat-swatch {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+  }
+
+  .heat-swatch--few {
+    background: #5a9f6b;
+  }
+
+  .heat-swatch--more {
+    background: #8864bc;
+  }
+
+  .heat-swatch--most {
+    background: #c65353;
   }
 
   .panel-actions {
@@ -1015,7 +1140,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.5.0";
+  var VERSION = "0.5.1";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1034,6 +1159,8 @@
   var ACTIVE_COMPOSER_KEY = "bokoun.active-composer.v1";
   var DISPLAY_SETTINGS_KEY = "bokoun.display.v1";
   var FONT_SETTINGS_KEY = "bokoun.fonts.v1";
+  var FAVORITES_SETTINGS_KEY = "bokoun.favorites.v1";
+  var FAVORITES_ORDER_KEY = "bokoun.favorites-order.v1";
   var SELECTORS = Object.freeze({
     favoritesPage: ".favorites-page",
     favoriteRows: ".favorites-page a[href^='/boards/']",
@@ -1070,6 +1197,14 @@
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 20h9"></path>
       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
+    </svg>
+  `,
+    settings: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h10M18 7h2M10 17h10M4 17h2M4 12h3M11 12h9"></path>
+      <circle cx="16" cy="7" r="2"></circle>
+      <circle cx="8" cy="17" r="2"></circle>
+      <circle cx="9" cy="12" r="2"></circle>
     </svg>
   `
   });
@@ -1113,7 +1248,12 @@
     fontSettings: null,
     openHeaderPanel: "",
     openPostMenuId: "",
-    suppressFontClickUntil: 0
+    suppressFontClickUntil: 0,
+    favoritesSettings: null,
+    favoriteManualOrder: null,
+    favoriteSourceClubs: [],
+    favoriteViewClubs: [],
+    editingFavoriteOrder: false
   };
   var gmGet = typeof GM_getValue === "function" ? GM_getValue : (key, fallback) => {
     const raw = localStorage.getItem(`bokoun.gm.${key}`);
@@ -2403,6 +2543,10 @@
     customFamily: "",
     size: 17
   });
+  var DEFAULT_FAVORITES_SETTINGS = Object.freeze({
+    sort: "activity",
+    unreadMode: "count"
+  });
   var FONT_FAMILIES = Object.freeze([
     { value: "default", label: "Bokoun default", stack: "" },
     { value: "classic-okoun", label: "Classic Okoun", stack: 'Verdana, "Bitstream Vera Sans", Arial, sans-serif' },
@@ -2427,12 +2571,16 @@
     { value: "custom", label: "Custom…", stack: "" }
   ]);
   var AVATAR_POSITIONS = /* @__PURE__ */ new Set(["inline", "left"]);
+  var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
+  var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
   var MIN_FONT_SIZE = 8;
   var MAX_FONT_SIZE = 72;
   function installSettings(ctx2) {
     const {
       DISPLAY_SETTINGS_KEY: DISPLAY_SETTINGS_KEY2,
+      FAVORITES_ORDER_KEY: FAVORITES_ORDER_KEY2,
+      FAVORITES_SETTINGS_KEY: FAVORITES_SETTINGS_KEY2,
       FONT_SETTINGS_KEY: FONT_SETTINGS_KEY2,
       gmGet: gmGet2,
       gmSet: gmSet2,
@@ -2448,8 +2596,18 @@
         const stored = safeStoredObject(gmGet2(FONT_SETTINGS_KEY2, {}));
         state2.fontSettings = normalizeFontSettings(stored);
       }
+      if (!state2.favoritesSettings) {
+        const stored = safeStoredObject(gmGet2(FAVORITES_SETTINGS_KEY2, {}));
+        state2.favoritesSettings = normalizeFavoritesSettings(stored);
+      }
+      if (!state2.favoriteManualOrder) {
+        state2.favoriteManualOrder = normalizeFavoriteOrder(
+          gmGet2(FAVORITES_ORDER_KEY2, [])
+        );
+      }
       return {
         display: state2.displaySettings,
+        favorites: state2.favoritesSettings,
         font: state2.fontSettings
       };
     }
@@ -2469,11 +2627,28 @@
         size: normalizeFontSize(value.size)
       };
     }
+    function normalizeFavoritesSettings(value = {}) {
+      return {
+        sort: FAVORITE_SORTS.has(value.sort) ? value.sort : DEFAULT_FAVORITES_SETTINGS.sort,
+        unreadMode: UNREAD_MODES.has(value.unreadMode) ? value.unreadMode : DEFAULT_FAVORITES_SETTINGS.unreadMode
+      };
+    }
+    function normalizeFavoriteOrder(value) {
+      if (!Array.isArray(value)) return [];
+      return [...new Set(value.map(String).filter((href) => href.startsWith("/boards/")))];
+    }
     function currentDisplaySettings() {
       return loadSettings().display;
     }
     function currentFontSettings() {
       return loadSettings().font;
+    }
+    function currentFavoritesSettings() {
+      return loadSettings().favorites;
+    }
+    function currentFavoriteOrder() {
+      loadSettings();
+      return [...state2.favoriteManualOrder];
     }
     function updateDisplaySettings(patch) {
       state2.displaySettings = normalizeDisplaySettings({
@@ -2495,6 +2670,60 @@
         state2.currentSignature = "";
         scheduleRender({ force: true });
       }
+    }
+    function updateFavoritesSettings(patch, { clubs = state2.favoriteSourceClubs } = {}) {
+      state2.favoritesSettings = normalizeFavoritesSettings({
+        ...currentFavoritesSettings(),
+        ...patch
+      });
+      gmSet2(FAVORITES_SETTINGS_KEY2, state2.favoritesSettings);
+      if (state2.favoritesSettings.sort === "manual" && !state2.favoriteManualOrder.length) {
+        saveFavoriteOrder(clubs.map((club) => club.href));
+      }
+      if (state2.favoritesSettings.sort !== "manual") state2.editingFavoriteOrder = false;
+      state2.currentSignature = "";
+      scheduleRender({ force: true });
+    }
+    function saveFavoriteOrder(order) {
+      state2.favoriteManualOrder = normalizeFavoriteOrder(order);
+      gmSet2(FAVORITES_ORDER_KEY2, state2.favoriteManualOrder);
+    }
+    function resetFavoriteOrder(clubs = state2.favoriteSourceClubs) {
+      saveFavoriteOrder(clubs.map((club) => club.href));
+      state2.currentSignature = "";
+      scheduleRender({ force: true });
+    }
+    function sortFavorites(clubs) {
+      const source = clubs.map((club) => ({ ...club }));
+      const { sort } = currentFavoritesSettings();
+      const collator = new Intl.Collator("cs", {
+        numeric: true,
+        sensitivity: "base"
+      });
+      if (sort === "alphabetical") {
+        return source.sort((left, right) => collator.compare(left.name, right.name));
+      }
+      if (sort === "unread") {
+        return source.sort((left, right) => right.unread - left.unread || collator.compare(left.name, right.name));
+      }
+      if (sort === "manual") {
+        const available = new Set(source.map((club) => club.href));
+        const known = currentFavoriteOrder().filter((href) => available.has(href));
+        const knownSet = new Set(known);
+        const appended = source.map((club) => club.href).filter((href) => !knownSet.has(href));
+        const normalized = [...known, ...appended];
+        if (normalized.length !== state2.favoriteManualOrder.length || normalized.some((href, index) => href !== state2.favoriteManualOrder[index])) saveFavoriteOrder(normalized);
+        const positions = new Map(normalized.map((href, index) => [href, index]));
+        return source.sort((left, right) => (positions.get(left.href) ?? Number.MAX_SAFE_INTEGER) - (positions.get(right.href) ?? Number.MAX_SAFE_INTEGER));
+      }
+      return source;
+    }
+    function unreadHeat(unread) {
+      const count = Math.max(0, Number(unread) || 0);
+      if (count === 0) return "";
+      if (count <= 4) return "few";
+      if (count <= 14) return "more";
+      return "most";
     }
     function resetFontSettings() {
       state2.fontSettings = { ...DEFAULT_FONT_SETTINGS };
@@ -2577,10 +2806,19 @@
       loadSettings,
       normalizeDisplaySettings,
       normalizeFontSettings,
+      normalizeFavoritesSettings,
+      normalizeFavoriteOrder,
       currentDisplaySettings,
       currentFontSettings,
+      currentFavoritesSettings,
+      currentFavoriteOrder,
       updateDisplaySettings,
       updateFontSettings,
+      updateFavoritesSettings,
+      saveFavoriteOrder,
+      resetFavoriteOrder,
+      sortFavorites,
+      unreadHeat,
       resetFontSettings,
       validFontFamily,
       fontStack,
@@ -2617,6 +2855,11 @@
     const resetFontSettings = (...args) => ctx2.resetFontSettings(...args);
     const displayFontSize = (...args) => ctx2.displayFontSize(...args);
     const normalizeCustomFamily = (...args) => ctx2.normalizeCustomFamily(...args);
+    const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
+    const updateFavoritesSettings = (...args) => ctx2.updateFavoritesSettings(...args);
+    const saveFavoriteOrder = (...args) => ctx2.saveFavoriteOrder(...args);
+    const resetFavoriteOrder = (...args) => ctx2.resetFavoriteOrder(...args);
+    const unreadHeat = (...args) => ctx2.unreadHeat(...args);
     function escapeHtml(value) {
       const div = document.createElement("div");
       div.textContent = value ?? "";
@@ -2624,7 +2867,14 @@
     }
     function signatureFor(type, model) {
       if (type === "favorites") {
-        return `${routeKey()}|${model.length}|${model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")}`;
+        return [
+          routeKey(),
+          JSON.stringify(currentFavoritesSettings()),
+          state2.openHeaderPanel,
+          state2.editingFavoriteOrder,
+          model.length,
+          model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")
+        ].join("|");
       }
       return [
         location.pathname,
@@ -2664,20 +2914,50 @@
     }
     function favoritesMarkup(clubs) {
       const selectedActivity = location.pathname === "/fav/activity";
-      const rows = clubs.length ? clubs.map((club) => `
-          <li>
-            <a class="favorite-row" href="${escapeHtml(club.href)}" data-native-href="${escapeHtml(club.href)}">
+      const favorites = currentFavoritesSettings();
+      const editing = favorites.sort === "manual" && state2.editingFavoriteOrder;
+      const showCount = ["count", "both"].includes(favorites.unreadMode);
+      const showHeat = ["heat", "both"].includes(favorites.unreadMode);
+      const rows = clubs.length ? clubs.map((club) => {
+        const heat = showHeat ? unreadHeat(club.unread) : "";
+        const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
+        const unreadLabel = club.unread ? `${club.unread} nových příspěvků` : "bez nových příspěvků";
+        return `
+          <li
+            class="favorite-item${editing ? " favorite-item--editing" : ""}"
+            data-favorite-href="${escapeHtml(club.href)}"
+          >
+            <a
+              class="favorite-row${heatClass}"
+              href="${escapeHtml(club.href)}"
+              data-native-href="${escapeHtml(club.href)}"
+              data-unread-count="${escapeHtml(club.unread)}"
+              aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
+              ${editing ? 'aria-disabled="true"' : ""}
+            >
               <span class="favorite-main">
                 <span class="favorite-name">${escapeHtml(club.name)}</span>
                 <span class="favorite-time">${escapeHtml(club.activity)}</span>
               </span>
-              ${club.unread ? `<span class="favorite-unread" aria-label="${club.unread} nových">${club.unread}</span>` : ""}
+              ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
             </a>
+            ${editing ? `
+              <button
+                class="favorite-drag-handle"
+                type="button"
+                aria-label="Přesunout ${escapeHtml(club.name)}"
+                title="Přetáhnout"
+              >
+                <span aria-hidden="true">≡</span>
+              </button>
+            ` : ""}
           </li>
-        `).join("") : `<li class="empty">Žádné oblíbené kluby.</li>`;
+        `;
+      }).join("") : `<li class="empty">Žádné oblíbené kluby.</li>`;
       return `
-      <header class="topbar">
+      <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
+        ${favoritesControlMarkup()}
         ${fullButton()}
       </header>
       <nav class="tabs" aria-label="Řazení oblíbených klubů">
@@ -2685,6 +2965,67 @@
         <a class="tab" href="/fav/topics" data-native-href="/fav/topics" ${selectedActivity ? "" : 'aria-current="page"'}>Témata</a>
       </nav>
       <ul class="favorites">${rows}</ul>
+    `;
+    }
+    function favoritesControlMarkup() {
+      const open = state2.openHeaderPanel === "favorites";
+      return `
+      <div class="header-control favorites-control">
+        <button
+          class="icon-button header-panel-toggle favorites-settings-toggle"
+          type="button"
+          data-action="favorites-panel"
+          aria-label="Nastavení oblíbených"
+          aria-expanded="${open ? "true" : "false"}"
+        >${ICONS2.settings}</button>
+        ${open ? favoritesPanelMarkup() : ""}
+      </div>
+    `;
+    }
+    function favoritesPanelMarkup() {
+      const favorites = currentFavoritesSettings();
+      const manual = favorites.sort === "manual";
+      return `
+      <section class="header-panel favorites-panel" aria-label="Nastavení oblíbených">
+        <header class="panel-head">
+          <strong>Oblíbené</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
+        <label class="settings-field">
+          <span>Řazení</span>
+          <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
+            <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Výchozí</option>
+            <option value="alphabetical" ${favorites.sort === "alphabetical" ? "selected" : ""}>Abecedně</option>
+            <option value="unread" ${favorites.sort === "unread" ? "selected" : ""}>Podle nových</option>
+            <option value="manual" ${favorites.sort === "manual" ? "selected" : ""}>Ručně</option>
+          </select>
+        </label>
+        <label class="settings-field">
+          <span>Nové</span>
+          <select data-setting="unread-mode" aria-label="Zobrazení nových příspěvků">
+            <option value="count" ${favorites.unreadMode === "count" ? "selected" : ""}>Číslo</option>
+            <option value="heat" ${favorites.unreadMode === "heat" ? "selected" : ""}>Barva</option>
+            <option value="both" ${favorites.unreadMode === "both" ? "selected" : ""}>Číslo + barva</option>
+            <option value="hidden" ${favorites.unreadMode === "hidden" ? "selected" : ""}>Skrýt</option>
+          </select>
+        </label>
+        <div class="heat-legend" aria-label="Barevná stupnice nových příspěvků">
+          <span><i class="heat-swatch heat-swatch--few"></i>1–4</span>
+          <span><i class="heat-swatch heat-swatch--more"></i>5–14</span>
+          <span><i class="heat-swatch heat-swatch--most"></i>15+</span>
+        </div>
+        ${manual ? `
+          <p class="settings-note">V režimu úprav přetahujte kluby za madlo. Odkazy jsou dočasně vypnuté.</p>
+          <div class="panel-actions">
+            <button type="button" data-action="toggle-favorite-edit">
+              ${state2.editingFavoriteOrder ? "Hotovo" : "Upravit pořadí"}
+            </button>
+            <button type="button" data-action="reset-favorite-order">Obnovit pořadí</button>
+          </div>
+        ` : `
+          <p class="settings-note">Výchozí zachovává pořadí Kapybary pro zvolenou kartu.</p>
+        `}
+      </section>
     `;
     }
     function setHeaderPanel(panel = "") {
@@ -2982,6 +3323,9 @@
       state2.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
       state2.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
       state2.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
+      state2.shadow.querySelector("[data-action='favorites-panel']")?.addEventListener("click", () => {
+        setHeaderPanel("favorites");
+      });
       const fontToggle = state2.shadow.querySelector(".font-toggle");
       fontToggle?.addEventListener("click", (event) => {
         if (Date.now() < state2.suppressFontClickUntil) {
@@ -3060,6 +3404,25 @@
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });
       });
+      state2.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
+        updateFavoritesSettings(
+          { sort: event.currentTarget.value },
+          { clubs: state2.favoriteSourceClubs }
+        );
+      });
+      state2.shadow.querySelector("[data-setting='unread-mode']")?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ unreadMode: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[data-action='toggle-favorite-edit']")?.addEventListener("click", () => {
+        const enteringEditMode = !state2.editingFavoriteOrder;
+        state2.editingFavoriteOrder = enteringEditMode;
+        if (enteringEditMode) state2.openHeaderPanel = "";
+        state2.currentSignature = "";
+        scheduleRender({ force: true });
+      });
+      state2.shadow.querySelector("[data-action='reset-favorite-order']")?.addEventListener("click", () => {
+        resetFavoriteOrder(state2.favoriteSourceClubs);
+      });
       for (const button of state2.shadow.querySelectorAll("[data-action='post-menu']")) {
         button.addEventListener("click", () => setPostMenu(button.dataset.postId));
       }
@@ -3084,13 +3447,15 @@
       for (const link of state2.shadow.querySelectorAll("[data-native-href]")) {
         link.addEventListener("click", (event) => {
           event.preventDefault();
+          if (state2.editingFavoriteOrder && link.closest(".favorite-item")) return;
           navigateNative(link.getAttribute("data-native-href"));
         });
       }
+      attachFavoriteReordering();
       const inner = state2.shadow.querySelector(".app-inner");
       inner.onpointerdown = (event) => {
         if (state2.openPostMenuId && !event.target.closest(".post-menu, .post-menu-trigger")) setPostMenu("");
-        if (state2.openHeaderPanel && !event.target.closest(".header-panel, .font-toggle")) setHeaderPanel("");
+        if (state2.openHeaderPanel && !event.target.closest(".header-panel, .header-panel-toggle, .font-toggle")) setHeaderPanel("");
       };
       state2.shadow.onkeydown = (event) => {
         if (event.key !== "Escape") return;
@@ -3098,11 +3463,62 @@
         else if (state2.openHeaderPanel) setHeaderPanel("");
       };
     }
+    function attachFavoriteReordering() {
+      if (!state2.editingFavoriteOrder) return;
+      const list = state2.shadow.querySelector(".favorites");
+      if (!list) return;
+      let dragged = null;
+      let pointerId = null;
+      const finish = (event) => {
+        if (!dragged || event && event.pointerId !== pointerId) return;
+        dragged.classList.remove("favorite-item--dragging");
+        list.classList.remove("favorites--dragging");
+        saveFavoriteOrder(
+          [...list.querySelectorAll("[data-favorite-href]")].map((item) => item.dataset.favoriteHref)
+        );
+        if (pointerId !== null && list.hasPointerCapture(pointerId)) {
+          list.releasePointerCapture(pointerId);
+        }
+        dragged = null;
+        pointerId = null;
+      };
+      list.addEventListener("pointermove", (event) => {
+        if (!dragged || event.pointerId !== pointerId) return;
+        event.preventDefault();
+        const scrollerRect = state2.scroller?.getBoundingClientRect();
+        if (scrollerRect && event.clientY < scrollerRect.top + 90) {
+          state2.scroller.scrollBy({ top: -14, behavior: "auto" });
+        } else if (scrollerRect && event.clientY > scrollerRect.bottom - 70) {
+          state2.scroller.scrollBy({ top: 14, behavior: "auto" });
+        }
+        const rows = [...list.querySelectorAll(".favorite-item")].filter((item) => item !== dragged);
+        const target = rows.find((item) => event.clientY < item.getBoundingClientRect().top + item.getBoundingClientRect().height / 2);
+        if (target && target !== dragged.nextElementSibling) target.before(dragged);
+        else if (!target && dragged !== list.lastElementChild) list.append(dragged);
+      });
+      list.addEventListener("pointerup", finish);
+      list.addEventListener("pointercancel", finish);
+      list.addEventListener("lostpointercapture", finish);
+      for (const handle of list.querySelectorAll(".favorite-drag-handle")) {
+        handle.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          dragged = handle.closest(".favorite-item");
+          if (!dragged) return;
+          pointerId = event.pointerId;
+          list.setPointerCapture(pointerId);
+          dragged.classList.add("favorite-item--dragging");
+          list.classList.add("favorites--dragging");
+        });
+      }
+    }
     Object.assign(ctx2, {
       escapeHtml,
       signatureFor,
       fullButton,
       favoritesMarkup,
+      favoritesControlMarkup,
+      favoritesPanelMarkup,
       boardMarkup,
       composerMarkup,
       attachUiEvents,
@@ -3112,7 +3528,8 @@
       fontPanelMarkup,
       displayPanelMarkup,
       avatarImageMarkup,
-      postMenuMarkup
+      postMenuMarkup,
+      attachFavoriteReordering
     });
   }
 
@@ -3309,6 +3726,7 @@
     const boardMarkup = (...args) => ctx2.boardMarkup(...args);
     const attachUiEvents = (...args) => ctx2.attachUiEvents(...args);
     const applyVisualSettings = (...args) => ctx2.applyVisualSettings(...args);
+    const sortFavorites = (...args) => ctx2.sortFavorites(...args);
     function render({ force = false } = {}) {
       if (state2.disabled || state2.nativeMode) return;
       const type = routeType();
@@ -3330,6 +3748,9 @@
         model = structuredRouteModel;
         if (model) readSource = "structured";
         else model = readFavoritesFromDom();
+        state2.favoriteSourceClubs = model.map((club) => ({ ...club }));
+        model = sortFavorites(model);
+        state2.favoriteViewClubs = model.map((club) => ({ ...club }));
       } else {
         const structuredModel = structuredRouteModel;
         const nativeModel = structuredModel || readBoardFromDom(document, key);
@@ -3373,6 +3794,9 @@
       }
       saveScroll();
       state2.currentSignature = "";
+      state2.openHeaderPanel = "";
+      state2.openPostMenuId = "";
+      state2.editingFavoriteOrder = false;
       if (routeType() === "unsupported" || !isMobileEligible()) {
         state2.currentRouteKey = key;
         revealNative();

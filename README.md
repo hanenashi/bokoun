@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, configurable post display and inline Markdown writing pre-alpha (`0.5.0`).
+> Status: structured-data reading, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.5.1`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.5.0` prototype reads Favorites, boards and older post pages from
+The `0.5.1` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun never calls
@@ -42,6 +42,10 @@ Current prototype boundaries:
 - loaded pages and sanitized post models live in memory only and disappear on
   a real page reload;
 - duplicate boundary posts are removed by normalized post ID;
+- Favorites can keep Kapybara's order, sort alphabetically or by unread count,
+  or use a persistent touch-friendly manual order;
+- unread counts can appear as numbers, a pale green/violet/coral heat scale,
+  both, or neither; exact counts remain available to assistive technology;
 - the pencil in the board header opens a plain Markdown editor above the posts;
 - every displayed post has a small **Odpovědět** action; its editor opens inside
   that post while surrounding posts dim, but the board remains scrollable;
@@ -469,7 +473,7 @@ bokoun/
 │   ├── board-state.js          # normalized post window and deduplication
 │   ├── writing.js              # drafts and native composer bridge
 │   ├── pagination.js           # endless older-page loading
-│   ├── settings.js             # persistent display and font preferences
+│   ├── settings.js             # persistent Favorites, display and font preferences
 │   ├── ui.js                   # markup and UI event binding
 │   ├── navigation.js           # native/Bokoun handoff and anchors
 │   ├── controller.js
@@ -570,6 +574,12 @@ Version `0.5.0` adds Bokoun-owned display preferences. Avatars can be compact
 and inline, placed in a left column or hidden; author/avatar clicks open a
 small post action menu, reply metadata sits below the body, and the board
 header exposes Cudloun-inspired persistent font controls.
+
+Version `0.5.1` adds Bokoun-owned Favorites preferences. Clubs can retain
+Kapybara's activity order, sort Czech-aware alphabetically or by unread count,
+or use a persistent manual order with touch drag handles. Unread activity can
+be shown as an exact number, a restrained color heat scale, both, or hidden
+visually while remaining in each row's accessible label.
 
 ### Phase 4 — direct transport experiment
 

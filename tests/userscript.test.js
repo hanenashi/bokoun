@@ -27,7 +27,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.5\.0/);
+  assert.match(source, /@version\s+0\.5\.1/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -124,12 +124,18 @@ test("post display settings persist avatar layout and safe font controls", () =>
   const stored = new Map();
   const settings = {
     DISPLAY_SETTINGS_KEY: "display",
+    FAVORITES_ORDER_KEY: "favorite-order",
+    FAVORITES_SETTINGS_KEY: "favorites",
     FONT_SETTINGS_KEY: "fonts",
     gmGet: (key, fallback) => stored.get(key) ?? fallback,
     gmSet: (key, value) => stored.set(key, value),
     state: {
       currentSignature: "",
       displaySettings: null,
+      editingFavoriteOrder: false,
+      favoriteManualOrder: null,
+      favoriteSourceClubs: [],
+      favoritesSettings: null,
       fontSettings: null,
       scroller: null,
     },
@@ -154,6 +160,79 @@ test("post display settings persist avatar layout and safe font controls", () =>
     '"Atkinson Hyperlegible", Arial, sans-serif',
   );
   assert.equal(settings.normalizeCustomFamily("url(evil), serif"), "");
+});
+
+test("Favorites preferences sort, persist manual order, and map unread heat", () => {
+  const stored = new Map();
+  const settings = {
+    DISPLAY_SETTINGS_KEY: "display",
+    FAVORITES_ORDER_KEY: "favorite-order",
+    FAVORITES_SETTINGS_KEY: "favorites",
+    FONT_SETTINGS_KEY: "fonts",
+    gmGet: (key, fallback) => stored.get(key) ?? fallback,
+    gmSet: (key, value) => stored.set(key, value),
+    state: {
+      currentSignature: "",
+      displaySettings: null,
+      editingFavoriteOrder: false,
+      favoriteManualOrder: null,
+      favoriteSourceClubs: [],
+      favoritesSettings: null,
+      fontSettings: null,
+      scroller: null,
+    },
+    scheduleRender() {},
+  };
+  installSettings(settings);
+  const clubs = [
+    { href: "/boards/zaba", name: "Žába", unread: 2 },
+    { href: "/boards/abel", name: "Ábel", unread: 15 },
+    { href: "/boards/borek", name: "Borek", unread: 5 },
+  ];
+  settings.state.favoriteSourceClubs = clubs;
+
+  settings.updateFavoritesSettings({ sort: "alphabetical" });
+  assert.deepEqual(
+    settings.sortFavorites(clubs).map((club) => club.name),
+    ["Ábel", "Borek", "Žába"],
+  );
+  settings.updateFavoritesSettings({ sort: "unread", unreadMode: "both" });
+  assert.deepEqual(
+    settings.sortFavorites(clubs).map((club) => club.unread),
+    [15, 5, 2],
+  );
+  assert.equal(stored.get("favorites").unreadMode, "both");
+
+  settings.saveFavoriteOrder(["/boards/borek", "/boards/abel"]);
+  settings.updateFavoritesSettings({ sort: "manual" });
+  assert.deepEqual(
+    settings.sortFavorites(clubs).map((club) => club.href),
+    ["/boards/borek", "/boards/abel", "/boards/zaba"],
+  );
+  assert.deepEqual(
+    stored.get("favorite-order"),
+    ["/boards/borek", "/boards/abel", "/boards/zaba"],
+  );
+  assert.equal(settings.unreadHeat(0), "");
+  assert.equal(settings.unreadHeat(1), "few");
+  assert.equal(settings.unreadHeat(4), "few");
+  assert.equal(settings.unreadHeat(5), "more");
+  assert.equal(settings.unreadHeat(14), "more");
+  assert.equal(settings.unreadHeat(15), "most");
+});
+
+test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering", () => {
+  assert.match(source, /data-action="favorites-panel"/);
+  assert.match(source, /data-setting="favorites-sort"/);
+  assert.match(source, /data-setting="unread-mode"/);
+  assert.match(source, /data-action="toggle-favorite-edit"/);
+  assert.match(source, /class="favorite-drag-handle"/);
+  assert.match(source, /touch-action: none/);
+  assert.match(source, /favorite-row--heat-few/);
+  assert.match(source, /favorite-row--heat-more/);
+  assert.match(source, /favorite-row--heat-most/);
+  assert.match(source, /data-unread-count=/);
+  assert.match(source, /aria-label="\$\{escapeHtml\(`\$\{club\.name\}, \$\{unreadLabel\}/);
 });
 
 test("reply metadata follows the body and reply moved into the popout menu", () => {

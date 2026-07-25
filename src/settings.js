@@ -9,6 +9,11 @@ const DEFAULT_FONT_SETTINGS = Object.freeze({
   size: 17,
 });
 
+const DEFAULT_FAVORITES_SETTINGS = Object.freeze({
+  sort: "activity",
+  unreadMode: "count",
+});
+
 const FONT_FAMILIES = Object.freeze([
   { value: "default", label: "Bokoun default", stack: "" },
   { value: "classic-okoun", label: "Classic Okoun", stack: 'Verdana, "Bitstream Vera Sans", Arial, sans-serif' },
@@ -34,6 +39,8 @@ const FONT_FAMILIES = Object.freeze([
 ]);
 
 const AVATAR_POSITIONS = new Set(["inline", "left"]);
+const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
+const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 72;
@@ -41,6 +48,8 @@ const MAX_FONT_SIZE = 72;
 export function installSettings(ctx) {
   const {
     DISPLAY_SETTINGS_KEY,
+    FAVORITES_ORDER_KEY,
+    FAVORITES_SETTINGS_KEY,
     FONT_SETTINGS_KEY,
     gmGet,
     gmSet,
@@ -57,8 +66,18 @@ export function installSettings(ctx) {
       const stored = safeStoredObject(gmGet(FONT_SETTINGS_KEY, {}));
       state.fontSettings = normalizeFontSettings(stored);
     }
+    if (!state.favoritesSettings) {
+      const stored = safeStoredObject(gmGet(FAVORITES_SETTINGS_KEY, {}));
+      state.favoritesSettings = normalizeFavoritesSettings(stored);
+    }
+    if (!state.favoriteManualOrder) {
+      state.favoriteManualOrder = normalizeFavoriteOrder(
+        gmGet(FAVORITES_ORDER_KEY, []),
+      );
+    }
     return {
       display: state.displaySettings,
+      favorites: state.favoritesSettings,
       font: state.fontSettings,
     };
   }
@@ -84,12 +103,37 @@ export function installSettings(ctx) {
     };
   }
 
+  function normalizeFavoritesSettings(value = {}) {
+    return {
+      sort: FAVORITE_SORTS.has(value.sort)
+        ? value.sort
+        : DEFAULT_FAVORITES_SETTINGS.sort,
+      unreadMode: UNREAD_MODES.has(value.unreadMode)
+        ? value.unreadMode
+        : DEFAULT_FAVORITES_SETTINGS.unreadMode,
+    };
+  }
+
+  function normalizeFavoriteOrder(value) {
+    if (!Array.isArray(value)) return [];
+    return [...new Set(value.map(String).filter((href) => href.startsWith("/boards/")))];
+  }
+
   function currentDisplaySettings() {
     return loadSettings().display;
   }
 
   function currentFontSettings() {
     return loadSettings().font;
+  }
+
+  function currentFavoritesSettings() {
+    return loadSettings().favorites;
+  }
+
+  function currentFavoriteOrder() {
+    loadSettings();
+    return [...state.favoriteManualOrder];
   }
 
   function updateDisplaySettings(patch) {
@@ -113,6 +157,77 @@ export function installSettings(ctx) {
       state.currentSignature = "";
       scheduleRender({ force: true });
     }
+  }
+
+  function updateFavoritesSettings(patch, { clubs = state.favoriteSourceClubs } = {}) {
+    state.favoritesSettings = normalizeFavoritesSettings({
+      ...currentFavoritesSettings(),
+      ...patch,
+    });
+    gmSet(FAVORITES_SETTINGS_KEY, state.favoritesSettings);
+    if (state.favoritesSettings.sort === "manual" && !state.favoriteManualOrder.length) {
+      saveFavoriteOrder(clubs.map((club) => club.href));
+    }
+    if (state.favoritesSettings.sort !== "manual") state.editingFavoriteOrder = false;
+    state.currentSignature = "";
+    scheduleRender({ force: true });
+  }
+
+  function saveFavoriteOrder(order) {
+    state.favoriteManualOrder = normalizeFavoriteOrder(order);
+    gmSet(FAVORITES_ORDER_KEY, state.favoriteManualOrder);
+  }
+
+  function resetFavoriteOrder(clubs = state.favoriteSourceClubs) {
+    saveFavoriteOrder(clubs.map((club) => club.href));
+    state.currentSignature = "";
+    scheduleRender({ force: true });
+  }
+
+  function sortFavorites(clubs) {
+    const source = clubs.map((club) => ({ ...club }));
+    const { sort } = currentFavoritesSettings();
+    const collator = new Intl.Collator("cs", {
+      numeric: true,
+      sensitivity: "base",
+    });
+
+    if (sort === "alphabetical") {
+      return source.sort((left, right) => collator.compare(left.name, right.name));
+    }
+    if (sort === "unread") {
+      return source.sort((left, right) => (
+        right.unread - left.unread
+        || collator.compare(left.name, right.name)
+      ));
+    }
+    if (sort === "manual") {
+      const available = new Set(source.map((club) => club.href));
+      const known = currentFavoriteOrder().filter((href) => available.has(href));
+      const knownSet = new Set(known);
+      const appended = source
+        .map((club) => club.href)
+        .filter((href) => !knownSet.has(href));
+      const normalized = [...known, ...appended];
+      if (
+        normalized.length !== state.favoriteManualOrder.length
+        || normalized.some((href, index) => href !== state.favoriteManualOrder[index])
+      ) saveFavoriteOrder(normalized);
+      const positions = new Map(normalized.map((href, index) => [href, index]));
+      return source.sort((left, right) => (
+        (positions.get(left.href) ?? Number.MAX_SAFE_INTEGER)
+        - (positions.get(right.href) ?? Number.MAX_SAFE_INTEGER)
+      ));
+    }
+    return source;
+  }
+
+  function unreadHeat(unread) {
+    const count = Math.max(0, Number(unread) || 0);
+    if (count === 0) return "";
+    if (count <= 4) return "few";
+    if (count <= 14) return "more";
+    return "most";
   }
 
   function resetFontSettings() {
@@ -208,10 +323,19 @@ export function installSettings(ctx) {
     loadSettings,
     normalizeDisplaySettings,
     normalizeFontSettings,
+    normalizeFavoritesSettings,
+    normalizeFavoriteOrder,
     currentDisplaySettings,
     currentFontSettings,
+    currentFavoritesSettings,
+    currentFavoriteOrder,
     updateDisplaySettings,
     updateFontSettings,
+    updateFavoritesSettings,
+    saveFavoriteOrder,
+    resetFavoriteOrder,
+    sortFavorites,
+    unreadHeat,
     resetFontSettings,
     validFontFamily,
     fontStack,

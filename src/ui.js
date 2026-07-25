@@ -23,6 +23,11 @@ export function installUi(ctx) {
   const resetFontSettings = (...args) => ctx.resetFontSettings(...args);
   const displayFontSize = (...args) => ctx.displayFontSize(...args);
   const normalizeCustomFamily = (...args) => ctx.normalizeCustomFamily(...args);
+  const currentFavoritesSettings = (...args) => ctx.currentFavoritesSettings(...args);
+  const updateFavoritesSettings = (...args) => ctx.updateFavoritesSettings(...args);
+  const saveFavoriteOrder = (...args) => ctx.saveFavoriteOrder(...args);
+  const resetFavoriteOrder = (...args) => ctx.resetFavoriteOrder(...args);
+  const unreadHeat = (...args) => ctx.unreadHeat(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -32,7 +37,14 @@ export function installUi(ctx) {
 
   function signatureFor(type, model) {
     if (type === "favorites") {
-      return `${routeKey()}|${model.length}|${model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")}`;
+      return [
+        routeKey(),
+        JSON.stringify(currentFavoritesSettings()),
+        state.openHeaderPanel,
+        state.editingFavoriteOrder,
+        model.length,
+        model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";"),
+      ].join("|");
     }
     return [
       location.pathname,
@@ -78,23 +90,55 @@ export function installUi(ctx) {
 
   function favoritesMarkup(clubs) {
     const selectedActivity = location.pathname === "/fav/activity";
+    const favorites = currentFavoritesSettings();
+    const editing = favorites.sort === "manual" && state.editingFavoriteOrder;
+    const showCount = ["count", "both"].includes(favorites.unreadMode);
+    const showHeat = ["heat", "both"].includes(favorites.unreadMode);
     const rows = clubs.length
-      ? clubs.map((club) => `
-          <li>
-            <a class="favorite-row" href="${escapeHtml(club.href)}" data-native-href="${escapeHtml(club.href)}">
+      ? clubs.map((club) => {
+        const heat = showHeat ? unreadHeat(club.unread) : "";
+        const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
+        const unreadLabel = club.unread
+          ? `${club.unread} nových příspěvků`
+          : "bez nových příspěvků";
+        return `
+          <li
+            class="favorite-item${editing ? " favorite-item--editing" : ""}"
+            data-favorite-href="${escapeHtml(club.href)}"
+          >
+            <a
+              class="favorite-row${heatClass}"
+              href="${escapeHtml(club.href)}"
+              data-native-href="${escapeHtml(club.href)}"
+              data-unread-count="${escapeHtml(club.unread)}"
+              aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
+              ${editing ? 'aria-disabled="true"' : ""}
+            >
               <span class="favorite-main">
                 <span class="favorite-name">${escapeHtml(club.name)}</span>
                 <span class="favorite-time">${escapeHtml(club.activity)}</span>
               </span>
-              ${club.unread ? `<span class="favorite-unread" aria-label="${club.unread} nových">${club.unread}</span>` : ""}
+              ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
             </a>
+            ${editing ? `
+              <button
+                class="favorite-drag-handle"
+                type="button"
+                aria-label="Přesunout ${escapeHtml(club.name)}"
+                title="Přetáhnout"
+              >
+                <span aria-hidden="true">≡</span>
+              </button>
+            ` : ""}
           </li>
-        `).join("")
+        `;
+      }).join("")
       : `<li class="empty">Žádné oblíbené kluby.</li>`;
 
     return `
-      <header class="topbar">
+      <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
+        ${favoritesControlMarkup()}
         ${fullButton()}
       </header>
       <nav class="tabs" aria-label="Řazení oblíbených klubů">
@@ -102,6 +146,69 @@ export function installUi(ctx) {
         <a class="tab" href="/fav/topics" data-native-href="/fav/topics" ${selectedActivity ? "" : 'aria-current="page"'}>Témata</a>
       </nav>
       <ul class="favorites">${rows}</ul>
+    `;
+  }
+
+  function favoritesControlMarkup() {
+    const open = state.openHeaderPanel === "favorites";
+    return `
+      <div class="header-control favorites-control">
+        <button
+          class="icon-button header-panel-toggle favorites-settings-toggle"
+          type="button"
+          data-action="favorites-panel"
+          aria-label="Nastavení oblíbených"
+          aria-expanded="${open ? "true" : "false"}"
+        >${ICONS.settings}</button>
+        ${open ? favoritesPanelMarkup() : ""}
+      </div>
+    `;
+  }
+
+  function favoritesPanelMarkup() {
+    const favorites = currentFavoritesSettings();
+    const manual = favorites.sort === "manual";
+    return `
+      <section class="header-panel favorites-panel" aria-label="Nastavení oblíbených">
+        <header class="panel-head">
+          <strong>Oblíbené</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
+        <label class="settings-field">
+          <span>Řazení</span>
+          <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
+            <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Výchozí</option>
+            <option value="alphabetical" ${favorites.sort === "alphabetical" ? "selected" : ""}>Abecedně</option>
+            <option value="unread" ${favorites.sort === "unread" ? "selected" : ""}>Podle nových</option>
+            <option value="manual" ${favorites.sort === "manual" ? "selected" : ""}>Ručně</option>
+          </select>
+        </label>
+        <label class="settings-field">
+          <span>Nové</span>
+          <select data-setting="unread-mode" aria-label="Zobrazení nových příspěvků">
+            <option value="count" ${favorites.unreadMode === "count" ? "selected" : ""}>Číslo</option>
+            <option value="heat" ${favorites.unreadMode === "heat" ? "selected" : ""}>Barva</option>
+            <option value="both" ${favorites.unreadMode === "both" ? "selected" : ""}>Číslo + barva</option>
+            <option value="hidden" ${favorites.unreadMode === "hidden" ? "selected" : ""}>Skrýt</option>
+          </select>
+        </label>
+        <div class="heat-legend" aria-label="Barevná stupnice nových příspěvků">
+          <span><i class="heat-swatch heat-swatch--few"></i>1–4</span>
+          <span><i class="heat-swatch heat-swatch--more"></i>5–14</span>
+          <span><i class="heat-swatch heat-swatch--most"></i>15+</span>
+        </div>
+        ${manual ? `
+          <p class="settings-note">V režimu úprav přetahujte kluby za madlo. Odkazy jsou dočasně vypnuté.</p>
+          <div class="panel-actions">
+            <button type="button" data-action="toggle-favorite-edit">
+              ${state.editingFavoriteOrder ? "Hotovo" : "Upravit pořadí"}
+            </button>
+            <button type="button" data-action="reset-favorite-order">Obnovit pořadí</button>
+          </div>
+        ` : `
+          <p class="settings-note">Výchozí zachovává pořadí Kapybary pro zvolenou kartu.</p>
+        `}
+      </section>
     `;
   }
 
@@ -432,6 +539,9 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
     state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
     state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
+    state.shadow.querySelector("[data-action='favorites-panel']")?.addEventListener("click", () => {
+      setHeaderPanel("favorites");
+    });
     const fontToggle = state.shadow.querySelector(".font-toggle");
     fontToggle?.addEventListener("click", (event) => {
       if (Date.now() < state.suppressFontClickUntil) {
@@ -512,6 +622,25 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });
     });
+    state.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
+      updateFavoritesSettings(
+        { sort: event.currentTarget.value },
+        { clubs: state.favoriteSourceClubs },
+      );
+    });
+    state.shadow.querySelector("[data-setting='unread-mode']")?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ unreadMode: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-action='toggle-favorite-edit']")?.addEventListener("click", () => {
+      const enteringEditMode = !state.editingFavoriteOrder;
+      state.editingFavoriteOrder = enteringEditMode;
+      if (enteringEditMode) state.openHeaderPanel = "";
+      state.currentSignature = "";
+      scheduleRender({ force: true });
+    });
+    state.shadow.querySelector("[data-action='reset-favorite-order']")?.addEventListener("click", () => {
+      resetFavoriteOrder(state.favoriteSourceClubs);
+    });
     for (const button of state.shadow.querySelectorAll("[data-action='post-menu']")) {
       button.addEventListener("click", () => setPostMenu(button.dataset.postId));
     }
@@ -536,9 +665,11 @@ export function installUi(ctx) {
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {
         event.preventDefault();
+        if (state.editingFavoriteOrder && link.closest(".favorite-item")) return;
         navigateNative(link.getAttribute("data-native-href"));
       });
     }
+    attachFavoriteReordering();
     const inner = state.shadow.querySelector(".app-inner");
     inner.onpointerdown = (event) => {
       if (
@@ -547,7 +678,7 @@ export function installUi(ctx) {
       ) setPostMenu("");
       if (
         state.openHeaderPanel
-        && !event.target.closest(".header-panel, .font-toggle")
+        && !event.target.closest(".header-panel, .header-panel-toggle, .font-toggle")
       ) setHeaderPanel("");
     };
     state.shadow.onkeydown = (event) => {
@@ -557,11 +688,71 @@ export function installUi(ctx) {
     };
   }
 
+  function attachFavoriteReordering() {
+    if (!state.editingFavoriteOrder) return;
+    const list = state.shadow.querySelector(".favorites");
+    if (!list) return;
+
+    let dragged = null;
+    let pointerId = null;
+    const finish = (event) => {
+      if (!dragged || (event && event.pointerId !== pointerId)) return;
+      dragged.classList.remove("favorite-item--dragging");
+      list.classList.remove("favorites--dragging");
+      saveFavoriteOrder(
+        [...list.querySelectorAll("[data-favorite-href]")]
+          .map((item) => item.dataset.favoriteHref),
+      );
+      if (pointerId !== null && list.hasPointerCapture(pointerId)) {
+        list.releasePointerCapture(pointerId);
+      }
+      dragged = null;
+      pointerId = null;
+    };
+    list.addEventListener("pointermove", (event) => {
+      if (!dragged || event.pointerId !== pointerId) return;
+      event.preventDefault();
+      const scrollerRect = state.scroller?.getBoundingClientRect();
+      if (scrollerRect && event.clientY < scrollerRect.top + 90) {
+        state.scroller.scrollBy({ top: -14, behavior: "auto" });
+      } else if (scrollerRect && event.clientY > scrollerRect.bottom - 70) {
+        state.scroller.scrollBy({ top: 14, behavior: "auto" });
+      }
+
+      const rows = [...list.querySelectorAll(".favorite-item")]
+        .filter((item) => item !== dragged);
+      const target = rows.find((item) => (
+        event.clientY < item.getBoundingClientRect().top
+          + item.getBoundingClientRect().height / 2
+      ));
+      if (target && target !== dragged.nextElementSibling) target.before(dragged);
+      else if (!target && dragged !== list.lastElementChild) list.append(dragged);
+    });
+    list.addEventListener("pointerup", finish);
+    list.addEventListener("pointercancel", finish);
+    list.addEventListener("lostpointercapture", finish);
+
+    for (const handle of list.querySelectorAll(".favorite-drag-handle")) {
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        dragged = handle.closest(".favorite-item");
+        if (!dragged) return;
+        pointerId = event.pointerId;
+        list.setPointerCapture(pointerId);
+        dragged.classList.add("favorite-item--dragging");
+        list.classList.add("favorites--dragging");
+      });
+    }
+  }
+
   Object.assign(ctx, {
     escapeHtml,
     signatureFor,
     fullButton,
     favoritesMarkup,
+    favoritesControlMarkup,
+    favoritesPanelMarkup,
     boardMarkup,
     composerMarkup,
     attachUiEvents,
@@ -572,5 +763,6 @@ export function installUi(ctx) {
     displayPanelMarkup,
     avatarImageMarkup,
     postMenuMarkup,
+    attachFavoriteReordering,
   });
 }

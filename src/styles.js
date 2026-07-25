@@ -58,6 +58,10 @@ export const STYLES = `
     padding-left: 4px;
   }
 
+  .topbar--favorites {
+    grid-template-columns: minmax(0, 1fr) 44px auto;
+  }
+
   .title {
     min-width: 0;
     margin: 0;
@@ -155,15 +159,84 @@ export const STYLES = `
     list-style: none;
   }
 
+  .favorite-item {
+    position: relative;
+  }
+
   .favorite-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 14px;
     align-items: center;
     min-height: 72px;
+    padding-right: 0;
+    padding-left: 0;
     border-bottom: 1px solid var(--border);
     color: inherit;
     text-decoration: none;
+    transition:
+      background-color 120ms ease,
+      box-shadow 120ms ease,
+      padding 120ms ease;
+  }
+
+  .favorite-row--heat-few {
+    padding-left: 12px;
+    background: #edf8f0;
+    box-shadow: inset 3px 0 #5a9f6b;
+  }
+
+  .favorite-row--heat-more {
+    padding-left: 12px;
+    background: #f4efff;
+    box-shadow: inset 3px 0 #8864bc;
+  }
+
+  .favorite-row--heat-most {
+    padding-left: 12px;
+    background: #fff0ef;
+    box-shadow: inset 3px 0 #c65353;
+  }
+
+  .favorite-item--editing .favorite-row {
+    padding-right: 52px;
+    cursor: default;
+  }
+
+  .favorite-drag-handle {
+    position: absolute;
+    top: 10px;
+    right: 0;
+    bottom: 10px;
+    display: grid;
+    width: 48px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.78);
+    color: var(--muted);
+    cursor: grab;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .favorite-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .favorite-item--dragging {
+    z-index: 2;
+    opacity: 0.88;
+    filter: drop-shadow(0 8px 10px rgba(18, 27, 43, 0.2));
+  }
+
+  .favorites--dragging .favorite-item:not(.favorite-item--dragging) {
+    transition: transform 100ms ease;
   }
 
   .favorite-main {
@@ -435,6 +508,16 @@ export const STYLES = `
     place-items: center;
   }
 
+  .favorites-control {
+    width: 44px;
+  }
+
+  .favorites-settings-toggle[aria-expanded="true"] {
+    border-radius: 50%;
+    background: #fff6e8;
+    color: var(--accent);
+  }
+
   .font-toggle {
     display: grid;
     width: 36px;
@@ -471,6 +554,11 @@ export const STYLES = `
     color: var(--text);
     box-shadow: 0 12px 32px rgba(18, 27, 43, 0.24);
     font: 14px/1.35 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .favorites-panel {
+    right: -70px;
+    width: min(310px, calc(100vw - 20px));
   }
 
   .panel-head {
@@ -589,6 +677,41 @@ export const STYLES = `
   .settings-note {
     margin: 12px 0 4px;
     line-height: 1.45;
+  }
+
+  .heat-legend {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 10px 0 4px 67px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .heat-legend span {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+  }
+
+  .heat-swatch {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+  }
+
+  .heat-swatch--few {
+    background: #5a9f6b;
+  }
+
+  .heat-swatch--more {
+    background: #8864bc;
+  }
+
+  .heat-swatch--most {
+    background: #c65353;
   }
 
   .panel-actions {

@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.5.0";
+export const VERSION = "0.5.1";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;
@@ -19,6 +19,8 @@ export const DRAFTS_KEY = "bokoun.drafts.v1";
 export const ACTIVE_COMPOSER_KEY = "bokoun.active-composer.v1";
 export const DISPLAY_SETTINGS_KEY = "bokoun.display.v1";
 export const FONT_SETTINGS_KEY = "bokoun.fonts.v1";
+export const FAVORITES_SETTINGS_KEY = "bokoun.favorites.v1";
+export const FAVORITES_ORDER_KEY = "bokoun.favorites-order.v1";
 
 export const SELECTORS = Object.freeze({
   favoritesPage: ".favorites-page",
@@ -57,6 +59,14 @@ export const ICONS = Object.freeze({
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 20h9"></path>
       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
+    </svg>
+  `,
+  settings: `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h10M18 7h2M10 17h10M4 17h2M4 12h3M11 12h9"></path>
+      <circle cx="16" cy="7" r="2"></circle>
+      <circle cx="8" cy="17" r="2"></circle>
+      <circle cx="9" cy="12" r="2"></circle>
     </svg>
   `,
 });
@@ -101,6 +111,11 @@ export const state = {
   openHeaderPanel: "",
   openPostMenuId: "",
   suppressFontClickUntil: 0,
+  favoritesSettings: null,
+  favoriteManualOrder: null,
+  favoriteSourceClubs: [],
+  favoriteViewClubs: [],
+  editingFavoriteOrder: false,
 };
 
 export const gmGet = typeof GM_getValue === "function"

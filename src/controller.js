@@ -33,6 +33,7 @@ export function installController(ctx) {
   const boardMarkup = (...args) => ctx.boardMarkup(...args);
   const attachUiEvents = (...args) => ctx.attachUiEvents(...args);
   const applyVisualSettings = (...args) => ctx.applyVisualSettings(...args);
+  const sortFavorites = (...args) => ctx.sortFavorites(...args);
 
   function render({ force = false } = {}) {
     if (state.disabled || state.nativeMode) return;
@@ -58,6 +59,9 @@ export function installController(ctx) {
       model = structuredRouteModel;
       if (model) readSource = "structured";
       else model = readFavoritesFromDom();
+      state.favoriteSourceClubs = model.map((club) => ({ ...club }));
+      model = sortFavorites(model);
+      state.favoriteViewClubs = model.map((club) => ({ ...club }));
     } else {
       const structuredModel = structuredRouteModel;
       const nativeModel = structuredModel || readBoardFromDom(document, key);
@@ -109,6 +113,9 @@ export function installController(ctx) {
 
     saveScroll();
     state.currentSignature = "";
+    state.openHeaderPanel = "";
+    state.openPostMenuId = "";
+    state.editingFavoriteOrder = false;
 
     if (routeType() === "unsupported" || !isMobileEligible()) {
       state.currentRouteKey = key;
