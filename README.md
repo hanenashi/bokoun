@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.3`).
+> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.4`).
 
 ## Install the first prototype
 
@@ -23,13 +23,13 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.3` prototype reads Favorites, boards and older post pages from
+The `0.6.4` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
 GraphQL for post reads or writing, and does not store credentials or mirror read
-post content. On leaving a structured board, it uses Kapybara's native read-state
-mutation once to mark the latest displayed post as read. It keeps
+post content. While a structured board is displayed, it uses Kapybara's native
+read-state mutation to mark the latest displayed post as read. It keeps
 preferences, explicit unsent drafts and one compact last-seen timestamp per
 recent club locally on the device. Unsupported routes and initialization
 failures restore normal Kapybara automatically.
@@ -625,6 +625,14 @@ and classic Okoun. On leaving a structured board, Bokoun sends Kapybara's own
 the already-authenticated page session only for that request: credentials and
 the access code are neither logged nor written to Bokoun storage. If the native
 contract is unavailable, Bokoun keeps its local visit marker and fails quietly.
+
+Version `0.6.4` hardens that synchronization for consecutive clubs and full
+mobile history navigations. Bokoun acknowledges the displayed board to the
+native server while the page is stable, deduplicates successful acknowledgements
+for the tab, and still keeps the visit's original white-post snapshot until the
+club is left. When Android or Firefox performs a full history navigation, the
+next Bokoun document finalizes the carried visit only if the destination differs;
+a refresh of the same club therefore keeps its original white-post snapshot.
 
 ### Phase 4 — direct transport experiment
 

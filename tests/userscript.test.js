@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { installAdapters } from "../src/adapters.js";
 import { installBoardState } from "../src/board-state.js";
+import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.3/);
+  assert.match(source, /@version\s+0\.6\.4/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -404,7 +405,7 @@ test("hardware Back finalizes a board visit before Favorites render", () => {
   assert.match(source, /boundary >= lastPosted/);
 });
 
-test("native read sync is leave-only, authenticated in memory, and uses Kapybara's mutation", () => {
+test("native read sync is stable-page first, deduplicated, and unload-safe", () => {
   assert.match(source, /mutation MarkBoardAsRead/);
   assert.match(source, /markBoardAsRead\(boardId: \$boardId, timestamp: \$timestamp\)/);
   assert.match(source, /credentials: "include"/);
@@ -412,8 +413,120 @@ test("native read sync is leave-only, authenticated in memory, and uses Kapybara
   assert.match(source, /timeZone: "Europe\/Prague"/);
   assert.match(source, /\$\{parts\.year\}\$\{parts\.month\}\$\{parts\.day\}-/);
   assert.match(source, /void syncNativeBoardRead\(state\.boardId, boardReadTimestamp\(\)\)/);
+  assert.match(source, /if \(successful\.has\(syncKey\)\) return true/);
+  assert.match(source, /if \(pending\.has\(syncKey\)\) return pending\.get\(syncKey\)/);
+  assert.match(source, /function finalizeStoredBoardVisit/);
+  assert.match(source, /if \(next\.pathname !== visit\.boardPath\) leaveBoardVisit\(visit\.boardPath\)/);
+  assert.match(source, /mountShell\(\);\s*finalizeStoredBoardVisit\(\);/);
   assert.match(source, /localStorage, "auth_token"/);
   assert.doesNotMatch(source, /gmSet\([^\n]*auth_token/);
+});
+
+test("native read sync coalesces repeated stable-page acknowledgements", async () => {
+  const originals = new Map();
+  const replaceGlobal = (key, value) => {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  };
+  const storage = (entries = {}) => ({
+    getItem: (key) => Object.hasOwn(entries, key) ? entries[key] : null,
+  });
+  const requests = [];
+
+  replaceGlobal("document", {
+    cookie: "auth_token=test-token",
+    querySelector: () => ({ content: "https://okapi.okoun.cz/graphql" }),
+  });
+  replaceGlobal("location", { origin: "https://kapybara.okoun.cz" });
+  replaceGlobal("localStorage", storage({ "okoun-api-access-code": "test-code" }));
+  replaceGlobal("sessionStorage", storage());
+  replaceGlobal("fetch", async (endpoint, options) => {
+    requests.push({ endpoint, options });
+    return { ok: true, json: async () => ({ data: { markBoardAsRead: { id: 42 } } }) };
+  });
+
+  try {
+    const readSync = {};
+    installReadSync(readSync);
+    const first = readSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z");
+    const second = readSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z");
+    assert.deepEqual(await Promise.all([first, second]), [true, true]);
+    assert.equal(await readSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z"), true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].endpoint, "https://okapi.okoun.cz/graphql");
+    assert.equal(requests[0].options.credentials, "include");
+    assert.match(JSON.parse(requests[0].options.body).variables.timestamp, /^\d{8}-\d{6}$/);
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
+test("consecutive board visits retain separate local read boundaries", () => {
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const originalSession = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const session = new Map();
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: { origin: "https://kapybara.okoun.cz" },
+  });
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: {
+      getItem: (key) => session.get(key) ?? null,
+      setItem: (key, value) => session.set(key, value),
+      removeItem: (key) => session.delete(key),
+    },
+  });
+  const stored = new Map();
+  const synced = [];
+  const state = {
+    boardLoadAbort: null,
+    boardVisit: null,
+    boardPosts: [],
+    boardPostIndex: new Map(),
+    boardPostPages: new Map(),
+    boardLoadedPages: new Set(),
+  };
+  const ctx = {
+    BOARD_VISIT_KEY: "visit",
+    BOARD_READ_BOUNDARIES_KEY: "boundaries",
+    gmGet: (key, fallback) => stored.get(key) ?? fallback,
+    gmSet: (key, value) => stored.set(key, value),
+    state,
+    routeKey: () => "",
+    normalizeHref: (value) => value,
+    structuredCacheKey: (type, href) => `${type}:${href}`,
+    syncNativeBoardRead: (id, timestamp) => synced.push([id, timestamp]),
+  };
+  installBoardState(ctx);
+  const model = (id, timestamp) => ({
+    id,
+    title: `Club ${id}`,
+    posts: [{ id: `${id}1`, datetime: timestamp }],
+    nextOlderHref: "",
+    lastPosted: timestamp,
+    lastRead: "",
+    newPostsCount: 1,
+  });
+
+  try {
+    ctx.resetBoardAccumulator(model("1", "2026-07-25T10:00:00.000Z"), "/boards/one");
+    ctx.leaveBoardVisit("/boards/one");
+    ctx.resetBoardAccumulator(model("2", "2026-07-25T11:00:00.000Z"), "/boards/two");
+    ctx.leaveBoardVisit("/boards/two");
+
+    assert.deepEqual(synced.map(([id]) => id), ["1", "2"]);
+    assert.deepEqual(Object.keys(stored.get("boundaries")).sort(), ["/boards/one", "/boards/two"]);
+    assert.equal(session.has("visit"), false);
+  } finally {
+    if (originalLocation) Object.defineProperty(globalThis, "location", originalLocation);
+    else delete globalThis.location;
+    if (originalSession) Object.defineProperty(globalThis, "sessionStorage", originalSession);
+    else delete globalThis.sessionStorage;
+  }
 });
 
 test("structured reads are primary and retain an explicit DOM fallback", () => {

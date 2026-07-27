@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.3
+// @version      0.6.4
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1174,7 +1174,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.3";
+  var VERSION = "0.6.4";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -2044,6 +2044,8 @@
 
   // src/read-sync.js
   function installReadSync(ctx2) {
+    const successful = /* @__PURE__ */ new Set();
+    const pending = /* @__PURE__ */ new Map();
     function storageValue(store, key) {
       try {
         return store?.getItem(key) || "";
@@ -2105,6 +2107,9 @@
       const token = currentAuthToken();
       const endpoint = nativeGraphqlEndpoint();
       if (!token || !endpoint) return false;
+      const syncKey = `${normalizedBoardId}:${nativeTimestamp}`;
+      if (successful.has(syncKey)) return true;
+      if (pending.has(syncKey)) return pending.get(syncKey);
       const headers = {
         "Content-Type": "application/json",
         "X-Client-App": "www",
@@ -2112,28 +2117,36 @@
       };
       const accessCode = storageValue(localStorage, "okoun-api-access-code");
       if (accessCode) headers["X-API-Access-Code"] = accessCode;
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          credentials: "include",
-          keepalive: true,
-          headers,
-          body: JSON.stringify({
-            query: `mutation MarkBoardAsRead($boardId: Int!, $timestamp: String!) {
-            markBoardAsRead(boardId: $boardId, timestamp: $timestamp) { id }
-          }`,
-            variables: {
-              boardId: normalizedBoardId,
-              timestamp: nativeTimestamp
-            }
-          })
-        });
-        if (!response.ok) return false;
-        const payload = await response.json().catch(() => null);
-        return Boolean(payload?.data?.markBoardAsRead?.id);
-      } catch {
-        return false;
-      }
+      const request = (async () => {
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            credentials: "include",
+            keepalive: true,
+            headers,
+            body: JSON.stringify({
+              query: `mutation MarkBoardAsRead($boardId: Int!, $timestamp: String!) {
+              markBoardAsRead(boardId: $boardId, timestamp: $timestamp) { id }
+            }`,
+              variables: {
+                boardId: normalizedBoardId,
+                timestamp: nativeTimestamp
+              }
+            })
+          });
+          if (!response.ok) return false;
+          const payload = await response.json().catch(() => null);
+          const synced = Boolean(payload?.data?.markBoardAsRead?.id);
+          if (synced) successful.add(syncKey);
+          return synced;
+        } catch {
+          return false;
+        } finally {
+          pending.delete(syncKey);
+        }
+      })();
+      pending.set(syncKey, request);
+      return request;
     }
     Object.assign(ctx2, { syncNativeBoardRead });
   }
@@ -4197,12 +4210,24 @@
     const boardRouteIdentity = (...args) => ctx2.boardRouteIdentity(...args);
     const navigateNative = (...args) => ctx2.navigateNative(...args);
     const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
+    const readBoardVisit = (...args) => ctx2.readBoardVisit(...args);
     const reconcileFavoriteReadState = (...args) => ctx2.reconcileFavoriteReadState(...args);
+    const boardReadTimestamp = (...args) => ctx2.boardReadTimestamp(...args);
+    const syncNativeBoardRead = (...args) => ctx2.syncNativeBoardRead(...args);
     function finalizeBoardVisitTransition(previousKey, nextKey) {
       try {
         const previous = new URL(previousKey, location.origin);
         const next = new URL(nextKey, location.origin);
         if (routeType(previous.pathname) === "board" && previous.pathname !== next.pathname) leaveBoardVisit(previous.pathname);
+      } catch {
+      }
+    }
+    function finalizeStoredBoardVisit(nextKey = routeKey()) {
+      const visit = readBoardVisit();
+      if (!visit?.boardPath) return;
+      try {
+        const next = new URL(nextKey, location.origin);
+        if (next.pathname !== visit.boardPath) leaveBoardVisit(visit.boardPath);
       } catch {
       }
     }
@@ -4254,6 +4279,7 @@
         }
         restoreActiveComposer();
         model = boardViewModel();
+        void syncNativeBoardRead(state2.boardId, boardReadTimestamp());
       }
       const signature = signatureFor(type, model);
       if (!force && signature === state2.currentSignature) return;
@@ -4322,6 +4348,7 @@
         return;
       }
       mountShell();
+      finalizeStoredBoardVisit();
       state2.currentRouteKey = routeKey();
       observeNative();
       render({ force: true });
@@ -4336,6 +4363,7 @@
     Object.assign(ctx2, {
       render,
       finalizeBoardVisitTransition,
+      finalizeStoredBoardVisit,
       scheduleRender,
       handleRouteChange,
       observeNative,

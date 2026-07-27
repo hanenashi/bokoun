@@ -1,4 +1,7 @@
 export function installReadSync(ctx) {
+  const successful = new Set();
+  const pending = new Map();
+
   function storageValue(store, key) {
     try {
       return store?.getItem(key) || "";
@@ -72,6 +75,10 @@ export function installReadSync(ctx) {
     const endpoint = nativeGraphqlEndpoint();
     if (!token || !endpoint) return false;
 
+    const syncKey = `${normalizedBoardId}:${nativeTimestamp}`;
+    if (successful.has(syncKey)) return true;
+    if (pending.has(syncKey)) return pending.get(syncKey);
+
     const headers = {
       "Content-Type": "application/json",
       "X-Client-App": "www",
@@ -80,28 +87,36 @@ export function installReadSync(ctx) {
     const accessCode = storageValue(localStorage, "okoun-api-access-code");
     if (accessCode) headers["X-API-Access-Code"] = accessCode;
 
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        keepalive: true,
-        headers,
-        body: JSON.stringify({
-          query: `mutation MarkBoardAsRead($boardId: Int!, $timestamp: String!) {
-            markBoardAsRead(boardId: $boardId, timestamp: $timestamp) { id }
-          }`,
-          variables: {
-            boardId: normalizedBoardId,
-            timestamp: nativeTimestamp,
-          },
-        }),
-      });
-      if (!response.ok) return false;
-      const payload = await response.json().catch(() => null);
-      return Boolean(payload?.data?.markBoardAsRead?.id);
-    } catch {
-      return false;
-    }
+    const request = (async () => {
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+          headers,
+          body: JSON.stringify({
+            query: `mutation MarkBoardAsRead($boardId: Int!, $timestamp: String!) {
+              markBoardAsRead(boardId: $boardId, timestamp: $timestamp) { id }
+            }`,
+            variables: {
+              boardId: normalizedBoardId,
+              timestamp: nativeTimestamp,
+            },
+          }),
+        });
+        if (!response.ok) return false;
+        const payload = await response.json().catch(() => null);
+        const synced = Boolean(payload?.data?.markBoardAsRead?.id);
+        if (synced) successful.add(syncKey);
+        return synced;
+      } catch {
+        return false;
+      } finally {
+        pending.delete(syncKey);
+      }
+    })();
+    pending.set(syncKey, request);
+    return request;
   }
 
   Object.assign(ctx, { syncNativeBoardRead });

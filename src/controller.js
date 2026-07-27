@@ -37,7 +37,10 @@ export function installController(ctx) {
   const boardRouteIdentity = (...args) => ctx.boardRouteIdentity(...args);
   const navigateNative = (...args) => ctx.navigateNative(...args);
   const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
+  const readBoardVisit = (...args) => ctx.readBoardVisit(...args);
   const reconcileFavoriteReadState = (...args) => ctx.reconcileFavoriteReadState(...args);
+  const boardReadTimestamp = (...args) => ctx.boardReadTimestamp(...args);
+  const syncNativeBoardRead = (...args) => ctx.syncNativeBoardRead(...args);
 
   function finalizeBoardVisitTransition(previousKey, nextKey) {
     try {
@@ -49,6 +52,17 @@ export function installController(ctx) {
       ) leaveBoardVisit(previous.pathname);
     } catch {
       // Route parsing failure should not block Kapybara navigation.
+    }
+  }
+
+  function finalizeStoredBoardVisit(nextKey = routeKey()) {
+    const visit = readBoardVisit();
+    if (!visit?.boardPath) return;
+    try {
+      const next = new URL(nextKey, location.origin);
+      if (next.pathname !== visit.boardPath) leaveBoardVisit(visit.boardPath);
+    } catch {
+      // A malformed restored route must not block startup.
     }
   }
 
@@ -106,6 +120,7 @@ export function installController(ctx) {
       }
       restoreActiveComposer();
       model = boardViewModel();
+      void syncNativeBoardRead(state.boardId, boardReadTimestamp());
     }
     const signature = signatureFor(type, model);
     if (!force && signature === state.currentSignature) return;
@@ -186,6 +201,7 @@ export function installController(ctx) {
     }
 
     mountShell();
+    finalizeStoredBoardVisit();
     state.currentRouteKey = routeKey();
     observeNative();
     render({ force: true });
@@ -202,6 +218,7 @@ export function installController(ctx) {
   Object.assign(ctx, {
     render,
     finalizeBoardVisitTransition,
+    finalizeStoredBoardVisit,
     scheduleRender,
     handleRouteChange,
     observeNative,
