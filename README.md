@@ -193,10 +193,6 @@ Bokoun should feel like a quiet reader, not a miniature social network.
 
 Unsupported routes must open normal Kapybara rather than fail mysteriously.
 
-## Feasibility findings
-
-Live Kapybara was inspected on 2026-07-24 using an authenticated test profile
-and the private `nepotrebny_pokus` club.
 
 ### Reads
 
