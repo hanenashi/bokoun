@@ -29,7 +29,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.4/);
+  assert.match(source, /@version\s+0\.6\.5/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -403,6 +403,14 @@ test("hardware Back finalizes a board visit before Favorites render", () => {
   assert.ok(transitionIndex < favoritesIndex);
   assert.match(source, /model = reconcileFavoriteReadState\(model\)/);
   assert.match(source, /boundary >= lastPosted/);
+});
+
+test("club header back arrow always targets Bokoun Favorites", () => {
+  const goBack = source.match(/function goBack\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
+  assert.match(goBack, /navigateNative\("\/fav\/activity"\)/);
+  assert.doesNotMatch(goBack, /history\.back/);
+  assert.match(source, /threadMode \? "thread-back" : "back"/);
+  assert.match(source, /\[data-action='thread-back'\][^\n]*closeThread/);
 });
 
 test("native read sync is stable-page first, deduplicated, and unload-safe", () => {

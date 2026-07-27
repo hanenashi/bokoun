@@ -49,11 +49,7 @@ export function installNavigation(ctx) {
 
   function goBack() {
     saveScroll();
-    if (history.length > 1) {
-      history.back();
-    } else {
-      navigateNative("/fav/activity");
-    }
+    navigateNative("/fav/activity");
   }
 
   function openThread(rootId) {
