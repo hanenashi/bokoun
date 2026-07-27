@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Vizuální srovnání plné Kapybary a zjednodušeného mobilního rozhraní Bokoun.">
+  <title>Bokoun vs. plná Kapybara</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #192338;
+      --muted: #667187;
+      --line: #d8dde6;
+      --paper: #fff;
+      --wash: #f3f5f8;
+      --blue: #eaf2ff;
+      --orange: #b55b00;
+      --orange-soft: #fff2e1;
+      --shadow: 0 18px 50px rgb(29 38 56 / 12%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, var(--orange-soft), transparent 28rem),
+        linear-gradient(#fff, var(--wash));
+      font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin-inline: auto;
+    }
+
+    .hero {
+      padding: 56px 0 32px;
+      text-align: center;
+    }
+
+    .hero img {
+      width: 132px;
+      height: 132px;
+      margin: 0 auto 16px;
+      object-fit: contain;
+      filter: drop-shadow(0 12px 22px rgb(25 35 56 / 15%));
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--orange);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.1rem, 7vw, 4.6rem);
+      line-height: 1;
+      letter-spacing: -.055em;
+    }
+
+    .lead {
+      max-width: 720px;
+      margin: 22px auto 0;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 2.5vw, 1.3rem);
+    }
+
+    .hero strong {
+      color: var(--ink);
+    }
+
+    .jump {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin: 28px auto 0;
+    }
+
+    .jump a,
+    .button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgb(255 255 255 / 84%);
+      padding: 9px 15px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: border-color .15s, transform .15s, background .15s;
+    }
+
+    .jump a:hover,
+    .jump a:focus-visible,
+    .button:hover,
+    .button:focus-visible {
+      border-color: var(--orange);
+      background: #fff;
+      transform: translateY(-1px);
+    }
+
+    .note {
+      max-width: 820px;
+      margin: 28px auto 0;
+      padding: 12px 16px;
+      border-left: 3px solid var(--orange);
+      border-radius: 4px 12px 12px 4px;
+      color: var(--muted);
+      background: rgb(255 255 255 / 72%);
+      font-size: .9rem;
+      text-align: left;
+    }
+
+    section {
+      padding: 50px 0;
+      scroll-margin-top: 20px;
+    }
+
+    .section-head {
+      max-width: 700px;
+      margin-bottom: 26px;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.7rem);
+      line-height: 1.08;
+      letter-spacing: -.035em;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(18px, 4vw, 46px);
+      align-items: start;
+    }
+
+    figure {
+      margin: 0;
+    }
+
+    .phone {
+      position: relative;
+      width: min(100%, 390px);
+      margin-inline: auto;
+      overflow: hidden;
+      border: 7px solid #202838;
+      border-radius: 32px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .phone::before {
+      position: absolute;
+      z-index: 1;
+      top: 7px;
+      left: 50%;
+      width: 62px;
+      height: 5px;
+      border-radius: 99px;
+      background: rgb(20 27 40 / 65%);
+      content: "";
+      transform: translateX(-50%);
+    }
+
+    .phone img {
+      width: 100%;
+      height: auto;
+    }
+
+    figcaption {
+      width: min(100%, 430px);
+      margin: 16px auto 0;
+    }
+
+    .label {
+      display: inline-block;
+      margin-bottom: 5px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      color: #4f586a;
+      background: #e7eaf0;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .label.after {
+      color: #854100;
+      background: var(--orange-soft);
+    }
+
+    figcaption h3 {
+      margin: 0 0 4px;
+      font-size: 1.2rem;
+    }
+
+    figcaption p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .feature-section {
+      margin-top: 30px;
+      border-block: 1px solid var(--line);
+      background: rgb(234 242 255 / 52%);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    .feature-grid .phone {
+      border-width: 5px;
+      border-radius: 24px;
+    }
+
+    .feature-grid figcaption {
+      margin-top: 12px;
+      font-size: .92rem;
+    }
+
+    .feature-grid figcaption h3 {
+      font-size: 1rem;
+    }
+
+    .contract {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 34px;
+      align-items: center;
+      margin: 52px auto;
+      padding: clamp(24px, 5vw, 50px);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .contract h2 {
+      margin-bottom: 12px;
+    }
+
+    .contract p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .contract ul {
+      margin: 0;
+      padding-left: 1.3rem;
+    }
+
+    .contract li + li {
+      margin-top: 9px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .button.primary {
+      border-color: var(--orange);
+      color: #fff;
+      background: var(--orange);
+    }
+
+    footer {
+      padding: 12px 0 54px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .feature-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .contract {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .wrap {
+        width: min(100% - 22px, 440px);
+      }
+
+      .hero {
+        padding-top: 32px;
+      }
+
+      .hero img {
+        width: 96px;
+        height: 96px;
+      }
+
+      section {
+        padding: 38px 0;
+      }
+
+      .comparison,
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .comparison {
+        gap: 34px;
+      }
+
+      .phone {
+        width: min(100%, 390px);
+        border-width: 5px;
+        border-radius: 26px;
+      }
+
+      .contract {
+        margin-block: 34px;
+        border-radius: 20px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      .jump a,
+      .button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero wrap">
+    <img src="assets/bokoun.png" alt="Bokoun">
+    <p class="eyebrow">Mobilní čtečka pro Okoun</p>
+    <h1>Bokoun vs. plná Kapybara</h1>
+    <p class="lead">
+      <strong>Stejný účet, stejná data, stejná Kapybara na pozadí.</strong>
+      Bokoun jen nabízí klidnější rozhraní pro čtení, oblíbené kluby a krátké odpovědi na telefonu.
+    </p>
+    <nav class="jump" aria-label="Přejít na část srovnání">
+      <a href="#oblibene">Oblíbené</a>
+      <a href="#cteni">Čtení</a>
+      <a href="#psani">Psaní</a>
+      <a href="#ovladani">Ovládání</a>
+    </nav>
+    <p class="note">
+      Snímky mají shodné mobilní rozlišení 390 × 844 px. Citlivé a soukromé údaje byly
+      nahrazené; ukázka používá jen veřejný nebo reprezentativní obsah a skutečné rozhraní.
+    </p>
+  </header>
+
+  <main>
+    <section id="oblibene" class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">01 — Oblíbené</p>
+        <h2>Rovnou ke klubům</h2>
+        <p>Bokoun nechává jen název, poslední aktivitu a počet nových příspěvků. Bez spodní navigace a vedlejších panelů.</p>
+      </div>
+      <div class="comparison">
+        <figure>
+          <div class="phone">
+            <img src="screenshots/native-favorites.png" alt="Oblíbené kluby v plné mobilní Kapybaře" loading="lazy" decoding="async">
+          </div>
+          <figcaption>
+            <span class="label">Plná Kapybara</span>
+            <h3>Kompletní aplikace</h3>
+            <p>Vyhledávání, filtry, navigace a další kontext jsou stále po ruce.</p>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="phone">
+            <img src="screenshots/bokoun-favorites.png" alt="Kompaktní seznam oblíbených klubů v Bokounu" loading="lazy" decoding="async">
+          </div>
+          <figcaption>
+            <span class="label after">Bokoun</span>
+            <h3>Kompaktní pracovní seznam</h3>
+            <p>Více klubů na jedné obrazovce, zvýrazněné novinky a návrat na přesné místo v seznamu.</p>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="cteni" class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">02 — Čtení</p>
+        <h2>Příspěvky mají znovu vlastní prostor</h2>
+        <p>Klasicky čitelné oddělení příspěvků, minimum trvalých tlačítek a nekonečné načítání starších stránek.</p>
+      </div>
+      <div class="comparison">
+        <figure>
+          <div class="phone">
+            <img src="screenshots/native-club.png" alt="Klub v plné mobilní Kapybaře" loading="lazy" decoding="async">
+          </div>
+          <figcaption>
+            <span class="label">Plná Kapybara</span>
+            <h3>Všechny funkce klubu</h3>
+            <p>Témata, moderátoři, řazení, vlákna i příspěvkové akce jsou viditelné současně.</p>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="phone">
+            <img src="screenshots/bokoun-club.png" alt="Zjednodušené čtení klubu v Bokounu" loading="lazy" decoding="async">
+          </div>
+          <figcaption>
+            <span class="label after">Bokoun</span>
+            <h3>Text je hlavní obsah</h3>
+            <p>Nové příspěvky zůstanou po celou návštěvu bílé, přečtené jsou modré a nic se nepřebarvuje časovačem.</p>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="psani" class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">03 — Psaní</p>
+        <h2>Krátká odpověď bez velkého editoru</h2>
+        <p>Bokoun ukazuje prosté Markdownové pole. Ověření a odeslání dál zajišťuje přihlášený nativní editor Kapybary.</p>
+      </div>
+      <div class="comparison">
+        <figure>
+          <div class="phone">
+            <img src="screenshots/native-editor.png" alt="Richtextový editor plné Kapybary" loading="lazy" decoding="async">
+          </div>
+          <figcaption>
+            <span class="label">Plná Kapybara</span>
+            <h3>Bohatý editor</h3>
+            <p>Nadpis, formátování, odkazy, obrázky, seznamy a další nástroje.</p>
+          </figcaption>
+        </figure>
+        <figure>
+          <div class="phone">
+            <img src="screenshots/bokoun-editor.png" alt="Jednoduchý Markdown editor v Bokounu" loading="lazy" decoding="async">
+          </div>
+          <figcaption>
+            <span class="label after">Bokoun</span>
+            <h3>Text, koncept, odeslat</h3>
+            <p>Rozepsaný text se lokálně zachová i po omylovém opuštění stránky. Odpovědi se píší přímo uvnitř příspěvku.</p>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="ovladani" class="feature-section">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">04 — Ovládání</p>
+          <h2>Funkce se ukážou, až když jsou potřeba</h2>
+          <p>Čtyři malé nabídky drží hlavní obrazovku čistou, ale dovolují Bokoun přizpůsobit bez editace stylů.</p>
+        </div>
+        <div class="feature-grid">
+          <figure>
+            <div class="phone">
+              <img src="screenshots/bokoun-favorites-menu.png" alt="Nastavení oblíbených klubů v Bokounu" loading="lazy" decoding="async">
+            </div>
+            <figcaption>
+              <h3>Oblíbené</h3>
+              <p>Řazení, podoba novinek, písmo a hustota seznamu.</p>
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="phone">
+              <img src="screenshots/bokoun-post-menu.png" alt="Nabídka příspěvku v Bokounu" loading="lazy" decoding="async">
+            </div>
+            <figcaption>
+              <h3>Příspěvek</h3>
+              <p>Klepnutí na jméno nebo avatar nabídne odpověď a celé vlákno.</p>
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="phone">
+              <img src="screenshots/bokoun-font-menu.png" alt="Volba písma a velikosti v Bokounu" loading="lazy" decoding="async">
+            </div>
+            <figcaption>
+              <h3>Písmo</h3>
+              <p>Rychlá volba rodiny písma a přesná ruční velikost.</p>
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="phone">
+              <img src="screenshots/bokoun-display-menu.png" alt="Nastavení zobrazení příspěvků v Bokounu" loading="lazy" decoding="async">
+            </div>
+            <figcaption>
+              <h3>Zobrazení</h3>
+              <p>Avatary, jejich tvar, velikost a poloha i rozsah informace o reakci.</p>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <aside class="contract wrap">
+      <div>
+        <p class="eyebrow">Co je pod kapotou</p>
+        <h2>Není to druhý Okoun</h2>
+        <p>
+          Bokoun je uživatelský skript nad přihlášenou Kapybarou. Čte její strukturovaná data,
+          používá její přihlášení a při psaní předává text jejímu vlastnímu editoru.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/hanenashi/bokoun/raw/refs/heads/main/bokoun.user.js">Nainstalovat Bokoun</a>
+          <a class="button" href="https://github.com/hanenashi/bokoun">Zdrojový kód a podrobnosti</a>
+        </div>
+      </div>
+      <ul>
+        <li>Žádný druhý účet ani export přihlašovacích údajů.</li>
+        <li>Žádná externí databáze, kopie příspěvků nebo scraper.</li>
+        <li>Plná Kapybara zůstává vždy na jedno klepnutí.</li>
+        <li>Bokoun záměrně řeší hlavně čtení, oblíbené a krátké odpovědi.</li>
+      </ul>
+    </aside>
+  </main>
+
+  <footer class="wrap">
+    Bokoun je experimentální alternativní rozhraní. Kapybara a Okoun zůstávají zdrojem pravdy.
+  </footer>
+</body>
+</html>
