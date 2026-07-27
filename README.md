@@ -8,9 +8,6 @@ A deliberately minimal mobile interface for Kapybara/Okoun.
 
 > Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.7`).
 
-See the [visual before/after comparison](./compare.html) for a quick tour of
-Favorites, club reading, writing and Bokoun's compact menus.
-
 ## Install the first prototype
 
 Install [bokoun.user.js](./bokoun.user.js) in Tampermonkey, Violentmonkey or
