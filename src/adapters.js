@@ -240,9 +240,13 @@ export function installAdapters(ctx) {
     }).filter((post) => post.id);
 
     return {
+      id: String(boardRoot.board.id || ""),
       title: String(boardRoot.board.name || boardRoot.board.slug || "Klub"),
       posts,
       nextOlderHref: olderHrefFromPagination(pageRoot.pagination, pageHref),
+      lastPosted: typeof boardRoot.board.lastPosted === "string"
+        ? boardRoot.board.lastPosted
+        : "",
       lastRead: typeof boardRoot.board.lastRead === "string"
         ? boardRoot.board.lastRead
         : "",
@@ -465,9 +469,11 @@ export function installAdapters(ctx) {
     const olderLinks = [...root.querySelectorAll(SELECTORS.olderPosts)];
     const nextOlderHref = normalizeHref(olderLinks.at(-1)?.getAttribute("href") || "");
     return {
+      id: "",
       title,
       posts,
       nextOlderHref,
+      lastPosted: "",
       lastRead: "",
       newPostsCount: 0,
     };

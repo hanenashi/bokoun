@@ -10,6 +10,7 @@ export function installBoardState(ctx) {
   const normalizeHref = (...args) => ctx.normalizeHref(...args);
   const fetchStructuredModel = (...args) => ctx.fetchStructuredModel(...args);
   const structuredCacheKey = (...args) => ctx.structuredCacheKey(...args);
+  const syncNativeBoardRead = (...args) => ctx.syncNativeBoardRead(...args);
 
   function boardPath(pageHref = routeKey()) {
     try {
@@ -96,6 +97,13 @@ export function installBoardState(ctx) {
     return trimmed[path] || "";
   }
 
+  function boardReadTimestamp() {
+    return state.boardPosts.reduce(
+      (latest, post) => laterReadBoundary(latest, post.datetime),
+      state.boardLastPosted || "",
+    );
+  }
+
   function reconcileFavoriteReadState(clubs) {
     return clubs.map((club) => {
       const boundary = Date.parse(localReadBoundary(boardPath(club.href)));
@@ -145,6 +153,7 @@ export function installBoardState(ctx) {
       return;
     }
     if (path && stored?.boardPath && stored.boardPath !== path) return;
+    void syncNativeBoardRead(state.boardId, boardReadTimestamp());
     rememberBoardReadBoundary(stored?.boardPath || path);
     state.boardVisit = null;
     if (typeof sessionStorage === "undefined") return;
@@ -216,6 +225,8 @@ export function installBoardState(ctx) {
     state.boardLoadAbort?.abort();
     state.boardLoadAbort = null;
     state.boardKey = boardRouteIdentity(pageHref);
+    state.boardId = model.id || "";
+    state.boardLastPosted = model.lastPosted || "";
     state.boardTitle = model.title;
     state.boardPosts = [];
     state.boardPostIndex = new Map();
@@ -237,6 +248,8 @@ export function installBoardState(ctx) {
 
     if (normalizedPage) state.boardLoadedPages.add(normalizedPage);
     if (model.title) state.boardTitle = model.title;
+    if (model.id) state.boardId = model.id;
+    if (model.lastPosted) state.boardLastPosted = model.lastPosted;
 
     for (const post of model.posts) {
       const index = state.boardPostIndex.get(post.id);
@@ -275,6 +288,8 @@ export function installBoardState(ctx) {
     state.boardPostPages = new Map();
     if (normalizedPage) state.boardLoadedPages.add(normalizedPage);
     if (model.title) state.boardTitle = model.title;
+    if (model.id) state.boardId = model.id;
+    if (model.lastPosted) state.boardLastPosted = model.lastPosted;
 
     for (const post of model.posts) {
       state.boardPostIndex.set(post.id, state.boardPosts.length);
@@ -317,6 +332,7 @@ export function installBoardState(ctx) {
     laterReadBoundary,
     localReadBoundary,
     rememberBoardReadBoundary,
+    boardReadTimestamp,
     reconcileFavoriteReadState,
     startBoardVisit,
     ensureBoardVisit,

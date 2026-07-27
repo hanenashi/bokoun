@@ -28,7 +28,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.2/);
+  assert.match(source, /@version\s+0\.6\.3/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -99,8 +99,8 @@ test("simple writing uses hidden native Kapybara composers only", () => {
   assert.match(source, /postReplyAction: "\.reply-action"/);
   assert.match(source, /document\.execCommand\("insertText", false, body\)/);
   assert.match(source, /composerMarkdownNode: "code\[data-language='markdown'\]"/);
-  assert.doesNotMatch(source, /\bAuthorization\b/);
-  assert.doesNotMatch(source, /X-API-Access-Code/);
+  assert.doesNotMatch(source, /mutation CreatePost/);
+  assert.doesNotMatch(source, /variables:\s*\{[^}]*body:/);
 });
 
 test("composer preserves drafts and prevents ambiguous retries", () => {
@@ -293,6 +293,8 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   );
 
   assert.equal(model.title, "Fixture Board");
+  assert.equal(model.id, "42");
+  assert.equal(model.lastPosted, "2026-07-25T10:00:00.000Z");
   assert.equal(model.lastRead, "2026-07-25T09:30:00.000Z");
   assert.equal(model.newPostsCount, 1);
   assert.equal(model.posts.length, 1);
@@ -400,6 +402,18 @@ test("hardware Back finalizes a board visit before Favorites render", () => {
   assert.ok(transitionIndex < favoritesIndex);
   assert.match(source, /model = reconcileFavoriteReadState\(model\)/);
   assert.match(source, /boundary >= lastPosted/);
+});
+
+test("native read sync is leave-only, authenticated in memory, and uses Kapybara's mutation", () => {
+  assert.match(source, /mutation MarkBoardAsRead/);
+  assert.match(source, /markBoardAsRead\(boardId: \$boardId, timestamp: \$timestamp\)/);
+  assert.match(source, /credentials: "include"/);
+  assert.match(source, /keepalive: true/);
+  assert.match(source, /timeZone: "Europe\/Prague"/);
+  assert.match(source, /\$\{parts\.year\}\$\{parts\.month\}\$\{parts\.day\}-/);
+  assert.match(source, /void syncNativeBoardRead\(state\.boardId, boardReadTimestamp\(\)\)/);
+  assert.match(source, /localStorage, "auth_token"/);
+  assert.doesNotMatch(source, /gmSet\([^\n]*auth_token/);
 });
 
 test("structured reads are primary and retain an explicit DOM fallback", () => {

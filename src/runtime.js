@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.6.2";
+export const VERSION = "0.6.3";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;
@@ -90,6 +90,8 @@ export const state = {
   nativeMode: false,
   pendingAnchor: null,
   boardKey: "",
+  boardId: "",
+  boardLastPosted: "",
   boardTitle: "",
   boardPosts: [],
   boardPostIndex: new Map(),

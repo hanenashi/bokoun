@@ -1,6 +1,7 @@
 import * as runtime from "./runtime.js";
 import { installShell } from "./shell.js";
 import { installAdapters } from "./adapters.js";
+import { installReadSync } from "./read-sync.js";
 import { installBoardState } from "./board-state.js";
 import { installWriting } from "./writing.js";
 import { installPagination } from "./pagination.js";
@@ -12,6 +13,7 @@ import { installController } from "./controller.js";
 const ctx = { ...runtime };
 installShell(ctx);
 installAdapters(ctx);
+installReadSync(ctx);
 installBoardState(ctx);
 installWriting(ctx);
 installPagination(ctx);

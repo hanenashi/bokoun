@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.2
+// @version      0.6.3
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1174,7 +1174,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.2";
+  var VERSION = "0.6.3";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1262,6 +1262,8 @@
     nativeMode: false,
     pendingAnchor: null,
     boardKey: "",
+    boardId: "",
+    boardLastPosted: "",
     boardTitle: "",
     boardPosts: [],
     boardPostIndex: /* @__PURE__ */ new Map(),
@@ -1779,9 +1781,11 @@
         };
       }).filter((post) => post.id);
       return {
+        id: String(boardRoot.board.id || ""),
         title: String(boardRoot.board.name || boardRoot.board.slug || "Klub"),
         posts,
         nextOlderHref: olderHrefFromPagination(pageRoot.pagination, pageHref),
+        lastPosted: typeof boardRoot.board.lastPosted === "string" ? boardRoot.board.lastPosted : "",
         lastRead: typeof boardRoot.board.lastRead === "string" ? boardRoot.board.lastRead : "",
         newPostsCount: Number.isFinite(boardRoot.board.newPostsCount) ? Math.max(0, boardRoot.board.newPostsCount) : 0
       };
@@ -1998,9 +2002,11 @@
       const olderLinks = [...root.querySelectorAll(SELECTORS2.olderPosts)];
       const nextOlderHref = normalizeHref(olderLinks.at(-1)?.getAttribute("href") || "");
       return {
+        id: "",
         title,
         posts,
         nextOlderHref,
+        lastPosted: "",
         lastRead: "",
         newPostsCount: 0
       };
@@ -2036,6 +2042,102 @@
     });
   }
 
+  // src/read-sync.js
+  function installReadSync(ctx2) {
+    function storageValue(store, key) {
+      try {
+        return store?.getItem(key) || "";
+      } catch {
+        return "";
+      }
+    }
+    function cookieValue(name) {
+      try {
+        const prefix = `${name}=`;
+        const entry = document.cookie.split(";").map((value) => value.trim()).find((value) => value.startsWith(prefix));
+        return entry ? decodeURIComponent(entry.slice(prefix.length)) : "";
+      } catch {
+        return "";
+      }
+    }
+    function currentAuthToken() {
+      const fromCookie = cookieValue("auth_token");
+      if (fromCookie) return fromCookie;
+      const fromSession = storageValue(sessionStorage, "auth_token");
+      if (fromSession) return fromSession;
+      return storageValue(localStorage, "auth_remembered") === "true" ? storageValue(localStorage, "auth_token") : "";
+    }
+    function nativeGraphqlEndpoint() {
+      const declared = document.querySelector('meta[name="okoun-graphql-endpoint"]')?.content;
+      try {
+        const url = new URL(declared || "/graphql", location.origin);
+        return ["https:", "http:"].includes(url.protocol) ? url.href : "";
+      } catch {
+        return "";
+      }
+    }
+    function nativeReadTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return "";
+      const parts = /* @__PURE__ */ Object.create(null);
+      for (const part of new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Prague",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(date)) {
+        if (part.type !== "literal") parts[part.type] = part.value;
+      }
+      if (!parts.year || !parts.month || !parts.day || !parts.hour || !parts.minute || !parts.second) {
+        return "";
+      }
+      return `${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}${parts.second}`;
+    }
+    async function syncNativeBoardRead(boardId, timestamp) {
+      const normalizedBoardId = Number.parseInt(String(boardId || ""), 10);
+      const nativeTimestamp = nativeReadTimestamp(timestamp);
+      if (!Number.isSafeInteger(normalizedBoardId) || normalizedBoardId < 1) return false;
+      if (!nativeTimestamp) return false;
+      const token = currentAuthToken();
+      const endpoint = nativeGraphqlEndpoint();
+      if (!token || !endpoint) return false;
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Client-App": "www",
+        Authorization: `Bearer ${token}`
+      };
+      const accessCode = storageValue(localStorage, "okoun-api-access-code");
+      if (accessCode) headers["X-API-Access-Code"] = accessCode;
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+          headers,
+          body: JSON.stringify({
+            query: `mutation MarkBoardAsRead($boardId: Int!, $timestamp: String!) {
+            markBoardAsRead(boardId: $boardId, timestamp: $timestamp) { id }
+          }`,
+            variables: {
+              boardId: normalizedBoardId,
+              timestamp: nativeTimestamp
+            }
+          })
+        });
+        if (!response.ok) return false;
+        const payload = await response.json().catch(() => null);
+        return Boolean(payload?.data?.markBoardAsRead?.id);
+      } catch {
+        return false;
+      }
+    }
+    Object.assign(ctx2, { syncNativeBoardRead });
+  }
+
   // src/board-state.js
   function installBoardState(ctx2) {
     const {
@@ -2049,6 +2151,7 @@
     const normalizeHref = (...args) => ctx2.normalizeHref(...args);
     const fetchStructuredModel = (...args) => ctx2.fetchStructuredModel(...args);
     const structuredCacheKey = (...args) => ctx2.structuredCacheKey(...args);
+    const syncNativeBoardRead = (...args) => ctx2.syncNativeBoardRead(...args);
     function boardPath(pageHref = routeKey()) {
       try {
         return new URL(pageHref, location.origin).pathname;
@@ -2117,6 +2220,12 @@
       }
       return trimmed[path] || "";
     }
+    function boardReadTimestamp() {
+      return state2.boardPosts.reduce(
+        (latest, post) => laterReadBoundary(latest, post.datetime),
+        state2.boardLastPosted || ""
+      );
+    }
     function reconcileFavoriteReadState(clubs) {
       return clubs.map((club) => {
         const boundary = Date.parse(localReadBoundary(boardPath(club.href)));
@@ -2156,6 +2265,7 @@
         return;
       }
       if (path && stored?.boardPath && stored.boardPath !== path) return;
+      void syncNativeBoardRead(state2.boardId, boardReadTimestamp());
       rememberBoardReadBoundary(stored?.boardPath || path);
       state2.boardVisit = null;
       if (typeof sessionStorage === "undefined") return;
@@ -2211,6 +2321,8 @@
       state2.boardLoadAbort?.abort();
       state2.boardLoadAbort = null;
       state2.boardKey = boardRouteIdentity(pageHref);
+      state2.boardId = model.id || "";
+      state2.boardLastPosted = model.lastPosted || "";
       state2.boardTitle = model.title;
       state2.boardPosts = [];
       state2.boardPostIndex = /* @__PURE__ */ new Map();
@@ -2230,6 +2342,8 @@
       let added = 0;
       if (normalizedPage) state2.boardLoadedPages.add(normalizedPage);
       if (model.title) state2.boardTitle = model.title;
+      if (model.id) state2.boardId = model.id;
+      if (model.lastPosted) state2.boardLastPosted = model.lastPosted;
       for (const post of model.posts) {
         const index = state2.boardPostIndex.get(post.id);
         if (index === void 0) {
@@ -2262,6 +2376,8 @@
       state2.boardPostPages = /* @__PURE__ */ new Map();
       if (normalizedPage) state2.boardLoadedPages.add(normalizedPage);
       if (model.title) state2.boardTitle = model.title;
+      if (model.id) state2.boardId = model.id;
+      if (model.lastPosted) state2.boardLastPosted = model.lastPosted;
       for (const post of model.posts) {
         state2.boardPostIndex.set(post.id, state2.boardPosts.length);
         state2.boardPostPages.set(post.id, normalizedPage || post.pageHref);
@@ -2300,6 +2416,7 @@
       laterReadBoundary,
       localReadBoundary,
       rememberBoardReadBoundary,
+      boardReadTimestamp,
       reconcileFavoriteReadState,
       startBoardVisit,
       ensureBoardVisit,
@@ -4230,6 +4347,7 @@
   var ctx = { ...runtime_exports };
   installShell(ctx);
   installAdapters(ctx);
+  installReadSync(ctx);
   installBoardState(ctx);
   installWriting(ctx);
   installPagination(ctx);
