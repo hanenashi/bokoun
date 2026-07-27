@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.5
+// @version      0.6.6
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -175,21 +175,25 @@
   }
 
   .favorites {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--favorite-row-gap, 0px);
     margin: 0;
     padding: 0 16px max(24px, env(safe-area-inset-bottom));
+    font-family: var(--favorite-font-family, inherit);
     list-style: none;
   }
 
   .favorite-item {
     position: relative;
+    min-width: 0;
   }
 
   .favorite-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
     gap: 14px;
     align-items: center;
-    min-height: 72px;
+    min-height: max(72px, calc(var(--favorite-avatar-size, 34px) + 24px));
     padding-right: 0;
     padding-left: 0;
     border-bottom: 1px solid var(--border);
@@ -261,15 +265,42 @@
   }
 
   .favorite-main {
+    flex: 1 1 auto;
     min-width: 0;
     padding: 12px 0;
+  }
+
+  .favorite-avatar {
+    display: grid;
+    flex: 0 0 var(--favorite-avatar-size, 34px);
+    width: var(--favorite-avatar-size, 34px);
+    height: var(--favorite-avatar-size, 34px);
+    place-items: center;
+    overflow: hidden;
+    background: #e5edf9;
+    color: #415b82;
+    font-size: var(--favorite-avatar-font-size, 14px);
+    font-weight: 750;
+    line-height: 1;
+  }
+
+  .app[data-favorite-avatar-shape="circle"] .favorite-avatar {
+    border-radius: 50%;
+  }
+
+  .app[data-favorite-avatar-shape="rounded"] .favorite-avatar {
+    border-radius: 22%;
+  }
+
+  .app[data-favorite-avatar-shape="square"] .favorite-avatar {
+    border-radius: 0;
   }
 
   .favorite-name {
     display: block;
     overflow: hidden;
     color: var(--text);
-    font-size: 17px;
+    font-size: var(--favorite-font-size, 17px);
     font-weight: 650;
     line-height: 1.25;
     letter-spacing: -0.008em;
@@ -280,7 +311,7 @@
   .favorite-time {
     margin-top: 4px;
     color: var(--muted);
-    font-size: 14px;
+    font-size: max(10px, calc(var(--favorite-font-size, 17px) - 3px));
     font-weight: 400;
     line-height: 1.25;
   }
@@ -288,7 +319,7 @@
   .favorite-unread {
     min-width: 32px;
     color: var(--accent);
-    font-size: 17px;
+    font-size: var(--favorite-font-size, 17px);
     font-variant-numeric: tabular-nums;
     font-weight: 650;
     text-align: right;
@@ -716,6 +747,37 @@
     color: var(--muted);
     font-size: 11px;
     font-weight: 500;
+  }
+
+  .panel-section-title {
+    margin: 13px -12px 8px;
+    padding: 9px 12px 0;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .compact-range-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .compact-range-controls input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  .compact-range-controls output {
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
   }
 
   .custom-font-wrap input[aria-invalid="true"] {
@@ -1174,7 +1236,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.5";
+  var VERSION = "0.6.6";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -2943,7 +3005,15 @@
   });
   var DEFAULT_FAVORITES_SETTINGS = Object.freeze({
     sort: "activity",
-    unreadMode: "count"
+    unreadMode: "count",
+    fontFamily: "default",
+    customFontFamily: "",
+    fontSize: 17,
+    showAvatars: false,
+    avatarSize: 34,
+    avatarShape: "circle",
+    avatarPosition: "left",
+    spacing: 0
   });
   var FONT_FAMILIES = Object.freeze([
     { value: "default", label: "Bokoun default", stack: "" },
@@ -2972,6 +3042,8 @@
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
+  var FAVORITE_AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
+  var FAVORITE_AVATAR_POSITIONS = /* @__PURE__ */ new Set(["left", "right"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
   var MIN_FONT_SIZE = 8;
   var MAX_FONT_SIZE = 72;
@@ -3030,7 +3102,15 @@
     function normalizeFavoritesSettings(value = {}) {
       return {
         sort: FAVORITE_SORTS.has(value.sort) ? value.sort : DEFAULT_FAVORITES_SETTINGS.sort,
-        unreadMode: UNREAD_MODES.has(value.unreadMode) ? value.unreadMode : DEFAULT_FAVORITES_SETTINGS.unreadMode
+        unreadMode: UNREAD_MODES.has(value.unreadMode) ? value.unreadMode : DEFAULT_FAVORITES_SETTINGS.unreadMode,
+        fontFamily: validFontFamily(value.fontFamily),
+        customFontFamily: String(value.customFontFamily || "").slice(0, MAX_CUSTOM_FAMILY_LENGTH),
+        fontSize: normalizeFontSize(value.fontSize),
+        showAvatars: value.showAvatars === true,
+        avatarSize: normalizeFavoriteAvatarSize(value.avatarSize),
+        avatarShape: FAVORITE_AVATAR_SHAPES.has(value.avatarShape) ? value.avatarShape : DEFAULT_FAVORITES_SETTINGS.avatarShape,
+        avatarPosition: FAVORITE_AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_FAVORITES_SETTINGS.avatarPosition,
+        spacing: normalizeFavoriteSpacing(value.spacing)
       };
     }
     function normalizeFavoriteOrder(value) {
@@ -3071,7 +3151,7 @@
         scheduleRender({ force: true });
       }
     }
-    function updateFavoritesSettings(patch, { clubs = state2.favoriteSourceClubs } = {}) {
+    function updateFavoritesSettings(patch, { clubs = state2.favoriteSourceClubs, render = true } = {}) {
       state2.favoritesSettings = normalizeFavoritesSettings({
         ...currentFavoritesSettings(),
         ...patch
@@ -3081,8 +3161,23 @@
         saveFavoriteOrder(clubs.map((club) => club.href));
       }
       if (state2.favoritesSettings.sort !== "manual") state2.editingFavoriteOrder = false;
-      state2.currentSignature = "";
-      scheduleRender({ force: true });
+      applyVisualSettings();
+      if (render) {
+        state2.currentSignature = "";
+        scheduleRender({ force: true });
+      }
+    }
+    function resetFavoritesAppearance() {
+      updateFavoritesSettings({
+        fontFamily: DEFAULT_FAVORITES_SETTINGS.fontFamily,
+        customFontFamily: DEFAULT_FAVORITES_SETTINGS.customFontFamily,
+        fontSize: DEFAULT_FAVORITES_SETTINGS.fontSize,
+        showAvatars: DEFAULT_FAVORITES_SETTINGS.showAvatars,
+        avatarSize: DEFAULT_FAVORITES_SETTINGS.avatarSize,
+        avatarShape: DEFAULT_FAVORITES_SETTINGS.avatarShape,
+        avatarPosition: DEFAULT_FAVORITES_SETTINGS.avatarPosition,
+        spacing: DEFAULT_FAVORITES_SETTINGS.spacing
+      });
     }
     function saveFavoriteOrder(order) {
       state2.favoriteManualOrder = normalizeFavoriteOrder(order);
@@ -3151,6 +3246,16 @@
       const size = normalizeFontSize(value);
       return Number.isInteger(size) ? String(size) : size.toFixed(1);
     }
+    function normalizeFavoriteAvatarSize(value) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.avatarSize;
+      return Math.round(Math.min(72, Math.max(20, parsed)));
+    }
+    function normalizeFavoriteSpacing(value) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.spacing;
+      return Math.round(Math.min(32, Math.max(0, parsed)));
+    }
     function normalizeCustomFamily(value) {
       const source = String(value || "").trim();
       if (!source || source.length > MAX_CUSTOM_FAMILY_LENGTH) return "";
@@ -3194,12 +3299,26 @@
       if (!scroller) return;
       const display = currentDisplaySettings();
       const font = currentFontSettings();
+      const favorites = currentFavoritesSettings();
       const stack = fontStack(font.family, font.customFamily);
+      const favoriteStack = fontStack(favorites.fontFamily, favorites.customFontFamily);
       scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
       scroller.dataset.avatarPosition = display.avatarPosition;
       scroller.style.setProperty("--post-font-size", `${displayFontSize(font.size)}px`);
       if (stack) scroller.style.setProperty("--post-font-family", stack);
       else scroller.style.removeProperty("--post-font-family");
+      scroller.dataset.favoriteAvatars = favorites.showAvatars ? "visible" : "hidden";
+      scroller.dataset.favoriteAvatarShape = favorites.avatarShape;
+      scroller.dataset.favoriteAvatarPosition = favorites.avatarPosition;
+      scroller.style.setProperty("--favorite-font-size", `${displayFontSize(favorites.fontSize)}px`);
+      scroller.style.setProperty("--favorite-avatar-size", `${favorites.avatarSize}px`);
+      scroller.style.setProperty(
+        "--favorite-avatar-font-size",
+        `${Math.max(12, Math.round(favorites.avatarSize * 0.42))}px`
+      );
+      scroller.style.setProperty("--favorite-row-gap", `${favorites.spacing}px`);
+      if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
+      else scroller.style.removeProperty("--favorite-font-family");
     }
     Object.assign(ctx2, {
       fontFamilies: FONT_FAMILIES,
@@ -3215,6 +3334,7 @@
       updateDisplaySettings,
       updateFontSettings,
       updateFavoritesSettings,
+      resetFavoritesAppearance,
       saveFavoriteOrder,
       resetFavoriteOrder,
       sortFavorites,
@@ -3224,6 +3344,8 @@
       fontStack,
       normalizeFontSize,
       displayFontSize,
+      normalizeFavoriteAvatarSize,
+      normalizeFavoriteSpacing,
       normalizeCustomFamily,
       applyVisualSettings
     });
@@ -3257,6 +3379,7 @@
     const normalizeCustomFamily = (...args) => ctx2.normalizeCustomFamily(...args);
     const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
     const updateFavoritesSettings = (...args) => ctx2.updateFavoritesSettings(...args);
+    const resetFavoritesAppearance = (...args) => ctx2.resetFavoritesAppearance(...args);
     const saveFavoriteOrder = (...args) => ctx2.saveFavoriteOrder(...args);
     const resetFavoriteOrder = (...args) => ctx2.resetFavoriteOrder(...args);
     const unreadHeat = (...args) => ctx2.unreadHeat(...args);
@@ -3326,6 +3449,7 @@
         const heat = showHeat ? unreadHeat(club.unread) : "";
         const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
         const unreadLabel = club.unread ? `${club.unread} nových příspěvků` : "bez nových příspěvků";
+        const avatar = favorites.showAvatars ? favoriteAvatarMarkup(club) : "";
         return `
           <li
             class="favorite-item${editing ? " favorite-item--editing" : ""}"
@@ -3339,11 +3463,13 @@
               aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
               ${editing ? 'aria-disabled="true"' : ""}
             >
+              ${favorites.avatarPosition === "left" ? avatar : ""}
               <span class="favorite-main">
                 <span class="favorite-name">${escapeHtml(club.name)}</span>
                 <span class="favorite-time">${escapeHtml(club.activity)}</span>
               </span>
               ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
+              ${favorites.avatarPosition === "right" ? avatar : ""}
             </a>
             ${editing ? `
               <button
@@ -3367,6 +3493,10 @@
       <ul class="favorites">${rows}</ul>
     `;
     }
+    function favoriteAvatarMarkup(club) {
+      const initial = String(club.name || "?").trim().slice(0, 1).toLocaleUpperCase("cs") || "?";
+      return `<span class="favorite-avatar" aria-hidden="true">${escapeHtml(initial)}</span>`;
+    }
     function favoritesControlMarkup() {
       const open = state2.openHeaderPanel === "favorites";
       return `
@@ -3385,6 +3515,9 @@
     function favoritesPanelMarkup() {
       const favorites = currentFavoritesSettings();
       const manual = favorites.sort === "manual";
+      const customFont = favorites.fontFamily === "custom";
+      const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
+      const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
       return `
       <section class="header-panel favorites-panel" aria-label="Nastavení oblíbených">
         <header class="panel-head">
@@ -3414,6 +3547,67 @@
           <span><i class="heat-swatch heat-swatch--more"></i>5–14</span>
           <span><i class="heat-swatch heat-swatch--most"></i>15+</span>
         </div>
+        <div class="panel-section-title">Vzhled</div>
+        <label class="settings-field">
+          <span>Písmo</span>
+          <select data-setting="favorite-font-family" aria-label="Písmo oblíbených">${fontOptionsMarkup(favorites.fontFamily)}</select>
+        </label>
+        <label class="settings-field settings-field--custom" ${customFont ? "" : "hidden"}>
+          <span>Vlastní</span>
+          <span class="custom-font-wrap">
+            <input
+              type="text"
+              maxlength="160"
+              autocomplete="off"
+              spellcheck="false"
+              value="${escapeHtml(favorites.customFontFamily)}"
+              aria-label="Vlastní písmo oblíbených"
+              aria-invalid="${invalidCustomFont ? "true" : "false"}"
+            >
+            <small>${invalidCustomFont ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami"}</small>
+          </span>
+        </label>
+        <div class="settings-field">
+          <span>Velikost</span>
+          <span class="font-size-controls">
+            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma oblíbených posuvníkem">
+            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma oblíbených v pixelech">
+            <span>px</span>
+          </span>
+        </div>
+        <label class="settings-switch">
+          <span>Zobrazovat avatary</span>
+          <input type="checkbox" data-setting="favorite-show-avatars" ${favorites.showAvatars ? "checked" : ""}>
+        </label>
+        <label class="settings-field">
+          <span>Pozice</span>
+          <select data-setting="favorite-avatar-position" aria-label="Pozice avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
+            <option value="left" ${favorites.avatarPosition === "left" ? "selected" : ""}>Vlevo</option>
+            <option value="right" ${favorites.avatarPosition === "right" ? "selected" : ""}>Vpravo</option>
+          </select>
+        </label>
+        <label class="settings-field">
+          <span>Tvar</span>
+          <select data-setting="favorite-avatar-shape" aria-label="Tvar avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
+            <option value="circle" ${favorites.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
+            <option value="rounded" ${favorites.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
+            <option value="square" ${favorites.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
+          </select>
+        </label>
+        <div class="settings-field">
+          <span>Avatar</span>
+          <span class="compact-range-controls">
+            <input type="range" min="20" max="72" step="1" value="${escapeHtml(favorites.avatarSize)}" aria-label="Velikost avatarů oblíbených posuvníkem" ${favorites.showAvatars ? "" : "disabled"}>
+            <output>${escapeHtml(favorites.avatarSize)} px</output>
+          </span>
+        </div>
+        <div class="settings-field">
+          <span>Rozestup</span>
+          <span class="compact-range-controls">
+            <input type="range" min="0" max="32" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Rozestup oblíbených posuvníkem">
+            <output>${escapeHtml(favorites.spacing)} px</output>
+          </span>
+        </div>
         ${manual ? `
           <p class="settings-note">V režimu úprav přetahujte kluby za madlo. Odkazy jsou dočasně vypnuté.</p>
           <div class="panel-actions">
@@ -3425,6 +3619,9 @@
         ` : `
           <p class="settings-note">Výchozí zachovává pořadí Kapybary pro zvolenou kartu.</p>
         `}
+        <div class="panel-actions">
+          <button type="button" data-action="reset-favorites-appearance">Obnovit vzhled</button>
+        </div>
       </section>
     `;
     }
@@ -3460,13 +3657,7 @@
     function fontPanelMarkup() {
       const font = currentFontSettings();
       const custom = font.family === "custom";
-      const options = ctx2.fontFamilies.map(({ value, label, stack }) => `
-      <option
-        value="${escapeHtml(value)}"
-        ${font.family === value ? "selected" : ""}
-        ${stack ? `style="font-family:${escapeHtml(stack)}"` : ""}
-      >${escapeHtml(label)}</option>
-    `).join("");
+      const options = fontOptionsMarkup(font.family);
       const normalizedCustom = normalizeCustomFamily(font.customFamily);
       const invalidCustom = Boolean(font.customFamily.trim() && !normalizedCustom);
       return `
@@ -3498,23 +3689,8 @@
         <div class="settings-field">
           <span>Velikost</span>
           <span class="font-size-controls">
-            <input
-              type="range"
-              min="10"
-              max="32"
-              step="0.5"
-              value="${escapeHtml(Math.min(32, Math.max(10, font.size)))}"
-              aria-label="Velikost písma posuvníkem"
-            >
-            <input
-              type="number"
-              min="8"
-              max="72"
-              step="0.5"
-              inputmode="decimal"
-              value="${escapeHtml(displayFontSize(font.size))}"
-              aria-label="Velikost písma v pixelech"
-            >
+            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, font.size)))}" aria-label="Velikost písma posuvníkem">
+            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(font.size))}" aria-label="Velikost písma v pixelech">
             <span>px</span>
           </span>
         </div>
@@ -3524,6 +3700,15 @@
         </div>
       </section>
     `;
+    }
+    function fontOptionsMarkup(selectedFamily) {
+      return ctx2.fontFamilies.map(({ value, label, stack }) => `
+      <option
+        value="${escapeHtml(value)}"
+        ${selectedFamily === value ? "selected" : ""}
+        ${stack ? `style="font-family:${escapeHtml(stack)}"` : ""}
+      >${escapeHtml(label)}</option>
+    `).join("");
     }
     function displayPanelMarkup() {
       const display = currentDisplaySettings();
@@ -3863,6 +4048,64 @@
       state2.shadow.querySelector("[data-setting='unread-mode']")?.addEventListener("change", (event) => {
         updateFavoritesSettings({ unreadMode: event.currentTarget.value });
       });
+      state2.shadow.querySelector("[data-setting='favorite-font-family']")?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ fontFamily: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[aria-label='Vlastní písmo oblíbených']")?.addEventListener("input", (event) => {
+        updateFavoritesSettings(
+          { customFontFamily: event.currentTarget.value },
+          { render: false }
+        );
+        const normalized = normalizeCustomFamily(event.currentTarget.value);
+        const invalid = Boolean(event.currentTarget.value.trim() && !normalized);
+        event.currentTarget.setAttribute("aria-invalid", invalid ? "true" : "false");
+        const hint = event.currentTarget.parentElement?.querySelector("small");
+        if (hint) hint.textContent = invalid ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami";
+      });
+      const favoriteFontRange = state2.shadow.querySelector("[aria-label='Velikost písma oblíbených posuvníkem']");
+      const favoriteFontNumber = state2.shadow.querySelector("[aria-label='Velikost písma oblíbených v pixelech']");
+      favoriteFontRange?.addEventListener("input", (event) => {
+        updateFavoritesSettings({ fontSize: event.currentTarget.value }, { render: false });
+        if (favoriteFontNumber) favoriteFontNumber.value = displayFontSize(event.currentTarget.value);
+      });
+      favoriteFontNumber?.addEventListener("input", (event) => {
+        if (event.currentTarget.value === "") return;
+        updateFavoritesSettings({ fontSize: event.currentTarget.value }, { render: false });
+        if (favoriteFontRange) favoriteFontRange.value = String(
+          Math.min(32, Math.max(10, Number(event.currentTarget.value)))
+        );
+      });
+      favoriteFontNumber?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ fontSize: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[data-setting='favorite-show-avatars']")?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ showAvatars: event.currentTarget.checked });
+      });
+      state2.shadow.querySelector("[data-setting='favorite-avatar-position']")?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ avatarPosition: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[data-setting='favorite-avatar-shape']")?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ avatarShape: event.currentTarget.value });
+      });
+      const favoriteAvatarRange = state2.shadow.querySelector("[aria-label='Velikost avatarů oblíbených posuvníkem']");
+      favoriteAvatarRange?.addEventListener("input", (event) => {
+        updateFavoritesSettings({ avatarSize: event.currentTarget.value }, { render: false });
+        const output = event.currentTarget.parentElement?.querySelector("output");
+        if (output) output.textContent = `${event.currentTarget.value} px`;
+      });
+      favoriteAvatarRange?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ avatarSize: event.currentTarget.value });
+      });
+      const favoriteSpacingRange = state2.shadow.querySelector("[aria-label='Rozestup oblíbených posuvníkem']");
+      favoriteSpacingRange?.addEventListener("input", (event) => {
+        updateFavoritesSettings({ spacing: event.currentTarget.value }, { render: false });
+        const output = event.currentTarget.parentElement?.querySelector("output");
+        if (output) output.textContent = `${event.currentTarget.value} px`;
+      });
+      favoriteSpacingRange?.addEventListener("change", (event) => {
+        updateFavoritesSettings({ spacing: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[data-action='reset-favorites-appearance']")?.addEventListener("click", resetFavoritesAppearance);
       state2.shadow.querySelector("[data-action='toggle-favorite-edit']")?.addEventListener("click", () => {
         const enteringEditMode = !state2.editingFavoriteOrder;
         state2.editingFavoriteOrder = enteringEditMode;

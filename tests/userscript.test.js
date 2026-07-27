@@ -29,7 +29,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.5/);
+  assert.match(source, /@version\s+0\.6\.6/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -198,6 +198,19 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
   ];
   settings.state.favoriteSourceClubs = clubs;
 
+  assert.deepEqual(settings.currentFavoritesSettings(), {
+    sort: "activity",
+    unreadMode: "count",
+    fontFamily: "default",
+    customFontFamily: "",
+    fontSize: 17,
+    showAvatars: false,
+    avatarSize: 34,
+    avatarShape: "circle",
+    avatarPosition: "left",
+    spacing: 0,
+  });
+
   settings.updateFavoritesSettings({ sort: "alphabetical" });
   assert.deepEqual(
     settings.sortFavorites(clubs).map((club) => club.name),
@@ -226,6 +239,36 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
   assert.equal(settings.unreadHeat(5), "more");
   assert.equal(settings.unreadHeat(14), "more");
   assert.equal(settings.unreadHeat(15), "most");
+
+  settings.updateFavoritesSettings({
+    fontFamily: "classic-okoun",
+    fontSize: 20.4,
+    showAvatars: true,
+    avatarSize: 200,
+    avatarShape: "rounded",
+    avatarPosition: "right",
+    spacing: 11.6,
+  });
+  assert.deepEqual(
+    {
+      fontFamily: stored.get("favorites").fontFamily,
+      fontSize: stored.get("favorites").fontSize,
+      showAvatars: stored.get("favorites").showAvatars,
+      avatarSize: stored.get("favorites").avatarSize,
+      avatarShape: stored.get("favorites").avatarShape,
+      avatarPosition: stored.get("favorites").avatarPosition,
+      spacing: stored.get("favorites").spacing,
+    },
+    {
+      fontFamily: "classic-okoun",
+      fontSize: 20.5,
+      showAvatars: true,
+      avatarSize: 72,
+      avatarShape: "rounded",
+      avatarPosition: "right",
+      spacing: 12,
+    },
+  );
 });
 
 test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering", () => {
@@ -239,6 +282,13 @@ test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering
   assert.match(source, /favorite-row--heat-more/);
   assert.match(source, /favorite-row--heat-most/);
   assert.match(source, /data-unread-count=/);
+  assert.match(source, /data-setting="favorite-font-family"/);
+  assert.match(source, /data-setting="favorite-show-avatars"/);
+  assert.match(source, /data-setting="favorite-avatar-position"/);
+  assert.match(source, /data-setting="favorite-avatar-shape"/);
+  assert.match(source, /Rozestup oblíbených posuvníkem/);
+  assert.match(source, /class="favorite-avatar"/);
+  assert.match(source, /--favorite-row-gap/);
   assert.match(source, /aria-label="\$\{escapeHtml\(`\$\{club\.name\}, \$\{unreadLabel\}/);
   assert.doesNotMatch(source, /<nav class="tabs"/);
   assert.match(source, /location\.pathname !== "\/fav\/activity"/);

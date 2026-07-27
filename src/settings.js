@@ -13,6 +13,14 @@ const DEFAULT_FONT_SETTINGS = Object.freeze({
 const DEFAULT_FAVORITES_SETTINGS = Object.freeze({
   sort: "activity",
   unreadMode: "count",
+  fontFamily: "default",
+  customFontFamily: "",
+  fontSize: 17,
+  showAvatars: false,
+  avatarSize: 34,
+  avatarShape: "circle",
+  avatarPosition: "left",
+  spacing: 0,
 });
 
 const FONT_FAMILIES = Object.freeze([
@@ -43,6 +51,8 @@ const AVATAR_POSITIONS = new Set(["inline", "left"]);
 const REPLY_META_MODES = new Set(["full", "compact", "hidden"]);
 const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
 const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
+const FAVORITE_AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
+const FAVORITE_AVATAR_POSITIONS = new Set(["left", "right"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 72;
@@ -116,6 +126,18 @@ export function installSettings(ctx) {
       unreadMode: UNREAD_MODES.has(value.unreadMode)
         ? value.unreadMode
         : DEFAULT_FAVORITES_SETTINGS.unreadMode,
+      fontFamily: validFontFamily(value.fontFamily),
+      customFontFamily: String(value.customFontFamily || "").slice(0, MAX_CUSTOM_FAMILY_LENGTH),
+      fontSize: normalizeFontSize(value.fontSize),
+      showAvatars: value.showAvatars === true,
+      avatarSize: normalizeFavoriteAvatarSize(value.avatarSize),
+      avatarShape: FAVORITE_AVATAR_SHAPES.has(value.avatarShape)
+        ? value.avatarShape
+        : DEFAULT_FAVORITES_SETTINGS.avatarShape,
+      avatarPosition: FAVORITE_AVATAR_POSITIONS.has(value.avatarPosition)
+        ? value.avatarPosition
+        : DEFAULT_FAVORITES_SETTINGS.avatarPosition,
+      spacing: normalizeFavoriteSpacing(value.spacing),
     };
   }
 
@@ -164,7 +186,10 @@ export function installSettings(ctx) {
     }
   }
 
-  function updateFavoritesSettings(patch, { clubs = state.favoriteSourceClubs } = {}) {
+  function updateFavoritesSettings(
+    patch,
+    { clubs = state.favoriteSourceClubs, render = true } = {},
+  ) {
     state.favoritesSettings = normalizeFavoritesSettings({
       ...currentFavoritesSettings(),
       ...patch,
@@ -174,8 +199,24 @@ export function installSettings(ctx) {
       saveFavoriteOrder(clubs.map((club) => club.href));
     }
     if (state.favoritesSettings.sort !== "manual") state.editingFavoriteOrder = false;
-    state.currentSignature = "";
-    scheduleRender({ force: true });
+    applyVisualSettings();
+    if (render) {
+      state.currentSignature = "";
+      scheduleRender({ force: true });
+    }
+  }
+
+  function resetFavoritesAppearance() {
+    updateFavoritesSettings({
+      fontFamily: DEFAULT_FAVORITES_SETTINGS.fontFamily,
+      customFontFamily: DEFAULT_FAVORITES_SETTINGS.customFontFamily,
+      fontSize: DEFAULT_FAVORITES_SETTINGS.fontSize,
+      showAvatars: DEFAULT_FAVORITES_SETTINGS.showAvatars,
+      avatarSize: DEFAULT_FAVORITES_SETTINGS.avatarSize,
+      avatarShape: DEFAULT_FAVORITES_SETTINGS.avatarShape,
+      avatarPosition: DEFAULT_FAVORITES_SETTINGS.avatarPosition,
+      spacing: DEFAULT_FAVORITES_SETTINGS.spacing,
+    });
   }
 
   function saveFavoriteOrder(order) {
@@ -268,6 +309,18 @@ export function installSettings(ctx) {
     return Number.isInteger(size) ? String(size) : size.toFixed(1);
   }
 
+  function normalizeFavoriteAvatarSize(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.avatarSize;
+    return Math.round(Math.min(72, Math.max(20, parsed)));
+  }
+
+  function normalizeFavoriteSpacing(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.spacing;
+    return Math.round(Math.min(32, Math.max(0, parsed)));
+  }
+
   function normalizeCustomFamily(value) {
     const source = String(value || "").trim();
     if (!source || source.length > MAX_CUSTOM_FAMILY_LENGTH) return "";
@@ -314,13 +367,27 @@ export function installSettings(ctx) {
     if (!scroller) return;
     const display = currentDisplaySettings();
     const font = currentFontSettings();
+    const favorites = currentFavoritesSettings();
     const stack = fontStack(font.family, font.customFamily);
+    const favoriteStack = fontStack(favorites.fontFamily, favorites.customFontFamily);
 
     scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
     scroller.dataset.avatarPosition = display.avatarPosition;
     scroller.style.setProperty("--post-font-size", `${displayFontSize(font.size)}px`);
     if (stack) scroller.style.setProperty("--post-font-family", stack);
     else scroller.style.removeProperty("--post-font-family");
+    scroller.dataset.favoriteAvatars = favorites.showAvatars ? "visible" : "hidden";
+    scroller.dataset.favoriteAvatarShape = favorites.avatarShape;
+    scroller.dataset.favoriteAvatarPosition = favorites.avatarPosition;
+    scroller.style.setProperty("--favorite-font-size", `${displayFontSize(favorites.fontSize)}px`);
+    scroller.style.setProperty("--favorite-avatar-size", `${favorites.avatarSize}px`);
+    scroller.style.setProperty(
+      "--favorite-avatar-font-size",
+      `${Math.max(12, Math.round(favorites.avatarSize * 0.42))}px`,
+    );
+    scroller.style.setProperty("--favorite-row-gap", `${favorites.spacing}px`);
+    if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
+    else scroller.style.removeProperty("--favorite-font-family");
   }
 
   Object.assign(ctx, {
@@ -337,6 +404,7 @@ export function installSettings(ctx) {
     updateDisplaySettings,
     updateFontSettings,
     updateFavoritesSettings,
+    resetFavoritesAppearance,
     saveFavoriteOrder,
     resetFavoriteOrder,
     sortFavorites,
@@ -346,6 +414,8 @@ export function installSettings(ctx) {
     fontStack,
     normalizeFontSize,
     displayFontSize,
+    normalizeFavoriteAvatarSize,
+    normalizeFavoriteSpacing,
     normalizeCustomFamily,
     applyVisualSettings,
   });

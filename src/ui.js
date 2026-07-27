@@ -25,6 +25,7 @@ export function installUi(ctx) {
   const normalizeCustomFamily = (...args) => ctx.normalizeCustomFamily(...args);
   const currentFavoritesSettings = (...args) => ctx.currentFavoritesSettings(...args);
   const updateFavoritesSettings = (...args) => ctx.updateFavoritesSettings(...args);
+  const resetFavoritesAppearance = (...args) => ctx.resetFavoritesAppearance(...args);
   const saveFavoriteOrder = (...args) => ctx.saveFavoriteOrder(...args);
   const resetFavoriteOrder = (...args) => ctx.resetFavoriteOrder(...args);
   const unreadHeat = (...args) => ctx.unreadHeat(...args);
@@ -105,6 +106,7 @@ export function installUi(ctx) {
         const unreadLabel = club.unread
           ? `${club.unread} nových příspěvků`
           : "bez nových příspěvků";
+        const avatar = favorites.showAvatars ? favoriteAvatarMarkup(club) : "";
         return `
           <li
             class="favorite-item${editing ? " favorite-item--editing" : ""}"
@@ -118,11 +120,13 @@ export function installUi(ctx) {
               aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
               ${editing ? 'aria-disabled="true"' : ""}
             >
+              ${favorites.avatarPosition === "left" ? avatar : ""}
               <span class="favorite-main">
                 <span class="favorite-name">${escapeHtml(club.name)}</span>
                 <span class="favorite-time">${escapeHtml(club.activity)}</span>
               </span>
               ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
+              ${favorites.avatarPosition === "right" ? avatar : ""}
             </a>
             ${editing ? `
               <button
@@ -149,6 +153,11 @@ export function installUi(ctx) {
     `;
   }
 
+  function favoriteAvatarMarkup(club) {
+    const initial = String(club.name || "?").trim().slice(0, 1).toLocaleUpperCase("cs") || "?";
+    return `<span class="favorite-avatar" aria-hidden="true">${escapeHtml(initial)}</span>`;
+  }
+
   function favoritesControlMarkup() {
     const open = state.openHeaderPanel === "favorites";
     return `
@@ -168,6 +177,9 @@ export function installUi(ctx) {
   function favoritesPanelMarkup() {
     const favorites = currentFavoritesSettings();
     const manual = favorites.sort === "manual";
+    const customFont = favorites.fontFamily === "custom";
+    const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
+    const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
     return `
       <section class="header-panel favorites-panel" aria-label="Nastavení oblíbených">
         <header class="panel-head">
@@ -197,6 +209,67 @@ export function installUi(ctx) {
           <span><i class="heat-swatch heat-swatch--more"></i>5–14</span>
           <span><i class="heat-swatch heat-swatch--most"></i>15+</span>
         </div>
+        <div class="panel-section-title">Vzhled</div>
+        <label class="settings-field">
+          <span>Písmo</span>
+          <select data-setting="favorite-font-family" aria-label="Písmo oblíbených">${fontOptionsMarkup(favorites.fontFamily)}</select>
+        </label>
+        <label class="settings-field settings-field--custom" ${customFont ? "" : "hidden"}>
+          <span>Vlastní</span>
+          <span class="custom-font-wrap">
+            <input
+              type="text"
+              maxlength="160"
+              autocomplete="off"
+              spellcheck="false"
+              value="${escapeHtml(favorites.customFontFamily)}"
+              aria-label="Vlastní písmo oblíbených"
+              aria-invalid="${invalidCustomFont ? "true" : "false"}"
+            >
+            <small>${invalidCustomFont ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami"}</small>
+          </span>
+        </label>
+        <div class="settings-field">
+          <span>Velikost</span>
+          <span class="font-size-controls">
+            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma oblíbených posuvníkem">
+            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma oblíbených v pixelech">
+            <span>px</span>
+          </span>
+        </div>
+        <label class="settings-switch">
+          <span>Zobrazovat avatary</span>
+          <input type="checkbox" data-setting="favorite-show-avatars" ${favorites.showAvatars ? "checked" : ""}>
+        </label>
+        <label class="settings-field">
+          <span>Pozice</span>
+          <select data-setting="favorite-avatar-position" aria-label="Pozice avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
+            <option value="left" ${favorites.avatarPosition === "left" ? "selected" : ""}>Vlevo</option>
+            <option value="right" ${favorites.avatarPosition === "right" ? "selected" : ""}>Vpravo</option>
+          </select>
+        </label>
+        <label class="settings-field">
+          <span>Tvar</span>
+          <select data-setting="favorite-avatar-shape" aria-label="Tvar avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
+            <option value="circle" ${favorites.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
+            <option value="rounded" ${favorites.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
+            <option value="square" ${favorites.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
+          </select>
+        </label>
+        <div class="settings-field">
+          <span>Avatar</span>
+          <span class="compact-range-controls">
+            <input type="range" min="20" max="72" step="1" value="${escapeHtml(favorites.avatarSize)}" aria-label="Velikost avatarů oblíbených posuvníkem" ${favorites.showAvatars ? "" : "disabled"}>
+            <output>${escapeHtml(favorites.avatarSize)} px</output>
+          </span>
+        </div>
+        <div class="settings-field">
+          <span>Rozestup</span>
+          <span class="compact-range-controls">
+            <input type="range" min="0" max="32" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Rozestup oblíbených posuvníkem">
+            <output>${escapeHtml(favorites.spacing)} px</output>
+          </span>
+        </div>
         ${manual ? `
           <p class="settings-note">V režimu úprav přetahujte kluby za madlo. Odkazy jsou dočasně vypnuté.</p>
           <div class="panel-actions">
@@ -208,6 +281,9 @@ export function installUi(ctx) {
         ` : `
           <p class="settings-note">Výchozí zachovává pořadí Kapybary pro zvolenou kartu.</p>
         `}
+        <div class="panel-actions">
+          <button type="button" data-action="reset-favorites-appearance">Obnovit vzhled</button>
+        </div>
       </section>
     `;
   }
@@ -247,13 +323,7 @@ export function installUi(ctx) {
   function fontPanelMarkup() {
     const font = currentFontSettings();
     const custom = font.family === "custom";
-    const options = ctx.fontFamilies.map(({ value, label, stack }) => `
-      <option
-        value="${escapeHtml(value)}"
-        ${font.family === value ? "selected" : ""}
-        ${stack ? `style="font-family:${escapeHtml(stack)}"` : ""}
-      >${escapeHtml(label)}</option>
-    `).join("");
+    const options = fontOptionsMarkup(font.family);
     const normalizedCustom = normalizeCustomFamily(font.customFamily);
     const invalidCustom = Boolean(font.customFamily.trim() && !normalizedCustom);
 
@@ -286,23 +356,8 @@ export function installUi(ctx) {
         <div class="settings-field">
           <span>Velikost</span>
           <span class="font-size-controls">
-            <input
-              type="range"
-              min="10"
-              max="32"
-              step="0.5"
-              value="${escapeHtml(Math.min(32, Math.max(10, font.size)))}"
-              aria-label="Velikost písma posuvníkem"
-            >
-            <input
-              type="number"
-              min="8"
-              max="72"
-              step="0.5"
-              inputmode="decimal"
-              value="${escapeHtml(displayFontSize(font.size))}"
-              aria-label="Velikost písma v pixelech"
-            >
+            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, font.size)))}" aria-label="Velikost písma posuvníkem">
+            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(font.size))}" aria-label="Velikost písma v pixelech">
             <span>px</span>
           </span>
         </div>
@@ -312,6 +367,16 @@ export function installUi(ctx) {
         </div>
       </section>
     `;
+  }
+
+  function fontOptionsMarkup(selectedFamily) {
+    return ctx.fontFamilies.map(({ value, label, stack }) => `
+      <option
+        value="${escapeHtml(value)}"
+        ${selectedFamily === value ? "selected" : ""}
+        ${stack ? `style="font-family:${escapeHtml(stack)}"` : ""}
+      >${escapeHtml(label)}</option>
+    `).join("");
   }
 
   function displayPanelMarkup() {
@@ -688,6 +753,66 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-setting='unread-mode']")?.addEventListener("change", (event) => {
       updateFavoritesSettings({ unreadMode: event.currentTarget.value });
     });
+    state.shadow.querySelector("[data-setting='favorite-font-family']")?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ fontFamily: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[aria-label='Vlastní písmo oblíbených']")?.addEventListener("input", (event) => {
+      updateFavoritesSettings(
+        { customFontFamily: event.currentTarget.value },
+        { render: false },
+      );
+      const normalized = normalizeCustomFamily(event.currentTarget.value);
+      const invalid = Boolean(event.currentTarget.value.trim() && !normalized);
+      event.currentTarget.setAttribute("aria-invalid", invalid ? "true" : "false");
+      const hint = event.currentTarget.parentElement?.querySelector("small");
+      if (hint) hint.textContent = invalid
+        ? "Použijte jen názvy písem oddělené čárkami"
+        : "Místní písma, oddělená čárkami";
+    });
+    const favoriteFontRange = state.shadow.querySelector("[aria-label='Velikost písma oblíbených posuvníkem']");
+    const favoriteFontNumber = state.shadow.querySelector("[aria-label='Velikost písma oblíbených v pixelech']");
+    favoriteFontRange?.addEventListener("input", (event) => {
+      updateFavoritesSettings({ fontSize: event.currentTarget.value }, { render: false });
+      if (favoriteFontNumber) favoriteFontNumber.value = displayFontSize(event.currentTarget.value);
+    });
+    favoriteFontNumber?.addEventListener("input", (event) => {
+      if (event.currentTarget.value === "") return;
+      updateFavoritesSettings({ fontSize: event.currentTarget.value }, { render: false });
+      if (favoriteFontRange) favoriteFontRange.value = String(
+        Math.min(32, Math.max(10, Number(event.currentTarget.value))),
+      );
+    });
+    favoriteFontNumber?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ fontSize: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-setting='favorite-show-avatars']")?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ showAvatars: event.currentTarget.checked });
+    });
+    state.shadow.querySelector("[data-setting='favorite-avatar-position']")?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ avatarPosition: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-setting='favorite-avatar-shape']")?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ avatarShape: event.currentTarget.value });
+    });
+    const favoriteAvatarRange = state.shadow.querySelector("[aria-label='Velikost avatarů oblíbených posuvníkem']");
+    favoriteAvatarRange?.addEventListener("input", (event) => {
+      updateFavoritesSettings({ avatarSize: event.currentTarget.value }, { render: false });
+      const output = event.currentTarget.parentElement?.querySelector("output");
+      if (output) output.textContent = `${event.currentTarget.value} px`;
+    });
+    favoriteAvatarRange?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ avatarSize: event.currentTarget.value });
+    });
+    const favoriteSpacingRange = state.shadow.querySelector("[aria-label='Rozestup oblíbených posuvníkem']");
+    favoriteSpacingRange?.addEventListener("input", (event) => {
+      updateFavoritesSettings({ spacing: event.currentTarget.value }, { render: false });
+      const output = event.currentTarget.parentElement?.querySelector("output");
+      if (output) output.textContent = `${event.currentTarget.value} px`;
+    });
+    favoriteSpacingRange?.addEventListener("change", (event) => {
+      updateFavoritesSettings({ spacing: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-action='reset-favorites-appearance']")?.addEventListener("click", resetFavoritesAppearance);
     state.shadow.querySelector("[data-action='toggle-favorite-edit']")?.addEventListener("click", () => {
       const enteringEditMode = !state.editingFavoriteOrder;
       state.editingFavoriteOrder = enteringEditMode;
