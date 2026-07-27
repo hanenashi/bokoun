@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.0
+// @version      0.6.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -22,6 +22,8 @@
   var runtime_exports = {};
   __export(runtime_exports, {
     ACTIVE_COMPOSER_KEY: () => ACTIVE_COMPOSER_KEY,
+    BOARD_READ_BOUNDARIES_KEY: () => BOARD_READ_BOUNDARIES_KEY,
+    BOARD_VISIT_KEY: () => BOARD_VISIT_KEY,
     BOOT_TIMEOUT_MS: () => BOOT_TIMEOUT_MS,
     COMPOSER_TIMEOUT_MS: () => COMPOSER_TIMEOUT_MS,
     DISPLAY_SETTINGS_KEY: () => DISPLAY_SETTINGS_KEY,
@@ -299,7 +301,12 @@
   .post {
     padding: 14px 16px 16px;
     border-bottom: 1px solid #c7cfdb;
+    background: #edf4ff;
     scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 56px);
+  }
+
+  .post--visit-new {
+    background: #fff;
   }
 
   .post--just-sent,
@@ -1167,7 +1174,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.0";
+  var VERSION = "0.6.1";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1180,6 +1187,8 @@
   var OLDER_TRIGGER_PX = 900;
   var MOBILE_QUERY = "(max-width: 760px)";
   var SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
+  var BOARD_VISIT_KEY = "bokoun.board-visit.v1";
+  var BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1";
   var SCROLL_KEY = "bokoun.scroll.v1";
   var PREF_ENABLED_KEY = "bokoun.enabled";
   var DRAFTS_KEY = "bokoun.drafts.v1";
@@ -1265,6 +1274,7 @@
     boardLoadAbort: null,
     boardAutoCooldownUntil: 0,
     boardStructuredReady: false,
+    boardVisit: null,
     structuredCache: /* @__PURE__ */ new Map(),
     structuredPending: /* @__PURE__ */ new Map(),
     structuredFailures: /* @__PURE__ */ new Map(),
@@ -1770,7 +1780,9 @@
       return {
         title: String(boardRoot.board.name || boardRoot.board.slug || "Klub"),
         posts,
-        nextOlderHref: olderHrefFromPagination(pageRoot.pagination, pageHref)
+        nextOlderHref: olderHrefFromPagination(pageRoot.pagination, pageHref),
+        lastRead: typeof boardRoot.board.lastRead === "string" ? boardRoot.board.lastRead : "",
+        newPostsCount: Number.isFinite(boardRoot.board.newPostsCount) ? Math.max(0, boardRoot.board.newPostsCount) : 0
       };
     }
     function favoritesModelFromSvelteRoots(roots) {
@@ -1795,6 +1807,7 @@
     }
     async function fetchStructuredModel(type, pageHref, { signal } = {}) {
       const response = await fetch(structuredDataUrl(pageHref), {
+        cache: "no-store",
         credentials: "same-origin",
         headers: { Accept: "text/sveltekit-data" },
         signal
@@ -1982,7 +1995,13 @@
       }).filter((post) => post.id);
       const olderLinks = [...root.querySelectorAll(SELECTORS2.olderPosts)];
       const nextOlderHref = normalizeHref(olderLinks.at(-1)?.getAttribute("href") || "");
-      return { title, posts, nextOlderHref };
+      return {
+        title,
+        posts,
+        nextOlderHref,
+        lastRead: "",
+        newPostsCount: 0
+      };
     }
     Object.assign(ctx2, {
       text,
@@ -2018,10 +2037,141 @@
   // src/board-state.js
   function installBoardState(ctx2) {
     const {
+      BOARD_VISIT_KEY: BOARD_VISIT_KEY2 = "bokoun.board-visit.v1",
+      BOARD_READ_BOUNDARIES_KEY: BOARD_READ_BOUNDARIES_KEY2 = "bokoun.board-read-boundaries.v1",
+      gmGet: gmGet2 = () => ({}),
+      gmSet: gmSet2 = () => void 0,
       state: state2
     } = ctx2;
     const routeKey = (...args) => ctx2.routeKey(...args);
     const normalizeHref = (...args) => ctx2.normalizeHref(...args);
+    const fetchStructuredModel = (...args) => ctx2.fetchStructuredModel(...args);
+    const structuredCacheKey = (...args) => ctx2.structuredCacheKey(...args);
+    function boardPath(pageHref = routeKey()) {
+      try {
+        return new URL(pageHref, location.origin).pathname;
+      } catch {
+        return "";
+      }
+    }
+    function readBoardVisit() {
+      if (typeof sessionStorage === "undefined") return state2.boardVisit || null;
+      try {
+        const visit = JSON.parse(sessionStorage.getItem(BOARD_VISIT_KEY2) || "null");
+        if (!visit || typeof visit.boardPath !== "string") return null;
+        return {
+          boardPath: visit.boardPath,
+          lastRead: typeof visit.lastRead === "string" ? visit.lastRead : "",
+          unreadCount: Math.max(0, Number(visit.unreadCount) || 0)
+        };
+      } catch {
+        return null;
+      }
+    }
+    function writeBoardVisit(visit) {
+      state2.boardVisit = visit;
+      if (typeof sessionStorage === "undefined") return;
+      try {
+        sessionStorage.setItem(BOARD_VISIT_KEY2, JSON.stringify(visit));
+      } catch {
+      }
+    }
+    function laterReadBoundary(...values) {
+      return values.reduce((latest, value) => {
+        const timestamp = Date.parse(value);
+        return Number.isFinite(timestamp) && timestamp > (Date.parse(latest) || 0) ? new Date(timestamp).toISOString() : latest;
+      }, "");
+    }
+    function readLocalBoundaries() {
+      try {
+        const stored = gmGet2(BOARD_READ_BOUNDARIES_KEY2, {});
+        return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+      } catch {
+        return {};
+      }
+    }
+    function localReadBoundary(path) {
+      const value = readLocalBoundaries()[path];
+      return typeof value === "string" ? value : "";
+    }
+    function rememberBoardReadBoundary(path, posts = state2.boardPosts) {
+      if (!path) return "";
+      const visit = readBoardVisit();
+      const newestSeen = posts.reduce(
+        (latest, post) => laterReadBoundary(latest, post.datetime),
+        visit?.lastRead || ""
+      );
+      if (!newestSeen) return "";
+      const boundaries = {
+        ...readLocalBoundaries(),
+        [path]: laterReadBoundary(localReadBoundary(path), newestSeen)
+      };
+      const trimmed = Object.fromEntries(
+        Object.entries(boundaries).filter(([key, value]) => key.startsWith("/boards/") && Number.isFinite(Date.parse(value))).sort((left, right) => Date.parse(right[1]) - Date.parse(left[1])).slice(0, 100)
+      );
+      try {
+        gmSet2(BOARD_READ_BOUNDARIES_KEY2, trimmed);
+      } catch {
+      }
+      return trimmed[path] || "";
+    }
+    function startBoardVisit(pageHref, { lastRead = "", newPostsCount = 0, unreadCount = newPostsCount } = {}) {
+      const path = boardPath(pageHref);
+      const visit = {
+        boardPath: path,
+        lastRead: laterReadBoundary(
+          typeof lastRead === "string" ? lastRead : "",
+          localReadBoundary(path)
+        ),
+        unreadCount: Math.max(0, Number(unreadCount) || 0)
+      };
+      writeBoardVisit(visit);
+      return visit;
+    }
+    function ensureBoardVisit(pageHref, model = {}) {
+      const path = boardPath(pageHref);
+      const stored = readBoardVisit();
+      if (stored?.boardPath === path) {
+        if (!stored.lastRead && typeof model.lastRead === "string" && model.lastRead) {
+          return startBoardVisit(pageHref, model);
+        }
+        state2.boardVisit = stored;
+        return stored;
+      }
+      return startBoardVisit(pageHref, model);
+    }
+    function leaveBoardVisit(path = "") {
+      const stored = readBoardVisit();
+      if (path && stored?.boardPath && stored.boardPath !== path) return;
+      rememberBoardReadBoundary(stored?.boardPath || path);
+      state2.boardVisit = null;
+      if (typeof sessionStorage === "undefined") return;
+      try {
+        sessionStorage.removeItem(BOARD_VISIT_KEY2);
+      } catch {
+      }
+    }
+    async function prepareBoardVisitFromFavorite(pageHref, fallbackUnreadCount = 0) {
+      let model = null;
+      try {
+        const entry = await fetchStructuredModel("board", pageHref);
+        state2.structuredCache.set(structuredCacheKey("board", pageHref), entry);
+        model = entry.model;
+      } catch {
+      }
+      return startBoardVisit(pageHref, model || { newPostsCount: fallbackUnreadCount });
+    }
+    function newPostIdsForVisit(posts, visit = state2.boardVisit) {
+      if (!visit) return [];
+      const boundary = Date.parse(visit.lastRead);
+      if (Number.isFinite(boundary)) {
+        return posts.filter((post) => {
+          const posted = Date.parse(post.datetime);
+          return Number.isFinite(posted) && posted > boundary;
+        }).map((post) => post.id);
+      }
+      return posts.slice(0, Math.max(0, Number(visit.unreadCount) || 0)).map((post) => post.id);
+    }
     function boardRouteIdentity(pageHref = routeKey()) {
       const url = new URL(pageHref, location.origin);
       const rootId = url.searchParams.get("rootId") || "";
@@ -2059,6 +2209,7 @@
       state2.boardError = "";
       state2.boardAutoCooldownUntil = 0;
       state2.boardStructuredReady = structured;
+      ensureBoardVisit(pageHref, model);
       mergeBoardPage(model, pageHref, { setNext: true });
     }
     function mergeBoardPage(model, pageHref, { setNext = false } = {}) {
@@ -2086,6 +2237,7 @@
       return added;
     }
     function refreshBoardNewestPage(model, pageHref) {
+      ensureBoardVisit(pageHref, model);
       const normalizedPage = normalizeHref(pageHref);
       const freshIds = new Set(model.posts.map((post) => post.id));
       const older = state2.boardPosts.filter((post) => !freshIds.has(post.id)).map((post) => ({
@@ -2120,6 +2272,7 @@
         posts,
         threadRootId: activeRootId,
         threadCount: posts.length,
+        newPostIds: newPostIdsForVisit(state2.boardPosts),
         nextOlderHref: state2.boardNextHref,
         loading: state2.boardLoading,
         end: state2.boardEnd,
@@ -2129,6 +2282,16 @@
     }
     Object.assign(ctx2, {
       boardRouteIdentity,
+      boardPath,
+      readBoardVisit,
+      laterReadBoundary,
+      localReadBoundary,
+      rememberBoardReadBoundary,
+      startBoardVisit,
+      ensureBoardVisit,
+      leaveBoardVisit,
+      prepareBoardVisitFromFavorite,
+      newPostIdsForVisit,
       threadRootId,
       threadPosts,
       resetBoardAccumulator,
@@ -2955,6 +3118,7 @@
     const unreadHeat = (...args) => ctx2.unreadHeat(...args);
     const openThread = (...args) => ctx2.openThread(...args);
     const closeThread = (...args) => ctx2.closeThread(...args);
+    const prepareBoardVisitFromFavorite = (...args) => ctx2.prepareBoardVisitFromFavorite(...args);
     function escapeHtml(value) {
       const div = document.createElement("div");
       div.textContent = value ?? "";
@@ -2980,6 +3144,7 @@
         model.end,
         model.error,
         model.loadedPageCount,
+        model.newPostIds.join(","),
         state2.openHeaderPanel,
         state2.openPostMenuId,
         JSON.stringify(currentDisplaySettings()),
@@ -3302,6 +3467,7 @@
       const replyingTo = state2.composer?.kind === "reply" ? state2.composer.replyTo : "";
       const newComposer = state2.composer?.kind === "new" ? composerMarkup() : "";
       const feedback = state2.writeFeedback?.boardId === currentBoardId() ? state2.writeFeedback : null;
+      const newPostIds = new Set(board.newPostIds);
       const feedbackMarkup = feedback ? `
         <div class="write-feedback" role="status">
           <span>${escapeHtml(feedback.message)}</span>
@@ -3322,6 +3488,7 @@
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
           threadMode && post.id === board.threadRootId ? "post--thread-root" : "",
           threadMode && post.id !== board.threadRootId ? "post--thread-reply" : "",
+          !threadMode && newPostIds.has(post.id) ? "post--visit-new" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
           replyContext ? "post--reply-context" : ""
@@ -3587,10 +3754,15 @@
         button.addEventListener("click", () => openThread(button.dataset.rootId));
       }
       for (const link of state2.shadow.querySelectorAll("[data-native-href]")) {
-        link.addEventListener("click", (event) => {
+        link.addEventListener("click", async (event) => {
           event.preventDefault();
           if (state2.editingFavoriteOrder && link.closest(".favorite-item")) return;
-          navigateNative(link.getAttribute("data-native-href"));
+          const href = link.getAttribute("data-native-href");
+          if (link.closest(".favorite-item")) {
+            link.setAttribute("aria-busy", "true");
+            await prepareBoardVisitFromFavorite(href, link.dataset.unreadCount);
+          }
+          navigateNative(href);
         });
       }
       attachFavoriteReordering();
@@ -3695,10 +3867,14 @@
     const nativeReady = (...args) => ctx2.nativeReady(...args);
     const render = (...args) => ctx2.render(...args);
     const observeNative = (...args) => ctx2.observeNative(...args);
+    const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
     function navigateNative(href) {
       if (!href) return;
       saveScroll();
       const target = new URL(href, location.origin);
+      if (routeType() === "board" && target.pathname !== location.pathname) {
+        leaveBoardVisit(location.pathname);
+      }
       const nativeLink = [...document.querySelectorAll("a[href]")].find((link) => {
         if (link.closest(`#${HOST_ID2}`)) return false;
         try {
@@ -3889,6 +4065,7 @@
     const sortFavorites = (...args) => ctx2.sortFavorites(...args);
     const boardRouteIdentity = (...args) => ctx2.boardRouteIdentity(...args);
     const navigateNative = (...args) => ctx2.navigateNative(...args);
+    const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
     function render({ force = false } = {}) {
       if (state2.disabled || state2.nativeMode) return;
       const type = routeType();
@@ -3957,6 +4134,12 @@
         const type = routeType();
         if (type !== "unsupported") primeStructuredModel(type, key);
         return;
+      }
+      try {
+        const previous = new URL(state2.currentRouteKey, location.origin);
+        const next = new URL(key, location.origin);
+        if (routeType(previous.pathname) === "board" && previous.pathname !== next.pathname) leaveBoardVisit(previous.pathname);
+      } catch {
       }
       saveScroll();
       state2.currentSignature = "";

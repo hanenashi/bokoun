@@ -16,11 +16,15 @@ export function installNavigation(ctx) {
   const nativeReady = (...args) => ctx.nativeReady(...args);
   const render = (...args) => ctx.render(...args);
   const observeNative = (...args) => ctx.observeNative(...args);
+  const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
 
   function navigateNative(href) {
     if (!href) return;
     saveScroll();
     const target = new URL(href, location.origin);
+    if (routeType() === "board" && target.pathname !== location.pathname) {
+      leaveBoardVisit(location.pathname);
+    }
     const nativeLink = [...document.querySelectorAll("a[href]")]
       .find((link) => {
         if (link.closest(`#${HOST_ID}`)) return false;

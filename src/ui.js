@@ -30,6 +30,7 @@ export function installUi(ctx) {
   const unreadHeat = (...args) => ctx.unreadHeat(...args);
   const openThread = (...args) => ctx.openThread(...args);
   const closeThread = (...args) => ctx.closeThread(...args);
+  const prepareBoardVisitFromFavorite = (...args) => ctx.prepareBoardVisitFromFavorite(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -57,6 +58,7 @@ export function installUi(ctx) {
       model.end,
       model.error,
       model.loadedPageCount,
+      model.newPostIds.join(","),
       state.openHeaderPanel,
       state.openPostMenuId,
       JSON.stringify(currentDisplaySettings()),
@@ -412,6 +414,7 @@ export function installUi(ctx) {
     const feedback = state.writeFeedback?.boardId === currentBoardId()
       ? state.writeFeedback
       : null;
+    const newPostIds = new Set(board.newPostIds);
     const feedbackMarkup = feedback
       ? `
         <div class="write-feedback" role="status">
@@ -435,6 +438,7 @@ export function installUi(ctx) {
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
           threadMode && post.id === board.threadRootId ? "post--thread-root" : "",
           threadMode && post.id !== board.threadRootId ? "post--thread-reply" : "",
+          !threadMode && newPostIds.has(post.id) ? "post--visit-new" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
           replyContext ? "post--reply-context" : "",
@@ -719,10 +723,15 @@ export function installUi(ctx) {
       button.addEventListener("click", () => openThread(button.dataset.rootId));
     }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
-      link.addEventListener("click", (event) => {
+      link.addEventListener("click", async (event) => {
         event.preventDefault();
         if (state.editingFavoriteOrder && link.closest(".favorite-item")) return;
-        navigateNative(link.getAttribute("data-native-href"));
+        const href = link.getAttribute("data-native-href");
+        if (link.closest(".favorite-item")) {
+          link.setAttribute("aria-busy", "true");
+          await prepareBoardVisitFromFavorite(href, link.dataset.unreadCount);
+        }
+        navigateNative(href);
       });
     }
     attachFavoriteReordering();

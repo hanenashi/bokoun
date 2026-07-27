@@ -36,6 +36,7 @@ export function installController(ctx) {
   const sortFavorites = (...args) => ctx.sortFavorites(...args);
   const boardRouteIdentity = (...args) => ctx.boardRouteIdentity(...args);
   const navigateNative = (...args) => ctx.navigateNative(...args);
+  const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
 
   function render({ force = false } = {}) {
     if (state.disabled || state.nativeMode) return;
@@ -115,6 +116,17 @@ export function installController(ctx) {
       const type = routeType();
       if (type !== "unsupported") primeStructuredModel(type, key);
       return;
+    }
+
+    try {
+      const previous = new URL(state.currentRouteKey, location.origin);
+      const next = new URL(key, location.origin);
+      if (
+        routeType(previous.pathname) === "board"
+        && previous.pathname !== next.pathname
+      ) leaveBoardVisit(previous.pathname);
+    } catch {
+      // Route parsing failure should not block Kapybara navigation.
     }
 
     saveScroll();

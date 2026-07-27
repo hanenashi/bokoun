@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, compact threaded clubs, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.0`).
+> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.1`).
 
 ## Install the first prototype
 
@@ -23,13 +23,14 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.0` prototype reads Favorites, boards and older post pages from
+The `0.6.1` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun never calls
-GraphQL directly, stores credentials or mirrors read posts. Only explicit
-unsent drafts are kept locally on the device. Unsupported routes and
-initialization failures restore normal Kapybara automatically.
+GraphQL directly, stores credentials or mirrors read post content. It keeps
+preferences, explicit unsent drafts and one compact last-seen timestamp per
+recent club locally on the device. Unsupported routes and initialization
+failures restore normal Kapybara automatically.
 
 Current prototype boundaries:
 
@@ -46,6 +47,11 @@ Current prototype boundaries:
   or use a persistent touch-friendly manual order;
 - unread counts can appear as numbers, a pale green/violet/coral heat scale,
   both, or neither; exact counts remain available to assistive technology;
+- posts that were new when a club was entered stay white for that whole visit;
+  read posts use a pale classic-blue tint, with no timer changing either state;
+- refreshing or opening a thread keeps the active visit boundary, while leaving
+  the club records its newest seen timestamp and returning combines it with
+  Kapybara's latest read marker;
 - Favorites always use Kapybara's Activity feed; the redundant Activity/Topics
   tab row is removed to recover mobile height;
 - the pencil in the board header opens a plain Markdown editor above the posts;
@@ -595,6 +601,14 @@ IDs. Opening a reply footer navigates through Kapybara's authenticated
 and presents them root-first in chronological order. The board Back button
 returns to the unfiltered club. Favorites now always use Activity and no longer
 spend a second sticky row on Activity/Topics tabs.
+
+Version `0.6.1` restores classic Okoun's visit-scoped new-post treatment.
+Bokoun snapshots Kapybara's `lastRead` marker before entering a club, keeps
+newer posts white through scrolling, thread views and reloads, and uses a pale
+blue background for already-read posts. The snapshot has no timeout and is
+retired only after navigation leaves the club, so returning starts cleanly from
+the later of Kapybara's read boundary and Bokoun's local last-seen timestamp.
+Only the timestamp is stored; post bodies are not copied.
 
 ### Phase 4 — direct transport experiment
 

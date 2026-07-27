@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.6.0";
+export const VERSION = "0.6.1";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;
@@ -13,6 +13,8 @@ export const ROUTE_POLL_MS = 150;
 export const OLDER_TRIGGER_PX = 900;
 export const MOBILE_QUERY = "(max-width: 760px)";
 export const SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
+export const BOARD_VISIT_KEY = "bokoun.board-visit.v1";
+export const BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1";
 export const SCROLL_KEY = "bokoun.scroll.v1";
 export const PREF_ENABLED_KEY = "bokoun.enabled";
 export const DRAFTS_KEY = "bokoun.drafts.v1";
@@ -100,6 +102,7 @@ export const state = {
   boardLoadAbort: null,
   boardAutoCooldownUntil: 0,
   boardStructuredReady: false,
+  boardVisit: null,
   structuredCache: new Map(),
   structuredPending: new Map(),
   structuredFailures: new Map(),

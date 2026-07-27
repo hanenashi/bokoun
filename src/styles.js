@@ -245,7 +245,12 @@ export const STYLES = `
   .post {
     padding: 14px 16px 16px;
     border-bottom: 1px solid #c7cfdb;
+    background: #edf4ff;
     scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 56px);
+  }
+
+  .post--visit-new {
+    background: #fff;
   }
 
   .post--just-sent,

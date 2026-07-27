@@ -28,7 +28,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.0/);
+  assert.match(source, /@version\s+0\.6\.1/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -293,6 +293,8 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   );
 
   assert.equal(model.title, "Fixture Board");
+  assert.equal(model.lastRead, "2026-07-25T09:30:00.000Z");
+  assert.equal(model.newPostsCount, 1);
   assert.equal(model.posts.length, 1);
   assert.deepEqual(model.posts[0], {
     id: "1001",
@@ -331,6 +333,50 @@ test("thread view keeps the root first and orders its replies chronologically", 
   );
 });
 
+test("classic new-post state uses a visit boundary and has no timeout", () => {
+  const board = { state: {} };
+  installBoardState(board);
+  const posts = [
+    { id: "103", datetime: "2026-07-25T10:00:00.000Z" },
+    { id: "102", datetime: "2026-07-25T09:45:00.000Z" },
+    { id: "101", datetime: "2026-07-25T09:00:00.000Z" },
+  ];
+
+  assert.deepEqual(
+    board.newPostIdsForVisit(posts, {
+      boardPath: "/boards/test",
+      lastRead: "2026-07-25T09:30:00.000Z",
+      unreadCount: 0,
+    }),
+    ["103", "102"],
+  );
+  assert.deepEqual(
+    board.newPostIdsForVisit(posts, {
+      boardPath: "/boards/test",
+      lastRead: "",
+      unreadCount: 2,
+    }),
+    ["103", "102"],
+  );
+  assert.equal(
+    board.laterReadBoundary(
+      "2026-07-25T09:30:00.000Z",
+      "2026-07-25T10:00:00.000Z",
+    ),
+    "2026-07-25T10:00:00.000Z",
+  );
+  assert.match(source, /const BOARD_VISIT_KEY = "bokoun\.board-visit\.v1"/);
+  assert.match(
+    source,
+    /const BOARD_READ_BOUNDARIES_KEY = "bokoun\.board-read-boundaries\.v1"/,
+  );
+  assert.match(source, /class="favorite-row/);
+  assert.match(source, /prepareBoardVisitFromFavorite/);
+  assert.match(source, /post--visit-new/);
+  assert.match(source, /\.slice\(0, 100\)/);
+  assert.doesNotMatch(source, /NEW_POST_TIMEOUT|newPostTimeout/);
+});
+
 test("decodes a sanitized streamed SvelteKit Favorites contract", () => {
   const roots = structured.decodeSvelteDataText(fixture("favorites.svelte-data.ndjson"));
   const model = structured.favoritesModelFromSvelteRoots(roots);
@@ -344,6 +390,7 @@ test("decodes a sanitized streamed SvelteKit Favorites contract", () => {
 
 test("structured reads are primary and retain an explicit DOM fallback", () => {
   assert.match(source, /headers: \{ Accept: "text\/sveltekit-data" \}/);
+  assert.match(source, /cache: "no-store"/);
   assert.match(source, /cachedStructuredModel\(type, key\)/);
   assert.match(source, /if \(!structuredRouteModel && !nativeReady\(type\)\) return/);
   assert.match(source, /!nativeReady\(type\) && !cachedStructuredModel\(type, routeKey\(\)\)/);

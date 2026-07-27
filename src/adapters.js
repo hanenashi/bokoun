@@ -242,6 +242,12 @@ export function installAdapters(ctx) {
       title: String(boardRoot.board.name || boardRoot.board.slug || "Klub"),
       posts,
       nextOlderHref: olderHrefFromPagination(pageRoot.pagination, pageHref),
+      lastRead: typeof boardRoot.board.lastRead === "string"
+        ? boardRoot.board.lastRead
+        : "",
+      newPostsCount: Number.isFinite(boardRoot.board.newPostsCount)
+        ? Math.max(0, boardRoot.board.newPostsCount)
+        : 0,
     };
   }
 
@@ -269,6 +275,7 @@ export function installAdapters(ctx) {
 
   async function fetchStructuredModel(type, pageHref, { signal } = {}) {
     const response = await fetch(structuredDataUrl(pageHref), {
+      cache: "no-store",
       credentials: "same-origin",
       headers: { Accept: "text/sveltekit-data" },
       signal,
@@ -455,7 +462,13 @@ export function installAdapters(ctx) {
     }).filter((post) => post.id);
     const olderLinks = [...root.querySelectorAll(SELECTORS.olderPosts)];
     const nextOlderHref = normalizeHref(olderLinks.at(-1)?.getAttribute("href") || "");
-    return { title, posts, nextOlderHref };
+    return {
+      title,
+      posts,
+      nextOlderHref,
+      lastRead: "",
+      newPostsCount: 0,
+    };
   }
 
   Object.assign(ctx, {
