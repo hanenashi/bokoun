@@ -136,21 +136,6 @@ CSS can remove a lot of chrome, and a lite skin is a useful fallback. It cannot
 fully simplify navigation, replace the interaction model, provide deterministic
 scroll restoration, or turn the rich composer into a genuinely simple workflow.
 
-### Why not MurkyPond?
-
-MurkyPond solves a different problem: preserving access during an outage through
-an archive, emergency chat, and external synchronization. Bokoun is an
-alternative interface while Kapybara and Okoun are healthy.
-
-Bokoun therefore does not need:
-
-- Firestore or another external database;
-- a Playwright harvester;
-- duplicated post storage;
-- a posting outbox;
-- recovery synchronization;
-- a continuously running computer or server.
-
 ### Why not a separate website or PWA?
 
 A separate origin would make Kapybara authentication, authorization headers,
