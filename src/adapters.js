@@ -70,6 +70,7 @@ export function installAdapters(ctx) {
         name: text(row.querySelector(SELECTORS.favoriteName)),
         unread: unreadCount(row),
         activity: relativeActivity(row),
+        lastPosted: row.querySelector(SELECTORS.favoriteTime)?.getAttribute("datetime") || "",
       }))
       .filter((club) => club.href && club.name);
   }
@@ -261,6 +262,7 @@ export function installAdapters(ctx) {
       name: String(board?.name || ""),
       unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
       activity: relativeActivityFromTimestamp(board?.lastPosted),
+      lastPosted: typeof board?.lastPosted === "string" ? board.lastPosted : "",
     })).filter((club) => club.href !== "/boards/" && club.name);
   }
 

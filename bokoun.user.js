@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.1
+// @version      0.6.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1174,7 +1174,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.1";
+  var VERSION = "0.6.2";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1638,7 +1638,8 @@
         href: normalizeHref(row.getAttribute("href")),
         name: text(row.querySelector(SELECTORS2.favoriteName)),
         unread: unreadCount(row),
-        activity: relativeActivity(row)
+        activity: relativeActivity(row),
+        lastPosted: row.querySelector(SELECTORS2.favoriteTime)?.getAttribute("datetime") || ""
       })).filter((club) => club.href && club.name);
     }
     function decodeSvelteDataValues(values) {
@@ -1794,7 +1795,8 @@
         href: `/boards/${encodeURIComponent(String(board?.slug || ""))}`,
         name: String(board?.name || ""),
         unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
-        activity: relativeActivityFromTimestamp(board?.lastPosted)
+        activity: relativeActivityFromTimestamp(board?.lastPosted),
+        lastPosted: typeof board?.lastPosted === "string" ? board.lastPosted : ""
       })).filter((club) => club.href !== "/boards/" && club.name);
     }
     function structuredDataUrl(pageHref) {
@@ -2099,7 +2101,7 @@
       const visit = readBoardVisit();
       const newestSeen = posts.reduce(
         (latest, post) => laterReadBoundary(latest, post.datetime),
-        visit?.lastRead || ""
+        laterReadBoundary(visit?.lastRead || "", (/* @__PURE__ */ new Date()).toISOString())
       );
       if (!newestSeen) return "";
       const boundaries = {
@@ -2114,6 +2116,13 @@
       } catch {
       }
       return trimmed[path] || "";
+    }
+    function reconcileFavoriteReadState(clubs) {
+      return clubs.map((club) => {
+        const boundary = Date.parse(localReadBoundary(boardPath(club.href)));
+        const lastPosted = Date.parse(club.lastPosted);
+        return Number.isFinite(boundary) && Number.isFinite(lastPosted) && boundary >= lastPosted ? { ...club, unread: 0 } : club;
+      });
     }
     function startBoardVisit(pageHref, { lastRead = "", newPostsCount = 0, unreadCount = newPostsCount } = {}) {
       const path = boardPath(pageHref);
@@ -2142,6 +2151,10 @@
     }
     function leaveBoardVisit(path = "") {
       const stored = readBoardVisit();
+      if (!stored) {
+        state2.boardVisit = null;
+        return;
+      }
       if (path && stored?.boardPath && stored.boardPath !== path) return;
       rememberBoardReadBoundary(stored?.boardPath || path);
       state2.boardVisit = null;
@@ -2287,6 +2300,7 @@
       laterReadBoundary,
       localReadBoundary,
       rememberBoardReadBoundary,
+      reconcileFavoriteReadState,
       startBoardVisit,
       ensureBoardVisit,
       leaveBoardVisit,
@@ -4066,8 +4080,20 @@
     const boardRouteIdentity = (...args) => ctx2.boardRouteIdentity(...args);
     const navigateNative = (...args) => ctx2.navigateNative(...args);
     const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
+    const reconcileFavoriteReadState = (...args) => ctx2.reconcileFavoriteReadState(...args);
+    function finalizeBoardVisitTransition(previousKey, nextKey) {
+      try {
+        const previous = new URL(previousKey, location.origin);
+        const next = new URL(nextKey, location.origin);
+        if (routeType(previous.pathname) === "board" && previous.pathname !== next.pathname) leaveBoardVisit(previous.pathname);
+      } catch {
+      }
+    }
     function render({ force = false } = {}) {
       if (state2.disabled || state2.nativeMode) return;
+      const previousKey = state2.currentRouteKey;
+      const key = routeKey();
+      finalizeBoardVisitTransition(previousKey, key);
       const type = routeType();
       if (type === "unsupported" || !isMobileEligible()) {
         revealNative();
@@ -4079,8 +4105,6 @@
       }
       if (!state2.host?.isConnected) mountShell();
       applyVisualSettings();
-      const previousKey = state2.currentRouteKey;
-      const key = routeKey();
       primeStructuredModel(type, key);
       const structuredRouteModel = cachedStructuredModel(type, key);
       if (!structuredRouteModel && !nativeReady(type)) return;
@@ -4091,6 +4115,7 @@
         model = structuredRouteModel;
         if (model) readSource = "structured";
         else model = readFavoritesFromDom();
+        model = reconcileFavoriteReadState(model);
         state2.favoriteSourceClubs = model.map((club) => ({ ...club }));
         model = sortFavorites(model);
         state2.favoriteViewClubs = model.map((club) => ({ ...club }));
@@ -4135,12 +4160,7 @@
         if (type !== "unsupported") primeStructuredModel(type, key);
         return;
       }
-      try {
-        const previous = new URL(state2.currentRouteKey, location.origin);
-        const next = new URL(key, location.origin);
-        if (routeType(previous.pathname) === "board" && previous.pathname !== next.pathname) leaveBoardVisit(previous.pathname);
-      } catch {
-      }
+      finalizeBoardVisitTransition(state2.currentRouteKey, key);
       saveScroll();
       state2.currentSignature = "";
       state2.openHeaderPanel = "";
@@ -4198,6 +4218,7 @@
     }
     Object.assign(ctx2, {
       render,
+      finalizeBoardVisitTransition,
       scheduleRender,
       handleRouteChange,
       observeNative,

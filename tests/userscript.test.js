@@ -28,7 +28,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.1/);
+  assert.match(source, /@version\s+0\.6\.2/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -385,7 +385,21 @@ test("decodes a sanitized streamed SvelteKit Favorites contract", () => {
   assert.equal(model[0].href, "/boards/fixture-club");
   assert.equal(model[0].name, "Fixture Club");
   assert.equal(model[0].unread, 3);
+  assert.equal(model[0].lastPosted, "2020-01-02T10:00:00.000Z");
   assert.match(model[0].activity, /^před \d+ dny$/);
+});
+
+test("hardware Back finalizes a board visit before Favorites render", () => {
+  const renderIndex = source.indexOf("function render({ force = false } = {})");
+  const transitionIndex = source.indexOf(
+    "finalizeBoardVisitTransition(previousKey, key)",
+    renderIndex,
+  );
+  const favoritesIndex = source.indexOf('if (type === "favorites")', renderIndex);
+  assert.ok(transitionIndex > renderIndex);
+  assert.ok(transitionIndex < favoritesIndex);
+  assert.match(source, /model = reconcileFavoriteReadState\(model\)/);
+  assert.match(source, /boundary >= lastPosted/);
 });
 
 test("structured reads are primary and retain an explicit DOM fallback", () => {

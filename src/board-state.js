@@ -74,7 +74,7 @@ export function installBoardState(ctx) {
     const visit = readBoardVisit();
     const newestSeen = posts.reduce(
       (latest, post) => laterReadBoundary(latest, post.datetime),
-      visit?.lastRead || "",
+      laterReadBoundary(visit?.lastRead || "", new Date().toISOString()),
     );
     if (!newestSeen) return "";
 
@@ -94,6 +94,18 @@ export function installBoardState(ctx) {
       // Read tracking is local enhancement state, never a navigation blocker.
     }
     return trimmed[path] || "";
+  }
+
+  function reconcileFavoriteReadState(clubs) {
+    return clubs.map((club) => {
+      const boundary = Date.parse(localReadBoundary(boardPath(club.href)));
+      const lastPosted = Date.parse(club.lastPosted);
+      return Number.isFinite(boundary)
+        && Number.isFinite(lastPosted)
+        && boundary >= lastPosted
+        ? { ...club, unread: 0 }
+        : club;
+    });
   }
 
   function startBoardVisit(
@@ -128,6 +140,10 @@ export function installBoardState(ctx) {
 
   function leaveBoardVisit(path = "") {
     const stored = readBoardVisit();
+    if (!stored) {
+      state.boardVisit = null;
+      return;
+    }
     if (path && stored?.boardPath && stored.boardPath !== path) return;
     rememberBoardReadBoundary(stored?.boardPath || path);
     state.boardVisit = null;
@@ -301,6 +317,7 @@ export function installBoardState(ctx) {
     laterReadBoundary,
     localReadBoundary,
     rememberBoardReadBoundary,
+    reconcileFavoriteReadState,
     startBoardVisit,
     ensureBoardVisit,
     leaveBoardVisit,

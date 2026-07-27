@@ -37,9 +37,26 @@ export function installController(ctx) {
   const boardRouteIdentity = (...args) => ctx.boardRouteIdentity(...args);
   const navigateNative = (...args) => ctx.navigateNative(...args);
   const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
+  const reconcileFavoriteReadState = (...args) => ctx.reconcileFavoriteReadState(...args);
+
+  function finalizeBoardVisitTransition(previousKey, nextKey) {
+    try {
+      const previous = new URL(previousKey, location.origin);
+      const next = new URL(nextKey, location.origin);
+      if (
+        routeType(previous.pathname) === "board"
+        && previous.pathname !== next.pathname
+      ) leaveBoardVisit(previous.pathname);
+    } catch {
+      // Route parsing failure should not block Kapybara navigation.
+    }
+  }
 
   function render({ force = false } = {}) {
     if (state.disabled || state.nativeMode) return;
+    const previousKey = state.currentRouteKey;
+    const key = routeKey();
+    finalizeBoardVisitTransition(previousKey, key);
     const type = routeType();
 
     if (type === "unsupported" || !isMobileEligible()) {
@@ -54,8 +71,6 @@ export function installController(ctx) {
     if (!state.host?.isConnected) mountShell();
     applyVisualSettings();
 
-    const previousKey = state.currentRouteKey;
-    const key = routeKey();
     primeStructuredModel(type, key);
     const structuredRouteModel = cachedStructuredModel(type, key);
     if (!structuredRouteModel && !nativeReady(type)) return;
@@ -66,6 +81,7 @@ export function installController(ctx) {
       model = structuredRouteModel;
       if (model) readSource = "structured";
       else model = readFavoritesFromDom();
+      model = reconcileFavoriteReadState(model);
       state.favoriteSourceClubs = model.map((club) => ({ ...club }));
       model = sortFavorites(model);
       state.favoriteViewClubs = model.map((club) => ({ ...club }));
@@ -118,16 +134,7 @@ export function installController(ctx) {
       return;
     }
 
-    try {
-      const previous = new URL(state.currentRouteKey, location.origin);
-      const next = new URL(key, location.origin);
-      if (
-        routeType(previous.pathname) === "board"
-        && previous.pathname !== next.pathname
-      ) leaveBoardVisit(previous.pathname);
-    } catch {
-      // Route parsing failure should not block Kapybara navigation.
-    }
+    finalizeBoardVisitTransition(state.currentRouteKey, key);
 
     saveScroll();
     state.currentSignature = "";
@@ -194,6 +201,7 @@ export function installController(ctx) {
 
   Object.assign(ctx, {
     render,
+    finalizeBoardVisitTransition,
     scheduleRender,
     handleRouteChange,
     observeNative,

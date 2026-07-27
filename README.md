@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.1`).
+> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.2`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.1` prototype reads Favorites, boards and older post pages from
+The `0.6.2` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun never calls
@@ -609,6 +609,13 @@ blue background for already-read posts. The snapshot has no timeout and is
 retired only after navigation leaves the club, so returning starts cleanly from
 the later of Kapybara's read boundary and Bokoun's local last-seen timestamp.
 Only the timestamp is stored; post bodies are not copied.
+
+Version `0.6.2` closes a mobile navigation race found with Android's hardware
+Back action. Board visits are now finalized before either the route observer or
+an early Favorites render can win, and cached Favorites rows reconcile their
+unread count against the same local last-seen boundary. The experimental
+advertising `Permissions-Policy` warnings printed by Chromium remain harmless
+server-header diagnostics and are unrelated to Bokoun's read state.
 
 ### Phase 4 — direct transport experiment
 
