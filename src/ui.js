@@ -106,7 +106,6 @@ export function installUi(ctx) {
         const unreadLabel = club.unread
           ? `${club.unread} nových příspěvků`
           : "bez nových příspěvků";
-        const avatar = favorites.showAvatars ? favoriteAvatarMarkup(club) : "";
         return `
           <li
             class="favorite-item${editing ? " favorite-item--editing" : ""}"
@@ -120,13 +119,11 @@ export function installUi(ctx) {
               aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
               ${editing ? 'aria-disabled="true"' : ""}
             >
-              ${favorites.avatarPosition === "left" ? avatar : ""}
               <span class="favorite-main">
                 <span class="favorite-name">${escapeHtml(club.name)}</span>
                 <span class="favorite-time">${escapeHtml(club.activity)}</span>
               </span>
               ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
-              ${favorites.avatarPosition === "right" ? avatar : ""}
             </a>
             ${editing ? `
               <button
@@ -151,11 +148,6 @@ export function installUi(ctx) {
       </header>
       <ul class="favorites">${rows}</ul>
     `;
-  }
-
-  function favoriteAvatarMarkup(club) {
-    const initial = String(club.name || "?").trim().slice(0, 1).toLocaleUpperCase("cs") || "?";
-    return `<span class="favorite-avatar" aria-hidden="true">${escapeHtml(initial)}</span>`;
   }
 
   function favoritesControlMarkup() {
@@ -237,36 +229,10 @@ export function installUi(ctx) {
             <span>px</span>
           </span>
         </div>
-        <label class="settings-switch">
-          <span>Zobrazovat avatary</span>
-          <input type="checkbox" data-setting="favorite-show-avatars" ${favorites.showAvatars ? "checked" : ""}>
-        </label>
-        <label class="settings-field">
-          <span>Pozice</span>
-          <select data-setting="favorite-avatar-position" aria-label="Pozice avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
-            <option value="left" ${favorites.avatarPosition === "left" ? "selected" : ""}>Vlevo</option>
-            <option value="right" ${favorites.avatarPosition === "right" ? "selected" : ""}>Vpravo</option>
-          </select>
-        </label>
-        <label class="settings-field">
-          <span>Tvar</span>
-          <select data-setting="favorite-avatar-shape" aria-label="Tvar avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
-            <option value="circle" ${favorites.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
-            <option value="rounded" ${favorites.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
-            <option value="square" ${favorites.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
-          </select>
-        </label>
         <div class="settings-field">
-          <span>Avatar</span>
+          <span>Odsazení</span>
           <span class="compact-range-controls">
-            <input type="range" min="20" max="72" step="1" value="${escapeHtml(favorites.avatarSize)}" aria-label="Velikost avatarů oblíbených posuvníkem" ${favorites.showAvatars ? "" : "disabled"}>
-            <output>${escapeHtml(favorites.avatarSize)} px</output>
-          </span>
-        </div>
-        <div class="settings-field">
-          <span>Rozestup</span>
-          <span class="compact-range-controls">
-            <input type="range" min="0" max="32" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Rozestup oblíbených posuvníkem">
+            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení oblíbených posuvníkem">
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>
@@ -395,6 +361,21 @@ export function installUi(ctx) {
             ${display.showAvatars ? "checked" : ""}
           >
         </label>
+        <label class="settings-field">
+          <span>Tvar</span>
+          <select data-setting="avatar-shape" aria-label="Tvar avataru" ${display.showAvatars ? "" : "disabled"}>
+            <option value="circle" ${display.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
+            <option value="rounded" ${display.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
+            <option value="square" ${display.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
+          </select>
+        </label>
+        <div class="settings-field">
+          <span>Velikost</span>
+          <span class="compact-range-controls">
+            <input type="range" min="20" max="96" step="1" value="${escapeHtml(display.avatarSize)}" aria-label="Velikost avataru příspěvku posuvníkem" ${display.showAvatars ? "" : "disabled"}>
+            <output>${escapeHtml(display.avatarSize)} px</output>
+          </span>
+        </div>
         <label class="settings-field">
           <span>Pozice</span>
           <select
@@ -741,6 +722,18 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });
     });
+    state.shadow.querySelector("[data-setting='avatar-shape']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ avatarShape: event.currentTarget.value });
+    });
+    const postAvatarRange = state.shadow.querySelector("[aria-label='Velikost avataru příspěvku posuvníkem']");
+    postAvatarRange?.addEventListener("input", (event) => {
+      updateDisplaySettings({ avatarSize: event.currentTarget.value }, { render: false });
+      const output = event.currentTarget.parentElement?.querySelector("output");
+      if (output) output.textContent = `${event.currentTarget.value} px`;
+    });
+    postAvatarRange?.addEventListener("change", (event) => {
+      updateDisplaySettings({ avatarSize: event.currentTarget.value });
+    });
     state.shadow.querySelector("[data-setting='reply-meta']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ replyMeta: event.currentTarget.value });
     });
@@ -785,25 +778,7 @@ export function installUi(ctx) {
     favoriteFontNumber?.addEventListener("change", (event) => {
       updateFavoritesSettings({ fontSize: event.currentTarget.value });
     });
-    state.shadow.querySelector("[data-setting='favorite-show-avatars']")?.addEventListener("change", (event) => {
-      updateFavoritesSettings({ showAvatars: event.currentTarget.checked });
-    });
-    state.shadow.querySelector("[data-setting='favorite-avatar-position']")?.addEventListener("change", (event) => {
-      updateFavoritesSettings({ avatarPosition: event.currentTarget.value });
-    });
-    state.shadow.querySelector("[data-setting='favorite-avatar-shape']")?.addEventListener("change", (event) => {
-      updateFavoritesSettings({ avatarShape: event.currentTarget.value });
-    });
-    const favoriteAvatarRange = state.shadow.querySelector("[aria-label='Velikost avatarů oblíbených posuvníkem']");
-    favoriteAvatarRange?.addEventListener("input", (event) => {
-      updateFavoritesSettings({ avatarSize: event.currentTarget.value }, { render: false });
-      const output = event.currentTarget.parentElement?.querySelector("output");
-      if (output) output.textContent = `${event.currentTarget.value} px`;
-    });
-    favoriteAvatarRange?.addEventListener("change", (event) => {
-      updateFavoritesSettings({ avatarSize: event.currentTarget.value });
-    });
-    const favoriteSpacingRange = state.shadow.querySelector("[aria-label='Rozestup oblíbených posuvníkem']");
+    const favoriteSpacingRange = state.shadow.querySelector("[aria-label='Svislé odsazení oblíbených posuvníkem']");
     favoriteSpacingRange?.addEventListener("input", (event) => {
       updateFavoritesSettings({ spacing: event.currentTarget.value }, { render: false });
       const output = event.currentTarget.parentElement?.querySelector("output");

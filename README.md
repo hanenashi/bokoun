@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.6`).
+> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.7`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.6` prototype reads Favorites, boards and older post pages from
+The `0.6.7` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -642,6 +642,11 @@ Version `0.6.6` expands the Favorites settings with independent font family,
 custom font and size controls; optional initial avatars with adjustable size,
 circle/rounded/square shape and left/right position; and adjustable spacing
 between clubs. These choices are stored separately from post appearance.
+
+Version `0.6.7` corrects the scope of those appearance controls: Favorites keep
+their clean text-only list, with font controls and a true vertical-padding slider
+that can make rows very tight. Avatar size, circle/rounded/square shape and the
+existing inline/left position control now live under club post display settings.
 
 ### Phase 4 — direct transport experiment
 

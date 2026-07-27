@@ -119,9 +119,6 @@ export const STYLES = `
   }
 
   .favorites {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--favorite-row-gap, 0px);
     margin: 0;
     padding: 0 16px max(24px, env(safe-area-inset-bottom));
     font-family: var(--favorite-font-family, inherit);
@@ -137,9 +134,8 @@ export const STYLES = `
     display: flex;
     gap: 14px;
     align-items: center;
-    min-height: max(72px, calc(var(--favorite-avatar-size, 34px) + 24px));
-    padding-right: 0;
-    padding-left: 0;
+    min-height: 44px;
+    padding: var(--favorite-row-padding, 12px) 0;
     border-bottom: 1px solid var(--border);
     color: inherit;
     text-decoration: none;
@@ -211,33 +207,7 @@ export const STYLES = `
   .favorite-main {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 12px 0;
-  }
-
-  .favorite-avatar {
-    display: grid;
-    flex: 0 0 var(--favorite-avatar-size, 34px);
-    width: var(--favorite-avatar-size, 34px);
-    height: var(--favorite-avatar-size, 34px);
-    place-items: center;
-    overflow: hidden;
-    background: #e5edf9;
-    color: #415b82;
-    font-size: var(--favorite-avatar-font-size, 14px);
-    font-weight: 750;
-    line-height: 1;
-  }
-
-  .app[data-favorite-avatar-shape="circle"] .favorite-avatar {
-    border-radius: 50%;
-  }
-
-  .app[data-favorite-avatar-shape="rounded"] .favorite-avatar {
-    border-radius: 22%;
-  }
-
-  .app[data-favorite-avatar-shape="square"] .favorite-avatar {
-    border-radius: 0;
+    padding: 0;
   }
 
   .favorite-name {
@@ -479,20 +449,20 @@ export const STYLES = `
 
   .post--avatar-left .post-layout {
     display: grid;
-    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-columns: var(--post-avatar-size, 40px) minmax(0, 1fr);
     gap: 12px;
     align-items: start;
   }
 
   .post-avatar-trigger {
     display: grid;
-    width: 48px;
-    height: 48px;
+    width: var(--post-avatar-size, 40px);
+    height: var(--post-avatar-size, 40px);
     place-items: center;
     padding: 0;
     overflow: hidden;
     border: 0;
-    border-radius: 50%;
+    border-radius: var(--post-avatar-radius, 50%);
     background: #f3f4f6;
     cursor: pointer;
   }
@@ -500,7 +470,7 @@ export const STYLES = `
   .post-avatar {
     display: block;
     object-fit: cover;
-    border-radius: 50%;
+    border-radius: var(--post-avatar-radius, 50%);
     background: #f3f4f6;
     color: var(--muted);
     font-weight: 700;
@@ -508,18 +478,30 @@ export const STYLES = `
   }
 
   .post-avatar--inline {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
-    font-size: 15px;
-    line-height: 40px;
+    width: var(--post-avatar-size, 40px);
+    height: var(--post-avatar-size, 40px);
+    flex: 0 0 var(--post-avatar-size, 40px);
+    font-size: var(--post-avatar-font-size, 15px);
+    line-height: var(--post-avatar-size, 40px);
   }
 
   .post-avatar--left {
-    width: 48px;
-    height: 48px;
-    font-size: 18px;
-    line-height: 48px;
+    width: var(--post-avatar-size, 40px);
+    height: var(--post-avatar-size, 40px);
+    font-size: var(--post-avatar-font-size, 15px);
+    line-height: var(--post-avatar-size, 40px);
+  }
+
+  .app[data-avatar-shape="circle"] {
+    --post-avatar-radius: 50%;
+  }
+
+  .app[data-avatar-shape="rounded"] {
+    --post-avatar-radius: 22%;
+  }
+
+  .app[data-avatar-shape="square"] {
+    --post-avatar-radius: 0;
   }
 
   .avatar-fallback {
@@ -1157,18 +1139,7 @@ export const STYLES = `
     }
 
     .post--avatar-left .post-layout {
-      grid-template-columns: 42px minmax(0, 1fr);
       gap: 10px;
-    }
-
-    .post-avatar-trigger,
-    .post-avatar--left {
-      width: 42px;
-      height: 42px;
-    }
-
-    .post-avatar--left {
-      line-height: 42px;
     }
   }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.6
+// @version      0.6.7
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -175,9 +175,6 @@
   }
 
   .favorites {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--favorite-row-gap, 0px);
     margin: 0;
     padding: 0 16px max(24px, env(safe-area-inset-bottom));
     font-family: var(--favorite-font-family, inherit);
@@ -193,9 +190,8 @@
     display: flex;
     gap: 14px;
     align-items: center;
-    min-height: max(72px, calc(var(--favorite-avatar-size, 34px) + 24px));
-    padding-right: 0;
-    padding-left: 0;
+    min-height: 44px;
+    padding: var(--favorite-row-padding, 12px) 0;
     border-bottom: 1px solid var(--border);
     color: inherit;
     text-decoration: none;
@@ -267,33 +263,7 @@
   .favorite-main {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 12px 0;
-  }
-
-  .favorite-avatar {
-    display: grid;
-    flex: 0 0 var(--favorite-avatar-size, 34px);
-    width: var(--favorite-avatar-size, 34px);
-    height: var(--favorite-avatar-size, 34px);
-    place-items: center;
-    overflow: hidden;
-    background: #e5edf9;
-    color: #415b82;
-    font-size: var(--favorite-avatar-font-size, 14px);
-    font-weight: 750;
-    line-height: 1;
-  }
-
-  .app[data-favorite-avatar-shape="circle"] .favorite-avatar {
-    border-radius: 50%;
-  }
-
-  .app[data-favorite-avatar-shape="rounded"] .favorite-avatar {
-    border-radius: 22%;
-  }
-
-  .app[data-favorite-avatar-shape="square"] .favorite-avatar {
-    border-radius: 0;
+    padding: 0;
   }
 
   .favorite-name {
@@ -535,20 +505,20 @@
 
   .post--avatar-left .post-layout {
     display: grid;
-    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-columns: var(--post-avatar-size, 40px) minmax(0, 1fr);
     gap: 12px;
     align-items: start;
   }
 
   .post-avatar-trigger {
     display: grid;
-    width: 48px;
-    height: 48px;
+    width: var(--post-avatar-size, 40px);
+    height: var(--post-avatar-size, 40px);
     place-items: center;
     padding: 0;
     overflow: hidden;
     border: 0;
-    border-radius: 50%;
+    border-radius: var(--post-avatar-radius, 50%);
     background: #f3f4f6;
     cursor: pointer;
   }
@@ -556,7 +526,7 @@
   .post-avatar {
     display: block;
     object-fit: cover;
-    border-radius: 50%;
+    border-radius: var(--post-avatar-radius, 50%);
     background: #f3f4f6;
     color: var(--muted);
     font-weight: 700;
@@ -564,18 +534,30 @@
   }
 
   .post-avatar--inline {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
-    font-size: 15px;
-    line-height: 40px;
+    width: var(--post-avatar-size, 40px);
+    height: var(--post-avatar-size, 40px);
+    flex: 0 0 var(--post-avatar-size, 40px);
+    font-size: var(--post-avatar-font-size, 15px);
+    line-height: var(--post-avatar-size, 40px);
   }
 
   .post-avatar--left {
-    width: 48px;
-    height: 48px;
-    font-size: 18px;
-    line-height: 48px;
+    width: var(--post-avatar-size, 40px);
+    height: var(--post-avatar-size, 40px);
+    font-size: var(--post-avatar-font-size, 15px);
+    line-height: var(--post-avatar-size, 40px);
+  }
+
+  .app[data-avatar-shape="circle"] {
+    --post-avatar-radius: 50%;
+  }
+
+  .app[data-avatar-shape="rounded"] {
+    --post-avatar-radius: 22%;
+  }
+
+  .app[data-avatar-shape="square"] {
+    --post-avatar-radius: 0;
   }
 
   .avatar-fallback {
@@ -1213,18 +1195,7 @@
     }
 
     .post--avatar-left .post-layout {
-      grid-template-columns: 42px minmax(0, 1fr);
       gap: 10px;
-    }
-
-    .post-avatar-trigger,
-    .post-avatar--left {
-      width: 42px;
-      height: 42px;
-    }
-
-    .post-avatar--left {
-      line-height: 42px;
     }
   }
 
@@ -1236,7 +1207,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.6";
+  var VERSION = "0.6.7";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -2996,6 +2967,8 @@
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
     showAvatars: true,
     avatarPosition: "inline",
+    avatarSize: 40,
+    avatarShape: "circle",
     replyMeta: "full"
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
@@ -3009,11 +2982,7 @@
     fontFamily: "default",
     customFontFamily: "",
     fontSize: 17,
-    showAvatars: false,
-    avatarSize: 34,
-    avatarShape: "circle",
-    avatarPosition: "left",
-    spacing: 0
+    spacing: 12
   });
   var FONT_FAMILIES = Object.freeze([
     { value: "default", label: "Bokoun default", stack: "" },
@@ -3039,11 +3008,10 @@
     { value: "custom", label: "Custom…", stack: "" }
   ]);
   var AVATAR_POSITIONS = /* @__PURE__ */ new Set(["inline", "left"]);
+  var AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
-  var FAVORITE_AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
-  var FAVORITE_AVATAR_POSITIONS = /* @__PURE__ */ new Set(["left", "right"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
   var MIN_FONT_SIZE = 8;
   var MAX_FONT_SIZE = 72;
@@ -3089,6 +3057,8 @@
       return {
         showAvatars: value.showAvatars !== false,
         avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
+        avatarSize: normalizeAvatarSize(value.avatarSize),
+        avatarShape: AVATAR_SHAPES.has(value.avatarShape) ? value.avatarShape : DEFAULT_DISPLAY_SETTINGS.avatarShape,
         replyMeta: REPLY_META_MODES.has(value.replyMeta) ? value.replyMeta : DEFAULT_DISPLAY_SETTINGS.replyMeta
       };
     }
@@ -3106,10 +3076,6 @@
         fontFamily: validFontFamily(value.fontFamily),
         customFontFamily: String(value.customFontFamily || "").slice(0, MAX_CUSTOM_FAMILY_LENGTH),
         fontSize: normalizeFontSize(value.fontSize),
-        showAvatars: value.showAvatars === true,
-        avatarSize: normalizeFavoriteAvatarSize(value.avatarSize),
-        avatarShape: FAVORITE_AVATAR_SHAPES.has(value.avatarShape) ? value.avatarShape : DEFAULT_FAVORITES_SETTINGS.avatarShape,
-        avatarPosition: FAVORITE_AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_FAVORITES_SETTINGS.avatarPosition,
         spacing: normalizeFavoriteSpacing(value.spacing)
       };
     }
@@ -3130,14 +3096,17 @@
       loadSettings();
       return [...state2.favoriteManualOrder];
     }
-    function updateDisplaySettings(patch) {
+    function updateDisplaySettings(patch, { render = true } = {}) {
       state2.displaySettings = normalizeDisplaySettings({
         ...currentDisplaySettings(),
         ...patch
       });
       gmSet2(DISPLAY_SETTINGS_KEY2, state2.displaySettings);
-      state2.currentSignature = "";
-      scheduleRender({ force: true });
+      applyVisualSettings();
+      if (render) {
+        state2.currentSignature = "";
+        scheduleRender({ force: true });
+      }
     }
     function updateFontSettings(patch, { render = false } = {}) {
       state2.fontSettings = normalizeFontSettings({
@@ -3172,10 +3141,6 @@
         fontFamily: DEFAULT_FAVORITES_SETTINGS.fontFamily,
         customFontFamily: DEFAULT_FAVORITES_SETTINGS.customFontFamily,
         fontSize: DEFAULT_FAVORITES_SETTINGS.fontSize,
-        showAvatars: DEFAULT_FAVORITES_SETTINGS.showAvatars,
-        avatarSize: DEFAULT_FAVORITES_SETTINGS.avatarSize,
-        avatarShape: DEFAULT_FAVORITES_SETTINGS.avatarShape,
-        avatarPosition: DEFAULT_FAVORITES_SETTINGS.avatarPosition,
         spacing: DEFAULT_FAVORITES_SETTINGS.spacing
       });
     }
@@ -3246,15 +3211,15 @@
       const size = normalizeFontSize(value);
       return Number.isInteger(size) ? String(size) : size.toFixed(1);
     }
-    function normalizeFavoriteAvatarSize(value) {
+    function normalizeAvatarSize(value) {
       const parsed = Number(value);
-      if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.avatarSize;
-      return Math.round(Math.min(72, Math.max(20, parsed)));
+      if (!Number.isFinite(parsed)) return DEFAULT_DISPLAY_SETTINGS.avatarSize;
+      return Math.round(Math.min(96, Math.max(20, parsed)));
     }
     function normalizeFavoriteSpacing(value) {
       const parsed = Number(value);
       if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.spacing;
-      return Math.round(Math.min(32, Math.max(0, parsed)));
+      return Math.round(Math.min(24, Math.max(0, parsed)));
     }
     function normalizeCustomFamily(value) {
       const source = String(value || "").trim();
@@ -3304,19 +3269,17 @@
       const favoriteStack = fontStack(favorites.fontFamily, favorites.customFontFamily);
       scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
       scroller.dataset.avatarPosition = display.avatarPosition;
+      scroller.dataset.avatarShape = display.avatarShape;
+      scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
+      scroller.style.setProperty(
+        "--post-avatar-font-size",
+        `${Math.max(12, Math.round(display.avatarSize * 0.38))}px`
+      );
       scroller.style.setProperty("--post-font-size", `${displayFontSize(font.size)}px`);
       if (stack) scroller.style.setProperty("--post-font-family", stack);
       else scroller.style.removeProperty("--post-font-family");
-      scroller.dataset.favoriteAvatars = favorites.showAvatars ? "visible" : "hidden";
-      scroller.dataset.favoriteAvatarShape = favorites.avatarShape;
-      scroller.dataset.favoriteAvatarPosition = favorites.avatarPosition;
       scroller.style.setProperty("--favorite-font-size", `${displayFontSize(favorites.fontSize)}px`);
-      scroller.style.setProperty("--favorite-avatar-size", `${favorites.avatarSize}px`);
-      scroller.style.setProperty(
-        "--favorite-avatar-font-size",
-        `${Math.max(12, Math.round(favorites.avatarSize * 0.42))}px`
-      );
-      scroller.style.setProperty("--favorite-row-gap", `${favorites.spacing}px`);
+      scroller.style.setProperty("--favorite-row-padding", `${favorites.spacing}px`);
       if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
       else scroller.style.removeProperty("--favorite-font-family");
     }
@@ -3344,7 +3307,7 @@
       fontStack,
       normalizeFontSize,
       displayFontSize,
-      normalizeFavoriteAvatarSize,
+      normalizeAvatarSize,
       normalizeFavoriteSpacing,
       normalizeCustomFamily,
       applyVisualSettings
@@ -3449,7 +3412,6 @@
         const heat = showHeat ? unreadHeat(club.unread) : "";
         const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
         const unreadLabel = club.unread ? `${club.unread} nových příspěvků` : "bez nových příspěvků";
-        const avatar = favorites.showAvatars ? favoriteAvatarMarkup(club) : "";
         return `
           <li
             class="favorite-item${editing ? " favorite-item--editing" : ""}"
@@ -3463,13 +3425,11 @@
               aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
               ${editing ? 'aria-disabled="true"' : ""}
             >
-              ${favorites.avatarPosition === "left" ? avatar : ""}
               <span class="favorite-main">
                 <span class="favorite-name">${escapeHtml(club.name)}</span>
                 <span class="favorite-time">${escapeHtml(club.activity)}</span>
               </span>
               ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
-              ${favorites.avatarPosition === "right" ? avatar : ""}
             </a>
             ${editing ? `
               <button
@@ -3492,10 +3452,6 @@
       </header>
       <ul class="favorites">${rows}</ul>
     `;
-    }
-    function favoriteAvatarMarkup(club) {
-      const initial = String(club.name || "?").trim().slice(0, 1).toLocaleUpperCase("cs") || "?";
-      return `<span class="favorite-avatar" aria-hidden="true">${escapeHtml(initial)}</span>`;
     }
     function favoritesControlMarkup() {
       const open = state2.openHeaderPanel === "favorites";
@@ -3575,36 +3531,10 @@
             <span>px</span>
           </span>
         </div>
-        <label class="settings-switch">
-          <span>Zobrazovat avatary</span>
-          <input type="checkbox" data-setting="favorite-show-avatars" ${favorites.showAvatars ? "checked" : ""}>
-        </label>
-        <label class="settings-field">
-          <span>Pozice</span>
-          <select data-setting="favorite-avatar-position" aria-label="Pozice avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
-            <option value="left" ${favorites.avatarPosition === "left" ? "selected" : ""}>Vlevo</option>
-            <option value="right" ${favorites.avatarPosition === "right" ? "selected" : ""}>Vpravo</option>
-          </select>
-        </label>
-        <label class="settings-field">
-          <span>Tvar</span>
-          <select data-setting="favorite-avatar-shape" aria-label="Tvar avatarů oblíbených" ${favorites.showAvatars ? "" : "disabled"}>
-            <option value="circle" ${favorites.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
-            <option value="rounded" ${favorites.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
-            <option value="square" ${favorites.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
-          </select>
-        </label>
         <div class="settings-field">
-          <span>Avatar</span>
+          <span>Odsazení</span>
           <span class="compact-range-controls">
-            <input type="range" min="20" max="72" step="1" value="${escapeHtml(favorites.avatarSize)}" aria-label="Velikost avatarů oblíbených posuvníkem" ${favorites.showAvatars ? "" : "disabled"}>
-            <output>${escapeHtml(favorites.avatarSize)} px</output>
-          </span>
-        </div>
-        <div class="settings-field">
-          <span>Rozestup</span>
-          <span class="compact-range-controls">
-            <input type="range" min="0" max="32" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Rozestup oblíbených posuvníkem">
+            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení oblíbených posuvníkem">
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>
@@ -3726,6 +3656,21 @@
             ${display.showAvatars ? "checked" : ""}
           >
         </label>
+        <label class="settings-field">
+          <span>Tvar</span>
+          <select data-setting="avatar-shape" aria-label="Tvar avataru" ${display.showAvatars ? "" : "disabled"}>
+            <option value="circle" ${display.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
+            <option value="rounded" ${display.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
+            <option value="square" ${display.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
+          </select>
+        </label>
+        <div class="settings-field">
+          <span>Velikost</span>
+          <span class="compact-range-controls">
+            <input type="range" min="20" max="96" step="1" value="${escapeHtml(display.avatarSize)}" aria-label="Velikost avataru příspěvku posuvníkem" ${display.showAvatars ? "" : "disabled"}>
+            <output>${escapeHtml(display.avatarSize)} px</output>
+          </span>
+        </div>
         <label class="settings-field">
           <span>Pozice</span>
           <select
@@ -4036,6 +3981,18 @@
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });
       });
+      state2.shadow.querySelector("[data-setting='avatar-shape']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ avatarShape: event.currentTarget.value });
+      });
+      const postAvatarRange = state2.shadow.querySelector("[aria-label='Velikost avataru příspěvku posuvníkem']");
+      postAvatarRange?.addEventListener("input", (event) => {
+        updateDisplaySettings({ avatarSize: event.currentTarget.value }, { render: false });
+        const output = event.currentTarget.parentElement?.querySelector("output");
+        if (output) output.textContent = `${event.currentTarget.value} px`;
+      });
+      postAvatarRange?.addEventListener("change", (event) => {
+        updateDisplaySettings({ avatarSize: event.currentTarget.value });
+      });
       state2.shadow.querySelector("[data-setting='reply-meta']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ replyMeta: event.currentTarget.value });
       });
@@ -4078,25 +4035,7 @@
       favoriteFontNumber?.addEventListener("change", (event) => {
         updateFavoritesSettings({ fontSize: event.currentTarget.value });
       });
-      state2.shadow.querySelector("[data-setting='favorite-show-avatars']")?.addEventListener("change", (event) => {
-        updateFavoritesSettings({ showAvatars: event.currentTarget.checked });
-      });
-      state2.shadow.querySelector("[data-setting='favorite-avatar-position']")?.addEventListener("change", (event) => {
-        updateFavoritesSettings({ avatarPosition: event.currentTarget.value });
-      });
-      state2.shadow.querySelector("[data-setting='favorite-avatar-shape']")?.addEventListener("change", (event) => {
-        updateFavoritesSettings({ avatarShape: event.currentTarget.value });
-      });
-      const favoriteAvatarRange = state2.shadow.querySelector("[aria-label='Velikost avatarů oblíbených posuvníkem']");
-      favoriteAvatarRange?.addEventListener("input", (event) => {
-        updateFavoritesSettings({ avatarSize: event.currentTarget.value }, { render: false });
-        const output = event.currentTarget.parentElement?.querySelector("output");
-        if (output) output.textContent = `${event.currentTarget.value} px`;
-      });
-      favoriteAvatarRange?.addEventListener("change", (event) => {
-        updateFavoritesSettings({ avatarSize: event.currentTarget.value });
-      });
-      const favoriteSpacingRange = state2.shadow.querySelector("[aria-label='Rozestup oblíbených posuvníkem']");
+      const favoriteSpacingRange = state2.shadow.querySelector("[aria-label='Svislé odsazení oblíbených posuvníkem']");
       favoriteSpacingRange?.addEventListener("input", (event) => {
         updateFavoritesSettings({ spacing: event.currentTarget.value }, { render: false });
         const output = event.currentTarget.parentElement?.querySelector("output");

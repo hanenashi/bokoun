@@ -1,6 +1,8 @@
 const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   showAvatars: true,
   avatarPosition: "inline",
+  avatarSize: 40,
+  avatarShape: "circle",
   replyMeta: "full",
 });
 
@@ -16,11 +18,7 @@ const DEFAULT_FAVORITES_SETTINGS = Object.freeze({
   fontFamily: "default",
   customFontFamily: "",
   fontSize: 17,
-  showAvatars: false,
-  avatarSize: 34,
-  avatarShape: "circle",
-  avatarPosition: "left",
-  spacing: 0,
+  spacing: 12,
 });
 
 const FONT_FAMILIES = Object.freeze([
@@ -48,11 +46,10 @@ const FONT_FAMILIES = Object.freeze([
 ]);
 
 const AVATAR_POSITIONS = new Set(["inline", "left"]);
+const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
 const REPLY_META_MODES = new Set(["full", "compact", "hidden"]);
 const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
 const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
-const FAVORITE_AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
-const FAVORITE_AVATAR_POSITIONS = new Set(["left", "right"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 72;
@@ -104,6 +101,10 @@ export function installSettings(ctx) {
       avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition)
         ? value.avatarPosition
         : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
+      avatarSize: normalizeAvatarSize(value.avatarSize),
+      avatarShape: AVATAR_SHAPES.has(value.avatarShape)
+        ? value.avatarShape
+        : DEFAULT_DISPLAY_SETTINGS.avatarShape,
       replyMeta: REPLY_META_MODES.has(value.replyMeta)
         ? value.replyMeta
         : DEFAULT_DISPLAY_SETTINGS.replyMeta,
@@ -129,14 +130,6 @@ export function installSettings(ctx) {
       fontFamily: validFontFamily(value.fontFamily),
       customFontFamily: String(value.customFontFamily || "").slice(0, MAX_CUSTOM_FAMILY_LENGTH),
       fontSize: normalizeFontSize(value.fontSize),
-      showAvatars: value.showAvatars === true,
-      avatarSize: normalizeFavoriteAvatarSize(value.avatarSize),
-      avatarShape: FAVORITE_AVATAR_SHAPES.has(value.avatarShape)
-        ? value.avatarShape
-        : DEFAULT_FAVORITES_SETTINGS.avatarShape,
-      avatarPosition: FAVORITE_AVATAR_POSITIONS.has(value.avatarPosition)
-        ? value.avatarPosition
-        : DEFAULT_FAVORITES_SETTINGS.avatarPosition,
       spacing: normalizeFavoriteSpacing(value.spacing),
     };
   }
@@ -163,14 +156,17 @@ export function installSettings(ctx) {
     return [...state.favoriteManualOrder];
   }
 
-  function updateDisplaySettings(patch) {
+  function updateDisplaySettings(patch, { render = true } = {}) {
     state.displaySettings = normalizeDisplaySettings({
       ...currentDisplaySettings(),
       ...patch,
     });
     gmSet(DISPLAY_SETTINGS_KEY, state.displaySettings);
-    state.currentSignature = "";
-    scheduleRender({ force: true });
+    applyVisualSettings();
+    if (render) {
+      state.currentSignature = "";
+      scheduleRender({ force: true });
+    }
   }
 
   function updateFontSettings(patch, { render = false } = {}) {
@@ -211,10 +207,6 @@ export function installSettings(ctx) {
       fontFamily: DEFAULT_FAVORITES_SETTINGS.fontFamily,
       customFontFamily: DEFAULT_FAVORITES_SETTINGS.customFontFamily,
       fontSize: DEFAULT_FAVORITES_SETTINGS.fontSize,
-      showAvatars: DEFAULT_FAVORITES_SETTINGS.showAvatars,
-      avatarSize: DEFAULT_FAVORITES_SETTINGS.avatarSize,
-      avatarShape: DEFAULT_FAVORITES_SETTINGS.avatarShape,
-      avatarPosition: DEFAULT_FAVORITES_SETTINGS.avatarPosition,
       spacing: DEFAULT_FAVORITES_SETTINGS.spacing,
     });
   }
@@ -309,16 +301,16 @@ export function installSettings(ctx) {
     return Number.isInteger(size) ? String(size) : size.toFixed(1);
   }
 
-  function normalizeFavoriteAvatarSize(value) {
+  function normalizeAvatarSize(value) {
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.avatarSize;
-    return Math.round(Math.min(72, Math.max(20, parsed)));
+    if (!Number.isFinite(parsed)) return DEFAULT_DISPLAY_SETTINGS.avatarSize;
+    return Math.round(Math.min(96, Math.max(20, parsed)));
   }
 
   function normalizeFavoriteSpacing(value) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.spacing;
-    return Math.round(Math.min(32, Math.max(0, parsed)));
+    return Math.round(Math.min(24, Math.max(0, parsed)));
   }
 
   function normalizeCustomFamily(value) {
@@ -373,19 +365,17 @@ export function installSettings(ctx) {
 
     scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
     scroller.dataset.avatarPosition = display.avatarPosition;
+    scroller.dataset.avatarShape = display.avatarShape;
+    scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
+    scroller.style.setProperty(
+      "--post-avatar-font-size",
+      `${Math.max(12, Math.round(display.avatarSize * 0.38))}px`,
+    );
     scroller.style.setProperty("--post-font-size", `${displayFontSize(font.size)}px`);
     if (stack) scroller.style.setProperty("--post-font-family", stack);
     else scroller.style.removeProperty("--post-font-family");
-    scroller.dataset.favoriteAvatars = favorites.showAvatars ? "visible" : "hidden";
-    scroller.dataset.favoriteAvatarShape = favorites.avatarShape;
-    scroller.dataset.favoriteAvatarPosition = favorites.avatarPosition;
     scroller.style.setProperty("--favorite-font-size", `${displayFontSize(favorites.fontSize)}px`);
-    scroller.style.setProperty("--favorite-avatar-size", `${favorites.avatarSize}px`);
-    scroller.style.setProperty(
-      "--favorite-avatar-font-size",
-      `${Math.max(12, Math.round(favorites.avatarSize * 0.42))}px`,
-    );
-    scroller.style.setProperty("--favorite-row-gap", `${favorites.spacing}px`);
+    scroller.style.setProperty("--favorite-row-padding", `${favorites.spacing}px`);
     if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
     else scroller.style.removeProperty("--favorite-font-family");
   }
@@ -414,7 +404,7 @@ export function installSettings(ctx) {
     fontStack,
     normalizeFontSize,
     displayFontSize,
-    normalizeFavoriteAvatarSize,
+    normalizeAvatarSize,
     normalizeFavoriteSpacing,
     normalizeCustomFamily,
     applyVisualSettings,
