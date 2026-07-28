@@ -1,6 +1,6 @@
 {
   "name": "bokoun",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "private": true,
   "type": "module",
   "description": "Minimal mobile reading and Markdown writing interface for Kapybara/Okoun",
@@ -8,7 +8,8 @@
     "build": "node tools/build-userscript.mjs",
     "check": "node tools/check-generated.mjs && node --check bokoun.user.js",
     "test": "node --test tests/*.test.js",
-    "qa:android:kiwi": "node tools/android-kiwi-smoke.mjs"
+    "qa:android:kiwi": "node tools/android-kiwi-smoke.mjs",
+    "qa:android:kiwi:write": "node tools/android-kiwi-writing.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.1",

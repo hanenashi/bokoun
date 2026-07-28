@@ -9,6 +9,7 @@ import { installPagination } from "../src/pagination.js";
 import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
 import { canonicalScrollRoute } from "../src/shell.js";
+import { installWriting } from "../src/writing.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
@@ -32,7 +33,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.10/);
+  assert.match(source, /@version\s+0\.6\.11/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -218,7 +219,20 @@ test("simple writing uses hidden native Kapybara composers only", () => {
   assert.match(source, /replyComposer: "section\.reply-composer/);
   assert.match(source, /postReplyAction: "\.reply-action"/);
   assert.match(source, /document\.execCommand\("insertText", false, body\)/);
+  assert.doesNotMatch(source, /range\.collapse\(false\)/);
   assert.match(source, /composerMarkdownNode: "code\[data-language='markdown'\]"/);
+  assert.match(
+    source,
+    /await waitForNative\(\s*\(\) => !visibleNativeComposer\(\)[\s\S]*Native composer did not close/,
+  );
+  assert.match(
+    source,
+    /const launcher = await waitForNative\(\s*\(\) => visibleNativeElement\(SELECTORS\.newPostLauncher\)[\s\S]*Native new-post action is unavailable/,
+  );
+  assert.match(
+    source,
+    /\(\) => visibleNativeComposer\(SELECTORS\.newPostComposer\)[\s\S]*Native new-post composer did not open/,
+  );
   assert.doesNotMatch(source, /mutation CreatePost/);
   assert.doesNotMatch(source, /variables:\s*\{[^}]*body:/);
 });
@@ -232,6 +246,73 @@ test("composer preserves drafts and prevents ambiguous retries", () => {
   assert.match(source, /function persistComposerDraft/);
   assert.match(source, /state\.composer\.ambiguous = Boolean\(error\?\.bokounSubmitted\)/);
   assert.match(source, /Neodesílejte znovu/);
+});
+
+test("an ambiguous native submission keeps its draft and cannot submit twice", async () => {
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: {
+      pathname: "/boards/nepotrebny_pokus",
+      origin: "https://kapybara.okoun.cz",
+    },
+  });
+  const values = new Map();
+  const state = {
+    composer: {
+      boardId: "nepotrebny_pokus",
+      kind: "new",
+      replyTo: "",
+      replyAuthor: "",
+      body: "Bokoun QA ambiguous draft",
+      status: "editing",
+      error: "",
+      ambiguous: false,
+    },
+    writeBusy: false,
+    draftSaveTimer: 0,
+  };
+  const ctx = {
+    VERSION: "test",
+    DRAFT_SAVE_DELAY_MS: 1,
+    DRAFT_LIMIT: 50,
+    DRAFTS_KEY: "drafts",
+    ACTIVE_COMPOSER_KEY: "active",
+    SELECTORS: {},
+    state,
+    gmGet: (key, fallback) => values.get(key) ?? fallback,
+    gmSet: (key, value) => values.set(key, value),
+    routeType: () => "board",
+    routeKey: () => "/boards/nepotrebny_pokus",
+    scheduleRender() {},
+  };
+  const originalWarn = console.warn;
+  let attempts = 0;
+
+  try {
+    installWriting(ctx);
+    ctx.submitThroughNative = async () => {
+      attempts += 1;
+      const error = new Error("Synthetic lost confirmation");
+      error.bokounSubmitted = true;
+      error.bokounStage = "confirm";
+      throw error;
+    };
+    console.warn = () => undefined;
+
+    await ctx.submitComposer({ preventDefault() {} });
+    assert.equal(attempts, 1);
+    assert.equal(state.composer.ambiguous, true);
+    assert.match(state.composer.error, /Neodesílejte znovu/);
+    assert.equal(values.get("drafts")["nepotrebny_pokus:new:"], state.composer.body);
+
+    await ctx.submitComposer({ preventDefault() {} });
+    assert.equal(attempts, 1, "an ambiguous submission must not be attempted again");
+  } finally {
+    console.warn = originalWarn;
+    if (originalLocation) Object.defineProperty(globalThis, "location", originalLocation);
+    else delete globalThis.location;
+  }
 });
 
 test("board UI exposes new-post and avatar-triggered post actions", () => {

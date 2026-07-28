@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.10
+// @version      0.6.11
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1219,7 +1219,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.10";
+  var VERSION = "0.6.11";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -3029,6 +3029,14 @@
         cancel?.click();
       }
     }
+    function visibleNativeElement(selectors, root = document) {
+      return [...root.querySelectorAll(selectors)].find((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true" && element.getClientRects().length > 0) || null;
+    }
+    function visibleNativeComposer(selectors = "") {
+      return visibleNativeElement(
+        selectors || `${SELECTORS2.newPostComposer}, ${SELECTORS2.replyComposer}`
+      );
+    }
     async function injectNativeMarkdown(section, body) {
       const toggle = section.querySelector(SELECTORS2.composerModeToggle);
       if (!toggle) throw new Error("Native Markdown toggle is unavailable");
@@ -3044,7 +3052,6 @@
       editable.focus();
       const range = document.createRange();
       range.selectNodeContents(editable);
-      range.collapse(false);
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
@@ -3092,6 +3099,11 @@
       document.documentElement.dataset.bokounBridge = "true";
       try {
         dismissNativeComposers();
+        await waitForNative(
+          () => !visibleNativeComposer(),
+          COMPOSER_TIMEOUT_MS2,
+          "Native composer did not close"
+        );
         let section;
         let submitLabel;
         if (composer.kind === "reply") {
@@ -3101,22 +3113,28 @@
             await navigateNativeRoute(pageHref, composer.replyTo);
           }
           const target = nativePostById(composer.replyTo);
-          const reply = target?.querySelector(SELECTORS2.postReplyAction);
-          if (!reply) throw new Error("Native reply action is unavailable");
+          const reply = await waitForNative(
+            () => target && visibleNativeElement(SELECTORS2.postReplyAction, target),
+            COMPOSER_TIMEOUT_MS2,
+            "Native reply action is unavailable"
+          );
           reply.click();
           section = await waitForNative(
-            () => document.querySelector(SELECTORS2.replyComposer),
+            () => visibleNativeComposer(SELECTORS2.replyComposer),
             COMPOSER_TIMEOUT_MS2,
             "Native reply composer did not open"
           );
           submitLabel = "Odeslat";
         } else {
           stage = "open-new-post";
-          const launcher = document.querySelector(SELECTORS2.newPostLauncher);
-          if (!launcher) throw new Error("Native new-post action is unavailable");
+          const launcher = await waitForNative(
+            () => visibleNativeElement(SELECTORS2.newPostLauncher),
+            COMPOSER_TIMEOUT_MS2,
+            "Native new-post action is unavailable"
+          );
           launcher.click();
           section = await waitForNative(
-            () => document.querySelector(SELECTORS2.newPostComposer),
+            () => visibleNativeComposer(SELECTORS2.newPostComposer),
             COMPOSER_TIMEOUT_MS2,
             "Native new-post composer did not open"
           );
@@ -3170,7 +3188,7 @@
       scheduleRender({ force: true });
       try {
         const sent = { ...state2.composer };
-        const result = await submitThroughNative(sent);
+        const result = await ctx2.submitThroughNative(sent);
         clearDraft(sent.kind, sent.replyTo, sent.boardId);
         forgetActiveComposer();
         state2.composer = null;
@@ -3222,6 +3240,8 @@
       showWriteFeedback,
       waitForNative,
       dismissNativeComposers,
+      visibleNativeElement,
+      visibleNativeComposer,
       injectNativeMarkdown,
       normalizeEditorText,
       findCreatedPost,

@@ -237,6 +237,21 @@ export function installWriting(ctx) {
     }
   }
 
+  function visibleNativeElement(selectors, root = document) {
+    return [...root.querySelectorAll(selectors)]
+      .find((element) => (
+        !element.hidden
+        && element.getAttribute("aria-hidden") !== "true"
+        && element.getClientRects().length > 0
+      )) || null;
+  }
+
+  function visibleNativeComposer(selectors = "") {
+    return visibleNativeElement(
+      selectors || `${SELECTORS.newPostComposer}, ${SELECTORS.replyComposer}`,
+    );
+  }
+
   async function injectNativeMarkdown(section, body) {
     const toggle = section.querySelector(SELECTORS.composerModeToggle);
     if (!toggle) throw new Error("Native Markdown toggle is unavailable");
@@ -253,7 +268,6 @@ export function installWriting(ctx) {
     editable.focus();
     const range = document.createRange();
     range.selectNodeContents(editable);
-    range.collapse(false);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
@@ -317,6 +331,11 @@ export function installWriting(ctx) {
 
     try {
       dismissNativeComposers();
+      await waitForNative(
+        () => !visibleNativeComposer(),
+        COMPOSER_TIMEOUT_MS,
+        "Native composer did not close",
+      );
       let section;
       let submitLabel;
 
@@ -327,22 +346,28 @@ export function installWriting(ctx) {
           await navigateNativeRoute(pageHref, composer.replyTo);
         }
         const target = nativePostById(composer.replyTo);
-        const reply = target?.querySelector(SELECTORS.postReplyAction);
-        if (!reply) throw new Error("Native reply action is unavailable");
+        const reply = await waitForNative(
+          () => target && visibleNativeElement(SELECTORS.postReplyAction, target),
+          COMPOSER_TIMEOUT_MS,
+          "Native reply action is unavailable",
+        );
         reply.click();
         section = await waitForNative(
-          () => document.querySelector(SELECTORS.replyComposer),
+          () => visibleNativeComposer(SELECTORS.replyComposer),
           COMPOSER_TIMEOUT_MS,
           "Native reply composer did not open",
         );
         submitLabel = "Odeslat";
       } else {
         stage = "open-new-post";
-        const launcher = document.querySelector(SELECTORS.newPostLauncher);
-        if (!launcher) throw new Error("Native new-post action is unavailable");
+        const launcher = await waitForNative(
+          () => visibleNativeElement(SELECTORS.newPostLauncher),
+          COMPOSER_TIMEOUT_MS,
+          "Native new-post action is unavailable",
+        );
         launcher.click();
         section = await waitForNative(
-          () => document.querySelector(SELECTORS.newPostComposer),
+          () => visibleNativeComposer(SELECTORS.newPostComposer),
           COMPOSER_TIMEOUT_MS,
           "Native new-post composer did not open",
         );
@@ -403,7 +428,7 @@ export function installWriting(ctx) {
 
     try {
       const sent = { ...state.composer };
-      const result = await submitThroughNative(sent);
+      const result = await ctx.submitThroughNative(sent);
       clearDraft(sent.kind, sent.replyTo, sent.boardId);
       forgetActiveComposer();
       state.composer = null;
@@ -460,6 +485,8 @@ export function installWriting(ctx) {
     showWriteFeedback,
     waitForNative,
     dismissNativeComposers,
+    visibleNativeElement,
+    visibleNativeComposer,
     injectNativeMarkdown,
     normalizeEditorText,
     findCreatedPost,
