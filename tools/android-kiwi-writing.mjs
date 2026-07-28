@@ -169,9 +169,27 @@ await page.locator("#bokoun-host [data-draft-status]")
   .getByText("Koncept uložen v zařízení", { exact: true })
   .waitFor({ state: "visible", timeout: 5_000 });
 await page.locator("#bokoun-host .composer-form button[type='submit']").click();
-await page.locator("#bokoun-host .write-feedback")
-  .getByText("Příspěvek odeslán.", { exact: true })
-  .waitFor({ state: "visible", timeout: 30_000 });
+await page.waitForFunction(() => {
+  const root = document.querySelector("#bokoun-host")?.shadowRoot;
+  return Boolean(root?.querySelector(".write-feedback, .composer-error"));
+}, null, { timeout: 30_000 });
+const submissionOutcome = await page.evaluate(() => {
+  const root = document.querySelector("#bokoun-host")?.shadowRoot;
+  const error = root?.querySelector(".composer-error")?.textContent || "";
+  return {
+    success: Boolean(root?.querySelector(".write-feedback")),
+    preSubmitFailure: error.includes("Koncept zůstal uložený"),
+    ambiguous: error.includes("Neodesílejte znovu"),
+  };
+});
+assertQa(
+  submissionOutcome.success,
+  submissionOutcome.ambiguous
+    ? "Native submission is ambiguous; do not retry"
+    : submissionOutcome.preSubmitFailure
+      ? "Writing stopped safely before native submit"
+      : "Writing did not reach a known outcome",
+);
 
 const sentPosts = page.locator("#bokoun-host article.post.post--just-sent");
 await sentPosts.waitFor({ state: "visible", timeout: 15_000 });
