@@ -87,6 +87,11 @@ export function installShell(ctx) {
         overflow: hidden !important;
         background: #fff !important;
       }
+      html[data-bokoun-active="true"][data-bokoun-aligning="true"],
+      html[data-bokoun-active="true"][data-bokoun-aligning="true"] body {
+        height: auto !important;
+        overflow: auto !important;
+      }
       #${HOST_ID} {
         display: block !important;
         visibility: visible !important;

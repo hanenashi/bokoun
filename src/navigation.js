@@ -154,6 +154,7 @@ export function installNavigation(ctx) {
 
   function restoreNativeAnchor(anchor) {
     if (!anchor) return;
+    document.documentElement.dataset.bokounAligning = "true";
     const apply = () => {
       const target = routeType() === "favorites"
         ? [...document.querySelectorAll(SELECTORS.favoriteRows)]
@@ -167,7 +168,10 @@ export function installNavigation(ctx) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         apply();
-        window.setTimeout(apply, 250);
+        window.setTimeout(() => {
+          apply();
+          delete document.documentElement.dataset.bokounAligning;
+        }, 250);
       });
     });
   }

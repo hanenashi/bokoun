@@ -541,6 +541,7 @@ test("live comparison uses an opt-in accessible drag handle and layered native v
   assert.match(source, /function animateHostReveal/);
   assert.match(source, /prefers-reduced-motion: reduce/);
   assert.match(source, /data-bokoun-layered/);
+  assert.match(source, /data-bokoun-aligning/);
   assert.match(source, /restoreNativeAnchor\(state\.compareAnchor\)/);
 });
 

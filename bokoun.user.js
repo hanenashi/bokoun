@@ -1465,6 +1465,11 @@
         overflow: hidden !important;
         background: #fff !important;
       }
+      html[data-bokoun-active="true"][data-bokoun-aligning="true"],
+      html[data-bokoun-active="true"][data-bokoun-aligning="true"] body {
+        height: auto !important;
+        overflow: auto !important;
+      }
       #${HOST_ID2} {
         display: block !important;
         visibility: visible !important;
@@ -4963,6 +4968,7 @@
     }
     function restoreNativeAnchor(anchor) {
       if (!anchor) return;
+      document.documentElement.dataset.bokounAligning = "true";
       const apply = () => {
         const target = routeType() === "favorites" ? [...document.querySelectorAll(SELECTORS2.favoriteRows)].find((row) => row.getAttribute("href") === anchor.favoriteHref) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
         if (!target) return;
@@ -4972,7 +4978,10 @@
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           apply();
-          window.setTimeout(apply, 250);
+          window.setTimeout(() => {
+            apply();
+            delete document.documentElement.dataset.bokounAligning;
+          }, 250);
         });
       });
     }
