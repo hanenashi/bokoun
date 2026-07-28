@@ -20,6 +20,19 @@ export function preserveForcedBokounMode(href, currentHref, origin = "") {
   }
 }
 
+export function sameFavoriteRoute(left, right, origin = "") {
+  try {
+    const base = origin
+      || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+    const leftUrl = new URL(left, base);
+    const rightUrl = new URL(right, base);
+    return leftUrl.origin === rightUrl.origin
+      && leftUrl.pathname.replace(/\/$/, "") === rightUrl.pathname.replace(/\/$/, "");
+  } catch {
+    return false;
+  }
+}
+
 export function installNavigation(ctx) {
   const {
     HOST_ID,
@@ -158,7 +171,7 @@ export function installNavigation(ctx) {
     const apply = () => {
       const target = routeType() === "favorites"
         ? [...document.querySelectorAll(SELECTORS.favoriteRows)]
-          .find((row) => row.getAttribute("href") === anchor.favoriteHref)
+          .find((row) => sameFavoriteRoute(row.getAttribute("href"), anchor.favoriteHref))
         : nativePostById(anchor.postId)
           || [...document.querySelectorAll(SELECTORS.posts)].at(-1);
       if (!target) return;
@@ -184,7 +197,10 @@ export function installNavigation(ctx) {
           ? [...state.shadow.querySelectorAll(".favorite-item [data-native-href]")]
           : [...state.shadow.querySelectorAll("[data-bokoun-post-id]")];
         const target = routeType() === "favorites"
-          ? items.find((row) => row.getAttribute("data-native-href") === anchor.favoriteHref)
+          ? items.find((row) => sameFavoriteRoute(
+            row.getAttribute("data-native-href"),
+            anchor.favoriteHref,
+          ))
           : items.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId))
             || items.at(-1);
         if (!target || !state.scroller) return;

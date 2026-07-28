@@ -4850,6 +4850,16 @@
       return new URL(href, origin || "https://kapybara.okoun.cz");
     }
   }
+  function sameFavoriteRoute(left, right, origin = "") {
+    try {
+      const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+      const leftUrl = new URL(left, base);
+      const rightUrl = new URL(right, base);
+      return leftUrl.origin === rightUrl.origin && leftUrl.pathname.replace(/\/$/, "") === rightUrl.pathname.replace(/\/$/, "");
+    } catch {
+      return false;
+    }
+  }
   function installNavigation(ctx2) {
     const {
       HOST_ID: HOST_ID2,
@@ -4970,7 +4980,7 @@
       if (!anchor) return;
       document.documentElement.dataset.bokounAligning = "true";
       const apply = () => {
-        const target = routeType() === "favorites" ? [...document.querySelectorAll(SELECTORS2.favoriteRows)].find((row) => row.getAttribute("href") === anchor.favoriteHref) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
+        const target = routeType() === "favorites" ? [...document.querySelectorAll(SELECTORS2.favoriteRows)].find((row) => sameFavoriteRoute(row.getAttribute("href"), anchor.favoriteHref)) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
         if (!target) return;
         const delta = target.getBoundingClientRect().top - anchor.offset;
         window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: "auto" });
@@ -4990,7 +5000,10 @@
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const items = routeType() === "favorites" ? [...state2.shadow.querySelectorAll(".favorite-item [data-native-href]")] : [...state2.shadow.querySelectorAll("[data-bokoun-post-id]")];
-          const target = routeType() === "favorites" ? items.find((row) => row.getAttribute("data-native-href") === anchor.favoriteHref) : items.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId)) || items.at(-1);
+          const target = routeType() === "favorites" ? items.find((row) => sameFavoriteRoute(
+            row.getAttribute("data-native-href"),
+            anchor.favoriteHref
+          )) : items.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId)) || items.at(-1);
           if (!target || !state2.scroller) return;
           const scrollerRect = state2.scroller.getBoundingClientRect();
           const delta = target.getBoundingClientRect().top - scrollerRect.top - anchor.offset;

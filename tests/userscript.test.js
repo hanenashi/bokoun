@@ -10,7 +10,7 @@ import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
 import { canonicalScrollRoute } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
-import { preserveForcedBokounMode } from "../src/navigation.js";
+import { preserveForcedBokounMode, sameFavoriteRoute } from "../src/navigation.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
@@ -255,6 +255,25 @@ test("forced desktop mode follows Bokoun-owned supported navigation", () => {
       origin,
     ).href,
     `${origin}/boards/test?bokoun=off`,
+  );
+});
+
+test("favorite anchors ignore temporary Bokoun mode queries", () => {
+  assert.equal(
+    sameFavoriteRoute(
+      "/boards/test?bokoun=on",
+      "/boards/test",
+      "https://kapybara.okoun.cz",
+    ),
+    true,
+  );
+  assert.equal(
+    sameFavoriteRoute(
+      "/boards/other?bokoun=on",
+      "/boards/test",
+      "https://kapybara.okoun.cz",
+    ),
+    false,
   );
 });
 
