@@ -176,7 +176,14 @@ export function installNavigation(ctx) {
           || [...document.querySelectorAll(SELECTORS.posts)].at(-1);
       if (!target) return;
       const delta = target.getBoundingClientRect().top - anchor.offset;
-      window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: "auto" });
+      for (const scroller of new Set([
+        document.scrollingElement,
+        document.documentElement,
+        document.body,
+      ])) {
+        if (!scroller) continue;
+        scroller.scrollTop = Math.max(0, scroller.scrollTop + delta);
+      }
     };
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {

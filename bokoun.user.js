@@ -4988,7 +4988,14 @@
         const target = routeType() === "favorites" ? [...document.querySelectorAll(SELECTORS2.favoriteRows)].find((row) => sameFavoriteRoute(row.getAttribute("href"), anchor.favoriteHref)) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
         if (!target) return;
         const delta = target.getBoundingClientRect().top - anchor.offset;
-        window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: "auto" });
+        for (const scroller of /* @__PURE__ */ new Set([
+          document.scrollingElement,
+          document.documentElement,
+          document.body
+        ])) {
+          if (!scroller) continue;
+          scroller.scrollTop = Math.max(0, scroller.scrollTop + delta);
+        }
       };
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
