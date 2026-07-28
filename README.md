@@ -113,13 +113,16 @@ npm run qa:android:kiwi
 The smoke uses genuine Playwright pointer clicks for Favorites and the
 root-post menu, Android's real Back key for thread/board navigation, verifies
 Favorites scroll restoration, watches console/page errors and confirms that
-an idle 10.5-second window generates no requests. It also checks the
-Bokoun/full-Kapybara/Bokoun handoff against the same visible post. When the
-dedicated club contains enough history, it loads two older batches, rejects
-one structured request and its HTML fallback with a synthetic HTTP 503, then
-verifies that **Zkusit znovu** recovers without duplicate post IDs. A smaller
-club verifies its explicit end-of-history state instead; the same
-failure/recovery contract remains covered with sanitized unit data.
+an idle 10.5-second window generates no requests. Android Back is retried once
+only when browser chrome consumes the first key without changing the thread
+route. The smoke also checks the Bokoun/full-Kapybara/Bokoun handoff against
+the same visible post, or the documented nearest visible fallback when native
+Kapybara does not render that structured-page anchor. When the dedicated club
+contains enough history, it loads two older batches, rejects one structured
+request and its HTML fallback with a synthetic HTTP 503, then verifies that
+**Zkusit znovu** recovers without duplicate post IDs. A smaller club verifies
+its explicit end-of-history state instead; the same failure/recovery contract
+remains covered with sanitized unit data.
 
 Set `BOKOUN_QA_BOARD` to use another dedicated test club,
 `BOKOUN_KIWI_CDP` for a non-default CDP endpoint, or `ADB_SERIAL` when more

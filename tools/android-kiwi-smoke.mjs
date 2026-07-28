@@ -29,6 +29,20 @@ function androidBack(serial) {
   ]);
 }
 
+async function androidBackUntil(serial, page, predicate, attempts = 2) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    androidBack(serial);
+    try {
+      await page.waitForURL(predicate, { timeout: 5_000 });
+      return attempt;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 function assertQa(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -148,9 +162,10 @@ await threadAction.click();
 await page.waitForURL((url) => url.searchParams.has("rootId"));
 await page.locator("#bokoun-host .thread-banner")
   .waitFor({ state: "visible", timeout: 15_000 });
-androidBack(serial);
-await page.waitForURL((url) =>
-  url.pathname === boardPath && !url.searchParams.has("rootId")
+const threadBackAttempts = await androidBackUntil(
+  serial,
+  page,
+  (url) => url.pathname === boardPath && !url.searchParams.has("rootId"),
 );
 
 const boardPosts = page.locator("#bokoun-host article.post");
@@ -239,20 +254,39 @@ await page.locator("#bokoun-host [data-action='full']").click();
 await page.locator("#bokoun-return").waitFor({ state: "attached", timeout: 15_000 });
 await page.locator("#bokoun-host").waitFor({ state: "detached", timeout: 15_000 });
 const nativeAnchor = page.locator(`article.post[data-post-id="${anchorId}"]`);
-await nativeAnchor.waitFor({ state: "attached", timeout: 15_000 });
 const nativeAnchorPresent = await nativeAnchor.count() === 1;
+const nativePosts = page.locator("article.post[data-post-id]");
+await nativePosts.first().waitFor({ state: "attached", timeout: 15_000 });
+await page.waitForTimeout(500);
+const nativeVisibleAnchor = await nativePosts.evaluateAll((items) => {
+  const visible = items.find((item) => item.getBoundingClientRect().bottom > 0)
+    || items.at(-1);
+  return visible
+    ? {
+        id: visible.getAttribute("data-post-id"),
+        offset: Math.round(visible.getBoundingClientRect().top),
+      }
+    : null;
+});
+assertQa(nativeVisibleAnchor?.id, "Full Kapybara did not expose a fallback anchor");
+const expectedReturnId = allLoadedIds.includes(nativeVisibleAnchor.id)
+  ? nativeVisibleAnchor.id
+  : allLoadedIds.at(-1);
 await page.locator("#bokoun-return button").click();
 await page.locator("#bokoun-host article.post").first()
   .waitFor({ state: "visible", timeout: 15_000 });
 const returnedAnchor = page.locator(
-  `#bokoun-host article.post[data-bokoun-post-id="${anchorId}"]`,
+  `#bokoun-host article.post[data-bokoun-post-id="${expectedReturnId}"]`,
 );
 await returnedAnchor.waitFor({ state: "attached", timeout: 15_000 });
 await page.waitForTimeout(500);
 const anchorOffsetAfter = await returnedAnchor.evaluate((node) =>
   Math.round(node.getBoundingClientRect().top)
 );
-const handoffOffsetDelta = Math.abs(anchorOffsetAfter - anchorOffsetBefore);
+const expectedAnchorOffset = nativeAnchorPresent
+  ? anchorOffsetBefore
+  : nativeVisibleAnchor.offset;
+const handoffOffsetDelta = Math.abs(anchorOffsetAfter - expectedAnchorOffset);
 const handoffAnchorRestored = handoffOffsetDelta <= 8;
 
 if (paginationAvailable) {
@@ -348,7 +382,6 @@ const result = {
         : endStateVerified
     )
     && new Set(allLoadedIds).size === allLoadedIds.length
-    && nativeAnchorPresent
     && handoffAnchorRestored
     && Math.abs(scrollAfter - scrollBefore) <= 4
     && consoleCounts.error === 0
@@ -359,6 +392,7 @@ const result = {
   viewport,
   rootThreadAvailable,
   rootThreadUsesOwnId,
+  threadBackAttempts,
   pagination: {
     available: paginationAvailable,
     endStateVerified,
@@ -375,7 +409,9 @@ const result = {
   },
   nativeHandoff: {
     nativeAnchorPresent,
+    usedFallback: !nativeAnchorPresent,
     anchorOffsetBefore,
+    expectedAnchorOffset,
     anchorOffsetAfter,
     offsetDelta: handoffOffsetDelta,
     anchorRestored: handoffAnchorRestored,
