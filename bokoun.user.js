@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.13
+// @version      0.7.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -26,6 +26,7 @@
     BOARD_READ_BOUNDARIES_KEY: () => BOARD_READ_BOUNDARIES_KEY,
     BOARD_VISIT_KEY: () => BOARD_VISIT_KEY,
     BOOT_TIMEOUT_MS: () => BOOT_TIMEOUT_MS,
+    COMPARE_HOST_ID: () => COMPARE_HOST_ID,
     COMPOSER_TIMEOUT_MS: () => COMPOSER_TIMEOUT_MS,
     DISPLAY_SETTINGS_KEY: () => DISPLAY_SETTINGS_KEY,
     DRAFTS_KEY: () => DRAFTS_KEY,
@@ -1219,9 +1220,10 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.13";
+  var VERSION = "0.7.0";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
+  var COMPARE_HOST_ID = "bokoun-compare";
   var BOOT_TIMEOUT_MS = 1e4;
   var PAGE_LOAD_TIMEOUT_MS = 15e3;
   var COMPOSER_TIMEOUT_MS = 8e3;
@@ -1328,6 +1330,12 @@
     popStateHandler: null,
     hashChangeHandler: null,
     nativeMode: false,
+    layerReasons: /* @__PURE__ */ new Set(),
+    revealPending: false,
+    revealRunning: false,
+    compareHost: null,
+    comparePercent: 100,
+    compareAnchor: null,
     pendingAnchor: null,
     boardKey: "",
     boardId: "",
@@ -1393,6 +1401,7 @@
       VERSION: VERSION2,
       HOST_ID: HOST_ID2,
       RETURN_HOST_ID: RETURN_HOST_ID2,
+      COMPARE_HOST_ID: COMPARE_HOST_ID2,
       MOBILE_QUERY: MOBILE_QUERY2,
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       SCROLL_KEY: SCROLL_KEY2,
@@ -1412,6 +1421,7 @@
     const navigateNativeRoute = (...args) => ctx2.navigateNativeRoute(...args);
     const returnToBokoun = (...args) => ctx2.returnToBokoun(...args);
     const stopRouteObservation = (...args) => ctx2.stopRouteObservation?.(...args);
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
     function routeType(pathname = location.pathname) {
       if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
       if (/^\/boards\/[^/]+\/?$/.test(pathname)) return "board";
@@ -1437,11 +1447,15 @@
       html[data-bokoun-booting="true"] body {
         visibility: hidden !important;
       }
-      html[data-bokoun-active="true"] body > :not(#${HOST_ID2}) {
+      html[data-bokoun-active="true"] body > :not(#${HOST_ID2}):not(#${COMPARE_HOST_ID2}) {
         display: none !important;
       }
-      html[data-bokoun-active="true"][data-bokoun-bridge="true"] body > :not(#${HOST_ID2}) {
+      html[data-bokoun-active="true"][data-bokoun-layered="true"] body > :not(#${HOST_ID2}):not(#${COMPARE_HOST_ID2}),
+      html[data-bokoun-active="true"][data-bokoun-bridge="true"] body > :not(#${HOST_ID2}):not(#${COMPARE_HOST_ID2}) {
         display: revert !important;
+      }
+      html[data-bokoun-active="true"][data-bokoun-layered="true"] body > :not(#${HOST_ID2}):not(#${COMPARE_HOST_ID2}) {
+        pointer-events: none !important;
       }
       html[data-bokoun-active="true"],
       html[data-bokoun-active="true"] body {
@@ -1452,6 +1466,13 @@
         background: #fff !important;
       }
       #${HOST_ID2} {
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 2147483647 !important;
+      }
+      #${COMPARE_HOST_ID2} {
         display: block !important;
         visibility: visible !important;
       }
@@ -1511,12 +1532,195 @@
       document.documentElement.dataset.bokounActive = "true";
       delete document.documentElement.dataset.bokounBooting;
     }
+    function prefersReducedMotion() {
+      return matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+    function setLayered(reason, enabled) {
+      if (enabled) state2.layerReasons.add(reason);
+      else state2.layerReasons.delete(reason);
+      if (!document.documentElement) return;
+      if (state2.layerReasons.size) document.documentElement.dataset.bokounLayered = "true";
+      else delete document.documentElement.dataset.bokounLayered;
+    }
+    function setHostReveal(percent) {
+      const normalized = Math.min(100, Math.max(0, Number(percent) || 0));
+      state2.comparePercent = normalized;
+      if (state2.host) {
+        state2.host.style.clipPath = `inset(0 ${100 - normalized}% 0 0)`;
+      }
+      const control = state2.compareHost?.shadowRoot?.querySelector("[role='slider']");
+      if (control) {
+        control.style.setProperty("--compare-percent", `${normalized}%`);
+        control.setAttribute("aria-valuenow", String(Math.round(normalized)));
+        control.setAttribute(
+          "aria-valuetext",
+          `${Math.round(normalized)} % Bokoun, ${Math.round(100 - normalized)} % Kapybara`
+        );
+      }
+    }
+    function animateHostReveal(from, to) {
+      const host = state2.host;
+      if (!host) return Promise.resolve();
+      setHostReveal(from);
+      if (prefersReducedMotion() || typeof host.animate !== "function") {
+        setHostReveal(to);
+        return Promise.resolve();
+      }
+      const animation = host.animate(
+        [
+          { clipPath: `inset(0 ${100 - from}% 0 0)` },
+          { clipPath: `inset(0 ${100 - to}% 0 0)` }
+        ],
+        { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" }
+      );
+      return animation.finished.catch(() => void 0).then(() => {
+        animation.cancel();
+        setHostReveal(to);
+      });
+    }
+    function removeCompareHandle() {
+      state2.compareHost?.remove();
+      state2.compareHost = null;
+      state2.compareAnchor = null;
+      setLayered("compare", false);
+      if (state2.active) setHostReveal(100);
+    }
+    function showCompareHandle() {
+      if (!state2.active || !state2.host || state2.compareHost?.isConnected) return;
+      setLayered("compare", true);
+      setHostReveal(100);
+      const host = document.createElement("div");
+      host.id = COMPARE_HOST_ID2;
+      const shadow = host.attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+          position: fixed;
+          inset: 0;
+          z-index: 2147483647;
+          display: block;
+          pointer-events: none;
+        }
+        button {
+          --compare-percent: 100%;
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: clamp(0px, var(--compare-percent), 100%);
+          width: 44px;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: #a85a00;
+          cursor: ew-resize;
+          pointer-events: auto;
+          touch-action: none;
+          transform: translateX(-50%);
+          -webkit-tap-highlight-color: transparent;
+        }
+        button::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: 21px;
+          width: 2px;
+          background: currentColor;
+          box-shadow: 0 0 0 1px rgba(255,255,255,.7);
+        }
+        span {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          display: grid;
+          width: 32px;
+          height: 56px;
+          place-items: center;
+          border: 1px solid currentColor;
+          border-radius: 18px;
+          background: #fff;
+          box-shadow: 0 2px 12px rgba(0,0,0,.22);
+          color: currentColor;
+          font: 700 15px/1 system-ui, sans-serif;
+          transform: translate(-50%, -50%);
+        }
+        button:focus-visible span {
+          outline: 3px solid #a85a00;
+          outline-offset: 2px;
+        }
+      </style>
+      <button
+        type="button"
+        role="slider"
+        aria-label="Porovnání Bokouna a Kapybary"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="100"
+      ><span aria-hidden="true">↔</span></button>
+    `;
+      document.body.append(host);
+      state2.compareHost = host;
+      const slider = shadow.querySelector("[role='slider']");
+      const updateFromClientX = (clientX) => {
+        const width = Math.max(1, document.documentElement.clientWidth);
+        setHostReveal(clientX / width * 100);
+      };
+      slider.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        state2.compareAnchor = captureBokounAnchor();
+        restoreNativeAnchor(state2.compareAnchor);
+        slider.setPointerCapture(event.pointerId);
+        updateFromClientX(event.clientX);
+      });
+      slider.addEventListener("pointermove", (event) => {
+        if (!slider.hasPointerCapture(event.pointerId)) return;
+        updateFromClientX(event.clientX);
+      });
+      slider.addEventListener("keydown", (event) => {
+        const amounts = { ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100 };
+        if (!(event.key in amounts)) return;
+        event.preventDefault();
+        if (!state2.compareAnchor) {
+          state2.compareAnchor = captureBokounAnchor();
+          restoreNativeAnchor(state2.compareAnchor);
+        }
+        setHostReveal(
+          event.key === "Home" ? 0 : event.key === "End" ? 100 : state2.comparePercent + amounts[event.key]
+        );
+      });
+      setHostReveal(state2.comparePercent);
+    }
+    function syncCompareMode() {
+      if (!state2.active || state2.nativeMode || state2.revealRunning) return;
+      if (currentDisplaySettings().compareHandle) showCompareHandle();
+      else removeCompareHandle();
+    }
+    async function revealBokoun({ initial = false } = {}) {
+      if (!state2.host || state2.revealRunning) return;
+      state2.revealPending = false;
+      state2.revealRunning = true;
+      removeCompareHandle();
+      setLayered("transition", true);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await animateHostReveal(0, 100);
+      setLayered("transition", false);
+      state2.revealRunning = false;
+      syncCompareMode();
+      if (initial) state2.host?.setAttribute("data-initial-reveal-complete", "true");
+    }
     function revealNative({ stop = false } = {}) {
       saveScroll();
       state2.active = false;
+      state2.revealPending = false;
+      state2.revealRunning = false;
+      removeCompareHandle();
+      state2.layerReasons.clear();
       if (document.documentElement) {
         delete document.documentElement.dataset.bokounBooting;
         delete document.documentElement.dataset.bokounActive;
+        delete document.documentElement.dataset.bokounLayered;
       }
       state2.host?.remove();
       state2.host = null;
@@ -1542,9 +1746,13 @@
           console.warn(`[Bokoun ${VERSION2}] Could not align the native page; using the closest loaded position.`, error?.name || "Error");
         }
       }
+      removeCompareHandle();
+      setLayered("transition", true);
+      restoreNativeAnchor(anchor);
+      await new Promise((resolve) => window.setTimeout(resolve, 300));
+      await animateHostReveal(100, 0);
       revealNative();
       showReturnControl();
-      restoreNativeAnchor(anchor);
     }
     function showReturnControl() {
       if (!document.body || document.getElementById(RETURN_HOST_ID2)) return;
@@ -1698,6 +1906,13 @@
       waitForBody,
       mountShell,
       revealNative,
+      setLayered,
+      setHostReveal,
+      animateHostReveal,
+      showCompareHandle,
+      removeCompareHandle,
+      syncCompareMode,
+      revealBokoun,
       openFullKapybara,
       showReturnControl,
       registerMenus,
@@ -3390,7 +3605,8 @@
     avatarPosition: "inline",
     avatarSize: 40,
     avatarShape: "circle",
-    replyMeta: "full"
+    replyMeta: "full",
+    compareHandle: false
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
     family: "default",
@@ -3480,7 +3696,8 @@
         avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
         avatarSize: normalizeAvatarSize(value.avatarSize),
         avatarShape: AVATAR_SHAPES.has(value.avatarShape) ? value.avatarShape : DEFAULT_DISPLAY_SETTINGS.avatarShape,
-        replyMeta: REPLY_META_MODES.has(value.replyMeta) ? value.replyMeta : DEFAULT_DISPLAY_SETTINGS.replyMeta
+        replyMeta: REPLY_META_MODES.has(value.replyMeta) ? value.replyMeta : DEFAULT_DISPLAY_SETTINGS.replyMeta,
+        compareHandle: value.compareHandle === true
       };
     }
     function normalizeFontSettings(value = {}) {
@@ -3703,6 +3920,7 @@
       scroller.style.setProperty("--favorite-row-padding", `${favorites.spacing}px`);
       if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
       else scroller.style.removeProperty("--favorite-font-family");
+      ctx2.syncCompareMode?.();
     }
     Object.assign(ctx2, {
       fontFamilies: FONT_FAMILIES,
@@ -4112,6 +4330,15 @@
             <option value="hidden" ${display.replyMeta === "hidden" ? "selected" : ""}>Skrýt</option>
           </select>
         </label>
+        <label class="settings-switch">
+          <span>Porovnávací madlo</span>
+          <input
+            type="checkbox"
+            data-setting="compare-handle"
+            ${display.compareHandle ? "checked" : ""}
+          >
+        </label>
+        <p class="settings-note">Tažením svislé čáry porovnáte Bokouna s živou Kapybarou pod ním.</p>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
         <div class="panel-actions">
           <button type="button" data-action="font-panel">← Písmo</button>
@@ -4419,6 +4646,9 @@
       state2.shadow.querySelector("[data-setting='reply-meta']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ replyMeta: event.currentTarget.value });
       });
+      state2.shadow.querySelector("[data-setting='compare-handle']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ compareHandle: event.currentTarget.checked }, { render: false });
+      });
       state2.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
         updateFavoritesSettings(
           { sort: event.currentTarget.value },
@@ -4634,6 +4864,9 @@
     const render = (...args) => ctx2.render(...args);
     const observeNative = (...args) => ctx2.observeNative(...args);
     const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
+    const setLayered = (...args) => ctx2.setLayered(...args);
+    const setHostReveal = (...args) => ctx2.setHostReveal(...args);
+    const revealBokoun = (...args) => ctx2.revealBokoun(...args);
     function navigateNative(href) {
       if (!href) return;
       saveScroll();
@@ -4679,8 +4912,19 @@
       navigateNative(`${target.pathname}${target.search}`);
     }
     function captureBokounAnchor() {
-      if (routeType() !== "board" || !state2.scroller || !state2.shadow) return null;
+      if (!state2.scroller || !state2.shadow) return null;
       const scrollerRect = state2.scroller.getBoundingClientRect();
+      if (routeType() === "favorites") {
+        const rows = [...state2.shadow.querySelectorAll(".favorite-item [data-native-href]")];
+        const row = rows.find((item) => item.getBoundingClientRect().bottom > scrollerRect.top) || rows.at(-1);
+        if (!row) return null;
+        return {
+          favoriteHref: row.getAttribute("data-native-href"),
+          offset: row.getBoundingClientRect().top - scrollerRect.top,
+          pageHref: routeKey()
+        };
+      }
+      if (routeType() !== "board") return null;
       const headerHeight = state2.shadow.querySelector(".topbar--board")?.getBoundingClientRect().height || 0;
       const visibleTop = scrollerRect.top + headerHeight;
       const posts = [...state2.shadow.querySelectorAll("[data-bokoun-post-id]")];
@@ -4694,6 +4938,16 @@
       };
     }
     function captureNativeAnchor() {
+      if (routeType() === "favorites") {
+        const rows = [...document.querySelectorAll(SELECTORS2.favoriteRows)];
+        const row = rows.find((item) => item.getBoundingClientRect().bottom > 0) || rows.at(-1);
+        if (!row) return null;
+        return {
+          favoriteHref: row.getAttribute("href"),
+          offset: row.getBoundingClientRect().top,
+          pageHref: routeKey()
+        };
+      }
       if (routeType() !== "board") return null;
       const posts = [...document.querySelectorAll(SELECTORS2.posts)];
       const post = posts.find((item) => item.getBoundingClientRect().bottom > 0) || posts.at(-1);
@@ -4708,9 +4962,9 @@
       return [...document.querySelectorAll(SELECTORS2.posts)].find((post) => post.getAttribute("data-post-id") === String(postId)) || null;
     }
     function restoreNativeAnchor(anchor) {
-      if (!anchor || routeType() !== "board") return;
+      if (!anchor) return;
       const apply = () => {
-        const target = nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
+        const target = routeType() === "favorites" ? [...document.querySelectorAll(SELECTORS2.favoriteRows)].find((row) => row.getAttribute("href") === anchor.favoriteHref) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
         if (!target) return;
         const delta = target.getBoundingClientRect().top - anchor.offset;
         window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: "auto" });
@@ -4723,11 +4977,11 @@
       });
     }
     function restoreBokounAnchor(anchor) {
-      if (!anchor || !state2.scroller || !state2.shadow || routeType() !== "board") return;
+      if (!anchor || !state2.scroller || !state2.shadow) return;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const posts = [...state2.shadow.querySelectorAll("[data-bokoun-post-id]")];
-          const target = posts.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId)) || posts.at(-1);
+          const items = routeType() === "favorites" ? [...state2.shadow.querySelectorAll(".favorite-item [data-native-href]")] : [...state2.shadow.querySelectorAll("[data-bokoun-post-id]")];
+          const target = routeType() === "favorites" ? items.find((row) => row.getAttribute("data-native-href") === anchor.favoriteHref) : items.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId)) || items.at(-1);
           if (!target || !state2.scroller) return;
           const scrollerRect = state2.scroller.getBoundingClientRect();
           const delta = target.getBoundingClientRect().top - scrollerRect.top - anchor.offset;
@@ -4767,11 +5021,14 @@
       state2.disabled = false;
       if (!isMobileEligible() || routeType() === "unsupported") return;
       await waitForBody();
+      setLayered("transition", true);
       mountShell();
+      setHostReveal(0);
       state2.currentRouteKey = routeKey();
       observeNative();
       render({ force: true });
       restoreBokounAnchor(anchor);
+      await revealBokoun();
     }
     Object.assign(ctx2, {
       navigateNative,
@@ -4838,6 +5095,9 @@
     const readBoardVisit = (...args) => ctx2.readBoardVisit(...args);
     const reconcileFavoriteReadState = (...args) => ctx2.reconcileFavoriteReadState(...args);
     const syncBoardVisitRead = (...args) => ctx2.syncBoardVisitRead(...args);
+    const revealBokoun = (...args) => ctx2.revealBokoun(...args);
+    const setLayered = (...args) => ctx2.setLayered(...args);
+    const setHostReveal = (...args) => ctx2.setHostReveal(...args);
     function requestStructuredRefresh(reason, { force = false } = {}) {
       const type = routeType();
       const key = routeKey();
@@ -4968,6 +5228,7 @@
       inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
       attachUiEvents();
       restoreScroll(key, previousKey === key ? previousY : 0);
+      if (state2.revealPending) void revealBokoun({ initial: true });
     }
     function scheduleRender({ force = false } = {}) {
       clearTimeout(state2.renderTimer);
@@ -5148,7 +5409,10 @@
         if (sessionStorage.getItem(SESSION_DISABLED_KEY2) === "1") showReturnControl();
         return;
       }
+      state2.revealPending = true;
+      setLayered("transition", true);
       mountShell();
+      setHostReveal(0);
       finalizeStoredBoardVisit();
       state2.currentRouteKey = routeKey();
       observeNative();

@@ -34,7 +34,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.13/);
+  assert.match(source, /@version\s+0\.7\.0/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -401,6 +401,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     avatarSize: 40,
     avatarShape: "circle",
     replyMeta: "full",
+    compareHandle: false,
   });
   settings.updateDisplaySettings({ avatarPosition: "left" });
   assert.equal(stored.get("display").avatarPosition, "left");
@@ -409,6 +410,8 @@ test("post display settings persist avatar layout and safe font controls", () =>
   settings.updateDisplaySettings({ avatarSize: 250, avatarShape: "rounded" });
   assert.equal(stored.get("display").avatarSize, 96);
   assert.equal(stored.get("display").avatarShape, "rounded");
+  settings.updateDisplaySettings({ compareHandle: true });
+  assert.equal(stored.get("display").compareHandle, true);
   assert.equal(settings.normalizeFontSize("18.26"), 18.5);
   assert.equal(settings.normalizeFontSize(100), 72);
   assert.equal(
@@ -528,6 +531,17 @@ test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering
   assert.match(source, /aria-label="\$\{escapeHtml\(`\$\{club\.name\}, \$\{unreadLabel\}/);
   assert.doesNotMatch(source, /<nav class="tabs"/);
   assert.match(source, /location\.pathname !== "\/fav\/activity"/);
+});
+
+test("live comparison uses an opt-in accessible drag handle and layered native view", () => {
+  assert.match(source, /data-setting="compare-handle"/);
+  assert.match(source, /role="slider"/);
+  assert.match(source, /aria-label="Porovnání Bokouna a Kapybary"/);
+  assert.match(source, /touch-action: none/);
+  assert.match(source, /function animateHostReveal/);
+  assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /data-bokoun-layered/);
+  assert.match(source, /restoreNativeAnchor\(state\.compareAnchor\)/);
 });
 
 test("reply metadata follows the body and reply moved into the popout menu", () => {
@@ -789,7 +803,10 @@ test("native read sync is visit-boundary only, deduplicated, and unload-safe", (
   assert.match(source, /const READ_SYNC_STATE_KEY = "bokoun\.read-sync-state\.v1"/);
   assert.match(source, /function finalizeStoredBoardVisit/);
   assert.match(source, /if \(next\.pathname !== visit\.boardPath\) leaveBoardVisit\(visit\.boardPath\)/);
-  assert.match(source, /mountShell\(\);\s*finalizeStoredBoardVisit\(\);/);
+  assert.match(
+    source,
+    /mountShell\(\);\s*setHostReveal\(0\);\s*finalizeStoredBoardVisit\(\);/,
+  );
   assert.match(source, /localStorage, "auth_token"/);
   assert.doesNotMatch(source, /gmSet\([^\n]*auth_token/);
 });

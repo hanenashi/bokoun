@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.13`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, and live Kapybara comparison pre-alpha (`0.7.0`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.13` prototype reads Favorites, boards and older post pages from
+The `0.7.0` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -742,7 +742,14 @@ Kapybara's own exposed Lexical editor state, with the browser editing command
 kept as a compatibility fallback. This avoids Chromium collapsing line breaks
 while leaving Kapybara's native validation and submit transport in control.
 
-Version `0.6.13` completes desktop forced-mode recovery. Once a supported
+Version `0.7.0` adds a controlled live comparison layer. Bokoun wipes in from
+left to right and out toward the left when switching to full Kapybara. The
+opt-in **Porovnávací madlo** in the display panel exposes the live native page
+under Bokoun without duplicating it as an image; the vertical handle supports
+touch, mouse, arrow keys, Home and End. Native controls stay inert during
+comparison, and reduced-motion preferences skip the wipe animation.
+
+Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,
 thread and native-handoff navigation preserve that explicit mode until the
 user chooses `?bokoun=off` or opens an unsupported native page. Scroll storage

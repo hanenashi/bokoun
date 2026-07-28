@@ -47,6 +47,9 @@ export function installController(ctx) {
   const readBoardVisit = (...args) => ctx.readBoardVisit(...args);
   const reconcileFavoriteReadState = (...args) => ctx.reconcileFavoriteReadState(...args);
   const syncBoardVisitRead = (...args) => ctx.syncBoardVisitRead(...args);
+  const revealBokoun = (...args) => ctx.revealBokoun(...args);
+  const setLayered = (...args) => ctx.setLayered(...args);
+  const setHostReveal = (...args) => ctx.setHostReveal(...args);
 
   function requestStructuredRefresh(reason, { force = false } = {}) {
     const type = routeType();
@@ -196,6 +199,7 @@ export function installController(ctx) {
     attachUiEvents();
 
     restoreScroll(key, previousKey === key ? previousY : 0);
+    if (state.revealPending) void revealBokoun({ initial: true });
   }
 
   function scheduleRender({ force = false } = {}) {
@@ -409,7 +413,10 @@ export function installController(ctx) {
       return;
     }
 
+    state.revealPending = true;
+    setLayered("transition", true);
     mountShell();
+    setHostReveal(0);
     finalizeStoredBoardVisit();
     state.currentRouteKey = routeKey();
     observeNative();

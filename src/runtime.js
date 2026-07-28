@@ -1,8 +1,9 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.6.13";
+export const VERSION = "0.7.0";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
+export const COMPARE_HOST_ID = "bokoun-compare";
 export const BOOT_TIMEOUT_MS = 10_000;
 export const PAGE_LOAD_TIMEOUT_MS = 15_000;
 export const COMPOSER_TIMEOUT_MS = 8_000;
@@ -111,6 +112,12 @@ export const state = {
   popStateHandler: null,
   hashChangeHandler: null,
   nativeMode: false,
+  layerReasons: new Set(),
+  revealPending: false,
+  revealRunning: false,
+  compareHost: null,
+  comparePercent: 100,
+  compareAnchor: null,
   pendingAnchor: null,
   boardKey: "",
   boardId: "",

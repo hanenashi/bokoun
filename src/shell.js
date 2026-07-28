@@ -15,6 +15,7 @@ export function installShell(ctx) {
     VERSION,
     HOST_ID,
     RETURN_HOST_ID,
+    COMPARE_HOST_ID,
     MOBILE_QUERY,
     SESSION_DISABLED_KEY,
     SCROLL_KEY,
@@ -34,6 +35,7 @@ export function installShell(ctx) {
   const navigateNativeRoute = (...args) => ctx.navigateNativeRoute(...args);
   const returnToBokoun = (...args) => ctx.returnToBokoun(...args);
   const stopRouteObservation = (...args) => ctx.stopRouteObservation?.(...args);
+  const currentDisplaySettings = (...args) => ctx.currentDisplaySettings(...args);
 
   function routeType(pathname = location.pathname) {
     if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
@@ -67,11 +69,15 @@ export function installShell(ctx) {
       html[data-bokoun-booting="true"] body {
         visibility: hidden !important;
       }
-      html[data-bokoun-active="true"] body > :not(#${HOST_ID}) {
+      html[data-bokoun-active="true"] body > :not(#${HOST_ID}):not(#${COMPARE_HOST_ID}) {
         display: none !important;
       }
-      html[data-bokoun-active="true"][data-bokoun-bridge="true"] body > :not(#${HOST_ID}) {
+      html[data-bokoun-active="true"][data-bokoun-layered="true"] body > :not(#${HOST_ID}):not(#${COMPARE_HOST_ID}),
+      html[data-bokoun-active="true"][data-bokoun-bridge="true"] body > :not(#${HOST_ID}):not(#${COMPARE_HOST_ID}) {
         display: revert !important;
+      }
+      html[data-bokoun-active="true"][data-bokoun-layered="true"] body > :not(#${HOST_ID}):not(#${COMPARE_HOST_ID}) {
+        pointer-events: none !important;
       }
       html[data-bokoun-active="true"],
       html[data-bokoun-active="true"] body {
@@ -82,6 +88,13 @@ export function installShell(ctx) {
         background: #fff !important;
       }
       #${HOST_ID} {
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 2147483647 !important;
+      }
+      #${COMPARE_HOST_ID} {
         display: block !important;
         visibility: visible !important;
       }
@@ -148,12 +161,207 @@ export function installShell(ctx) {
     delete document.documentElement.dataset.bokounBooting;
   }
 
+  function prefersReducedMotion() {
+    return matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function setLayered(reason, enabled) {
+    if (enabled) state.layerReasons.add(reason);
+    else state.layerReasons.delete(reason);
+    if (!document.documentElement) return;
+    if (state.layerReasons.size) document.documentElement.dataset.bokounLayered = "true";
+    else delete document.documentElement.dataset.bokounLayered;
+  }
+
+  function setHostReveal(percent) {
+    const normalized = Math.min(100, Math.max(0, Number(percent) || 0));
+    state.comparePercent = normalized;
+    if (state.host) {
+      state.host.style.clipPath = `inset(0 ${100 - normalized}% 0 0)`;
+    }
+    const control = state.compareHost?.shadowRoot?.querySelector("[role='slider']");
+    if (control) {
+      control.style.setProperty("--compare-percent", `${normalized}%`);
+      control.setAttribute("aria-valuenow", String(Math.round(normalized)));
+      control.setAttribute(
+        "aria-valuetext",
+        `${Math.round(normalized)} % Bokoun, ${Math.round(100 - normalized)} % Kapybara`,
+      );
+    }
+  }
+
+  function animateHostReveal(from, to) {
+    const host = state.host;
+    if (!host) return Promise.resolve();
+    setHostReveal(from);
+    if (prefersReducedMotion() || typeof host.animate !== "function") {
+      setHostReveal(to);
+      return Promise.resolve();
+    }
+    const animation = host.animate(
+      [
+        { clipPath: `inset(0 ${100 - from}% 0 0)` },
+        { clipPath: `inset(0 ${100 - to}% 0 0)` },
+      ],
+      { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" },
+    );
+    return animation.finished.catch(() => undefined).then(() => {
+      animation.cancel();
+      setHostReveal(to);
+    });
+  }
+
+  function removeCompareHandle() {
+    state.compareHost?.remove();
+    state.compareHost = null;
+    state.compareAnchor = null;
+    setLayered("compare", false);
+    if (state.active) setHostReveal(100);
+  }
+
+  function showCompareHandle() {
+    if (!state.active || !state.host || state.compareHost?.isConnected) return;
+    setLayered("compare", true);
+    setHostReveal(100);
+
+    const host = document.createElement("div");
+    host.id = COMPARE_HOST_ID;
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+          position: fixed;
+          inset: 0;
+          z-index: 2147483647;
+          display: block;
+          pointer-events: none;
+        }
+        button {
+          --compare-percent: 100%;
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: clamp(0px, var(--compare-percent), 100%);
+          width: 44px;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: #a85a00;
+          cursor: ew-resize;
+          pointer-events: auto;
+          touch-action: none;
+          transform: translateX(-50%);
+          -webkit-tap-highlight-color: transparent;
+        }
+        button::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: 21px;
+          width: 2px;
+          background: currentColor;
+          box-shadow: 0 0 0 1px rgba(255,255,255,.7);
+        }
+        span {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          display: grid;
+          width: 32px;
+          height: 56px;
+          place-items: center;
+          border: 1px solid currentColor;
+          border-radius: 18px;
+          background: #fff;
+          box-shadow: 0 2px 12px rgba(0,0,0,.22);
+          color: currentColor;
+          font: 700 15px/1 system-ui, sans-serif;
+          transform: translate(-50%, -50%);
+        }
+        button:focus-visible span {
+          outline: 3px solid #a85a00;
+          outline-offset: 2px;
+        }
+      </style>
+      <button
+        type="button"
+        role="slider"
+        aria-label="Porovnání Bokouna a Kapybary"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="100"
+      ><span aria-hidden="true">↔</span></button>
+    `;
+    document.body.append(host);
+    state.compareHost = host;
+    const slider = shadow.querySelector("[role='slider']");
+
+    const updateFromClientX = (clientX) => {
+      const width = Math.max(1, document.documentElement.clientWidth);
+      setHostReveal((clientX / width) * 100);
+    };
+    slider.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      state.compareAnchor = captureBokounAnchor();
+      restoreNativeAnchor(state.compareAnchor);
+      slider.setPointerCapture(event.pointerId);
+      updateFromClientX(event.clientX);
+    });
+    slider.addEventListener("pointermove", (event) => {
+      if (!slider.hasPointerCapture(event.pointerId)) return;
+      updateFromClientX(event.clientX);
+    });
+    slider.addEventListener("keydown", (event) => {
+      const amounts = { ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100 };
+      if (!(event.key in amounts)) return;
+      event.preventDefault();
+      if (!state.compareAnchor) {
+        state.compareAnchor = captureBokounAnchor();
+        restoreNativeAnchor(state.compareAnchor);
+      }
+      setHostReveal(
+        event.key === "Home" ? 0
+          : event.key === "End" ? 100
+            : state.comparePercent + amounts[event.key],
+      );
+    });
+    setHostReveal(state.comparePercent);
+  }
+
+  function syncCompareMode() {
+    if (!state.active || state.nativeMode || state.revealRunning) return;
+    if (currentDisplaySettings().compareHandle) showCompareHandle();
+    else removeCompareHandle();
+  }
+
+  async function revealBokoun({ initial = false } = {}) {
+    if (!state.host || state.revealRunning) return;
+    state.revealPending = false;
+    state.revealRunning = true;
+    removeCompareHandle();
+    setLayered("transition", true);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await animateHostReveal(0, 100);
+    setLayered("transition", false);
+    state.revealRunning = false;
+    syncCompareMode();
+    if (initial) state.host?.setAttribute("data-initial-reveal-complete", "true");
+  }
+
   function revealNative({ stop = false } = {}) {
     saveScroll();
     state.active = false;
+    state.revealPending = false;
+    state.revealRunning = false;
+    removeCompareHandle();
+    state.layerReasons.clear();
     if (document.documentElement) {
       delete document.documentElement.dataset.bokounBooting;
       delete document.documentElement.dataset.bokounActive;
+      delete document.documentElement.dataset.bokounLayered;
     }
     state.host?.remove();
     state.host = null;
@@ -183,9 +391,13 @@ export function installShell(ctx) {
       }
     }
 
+    removeCompareHandle();
+    setLayered("transition", true);
+    restoreNativeAnchor(anchor);
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    await animateHostReveal(100, 0);
     revealNative();
     showReturnControl();
-    restoreNativeAnchor(anchor);
   }
 
   function showReturnControl() {
@@ -359,6 +571,13 @@ export function installShell(ctx) {
     waitForBody,
     mountShell,
     revealNative,
+    setLayered,
+    setHostReveal,
+    animateHostReveal,
+    showCompareHandle,
+    removeCompareHandle,
+    syncCompareMode,
+    revealBokoun,
     openFullKapybara,
     showReturnControl,
     registerMenus,

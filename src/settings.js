@@ -4,6 +4,7 @@ const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   avatarSize: 40,
   avatarShape: "circle",
   replyMeta: "full",
+  compareHandle: false,
 });
 
 const DEFAULT_FONT_SETTINGS = Object.freeze({
@@ -108,6 +109,7 @@ export function installSettings(ctx) {
       replyMeta: REPLY_META_MODES.has(value.replyMeta)
         ? value.replyMeta
         : DEFAULT_DISPLAY_SETTINGS.replyMeta,
+      compareHandle: value.compareHandle === true,
     };
   }
 
@@ -378,6 +380,7 @@ export function installSettings(ctx) {
     scroller.style.setProperty("--favorite-row-padding", `${favorites.spacing}px`);
     if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
     else scroller.style.removeProperty("--favorite-font-family");
+    ctx.syncCompareMode?.();
   }
 
   Object.assign(ctx, {

@@ -396,6 +396,15 @@ export function installUi(ctx) {
             <option value="hidden" ${display.replyMeta === "hidden" ? "selected" : ""}>Skrýt</option>
           </select>
         </label>
+        <label class="settings-switch">
+          <span>Porovnávací madlo</span>
+          <input
+            type="checkbox"
+            data-setting="compare-handle"
+            ${display.compareHandle ? "checked" : ""}
+          >
+        </label>
+        <p class="settings-note">Tažením svislé čáry porovnáte Bokouna s živou Kapybarou pod ním.</p>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
         <div class="panel-actions">
           <button type="button" data-action="font-panel">← Písmo</button>
@@ -744,6 +753,9 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='reply-meta']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ replyMeta: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-setting='compare-handle']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ compareHandle: event.currentTarget.checked }, { render: false });
     });
     state.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
       updateFavoritesSettings(
