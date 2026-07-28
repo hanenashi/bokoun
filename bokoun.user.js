@@ -1457,6 +1457,11 @@
       html[data-bokoun-active="true"][data-bokoun-layered="true"] body > :not(#${HOST_ID2}):not(#${COMPARE_HOST_ID2}) {
         pointer-events: none !important;
       }
+      html[data-bokoun-active="true"][data-bokoun-layered="true"],
+      html[data-bokoun-active="true"][data-bokoun-layered="true"] body {
+        height: auto !important;
+        overflow: hidden !important;
+      }
       html[data-bokoun-active="true"],
       html[data-bokoun-active="true"] body {
         width: 100% !important;

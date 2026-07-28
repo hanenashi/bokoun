@@ -79,6 +79,11 @@ export function installShell(ctx) {
       html[data-bokoun-active="true"][data-bokoun-layered="true"] body > :not(#${HOST_ID}):not(#${COMPARE_HOST_ID}) {
         pointer-events: none !important;
       }
+      html[data-bokoun-active="true"][data-bokoun-layered="true"],
+      html[data-bokoun-active="true"][data-bokoun-layered="true"] body {
+        height: auto !important;
+        overflow: hidden !important;
+      }
       html[data-bokoun-active="true"],
       html[data-bokoun-active="true"] body {
         width: 100% !important;
