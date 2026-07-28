@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.9`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.10`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.9` prototype reads Favorites, boards and older post pages from
+The `0.6.10` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -113,9 +113,17 @@ npm run qa:android:kiwi
 The smoke uses genuine Playwright pointer clicks for Favorites and the
 root-post menu, Android's real Back key for thread/board navigation, verifies
 Favorites scroll restoration, watches console/page errors and confirms that
-an idle 10.5-second window generates no requests. Set `BOKOUN_QA_BOARD` to use
-another dedicated test club, `BOKOUN_KIWI_CDP` for a non-default CDP endpoint,
-or `ADB_SERIAL` when more than one Android device is connected.
+an idle 10.5-second window generates no requests. It also checks the
+Bokoun/full-Kapybara/Bokoun handoff against the same visible post. When the
+dedicated club contains enough history, it loads two older batches, rejects
+one structured request and its HTML fallback with a synthetic HTTP 503, then
+verifies that **Zkusit znovu** recovers without duplicate post IDs. A smaller
+club verifies its explicit end-of-history state instead; the same
+failure/recovery contract remains covered with sanitized unit data.
+
+Set `BOKOUN_QA_BOARD` to use another dedicated test club,
+`BOKOUN_KIWI_CDP` for a non-default CDP endpoint, or `ADB_SERIAL` when more
+than one Android device is connected.
 
 For true foreground/background checks, detach DevTools before sending Android
 Home: an attached debugger can keep Chromium reporting the page as visible.
@@ -691,6 +699,15 @@ Endless reading retains up to 1,000 posts in one board visit. Root posts now
 offer **Vlákno** from their avatar/name menu using their own post ID. Browser
 render-scale checks for 100, 500 and 1,000 posts are available through
 `window.__bokounDebug.measure()`.
+
+Version `0.6.10` expands the real-Pixel Kiwi smoke suite across thread
+navigation, the Bokoun/full-Kapybara/Bokoun anchor handoff, explicit
+end-of-history, Favorites restoration and idle request budgets. Sanitized
+behavioral coverage drives pagination through unique batches, a structured
+request plus HTML fallback failure, and successful Retry recovery. Scroll keys
+now ignore the temporary `?bokoun=on|off` mode switch, so the club-header Back
+arrow restores the same Favorites position regardless of how Bokoun was
+activated.
 
 ### Phase 4 — direct transport experiment
 

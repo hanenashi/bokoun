@@ -1,3 +1,15 @@
+export function canonicalScrollRoute(route, origin = "") {
+  try {
+    const base = origin
+      || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+    const url = new URL(route, base);
+    url.searchParams.delete("bokoun");
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return route;
+  }
+}
+
 export function installShell(ctx) {
   const {
     VERSION,
@@ -246,7 +258,7 @@ export function installShell(ctx) {
   }
 
   function scrollEntryKey(route) {
-    return `${SCROLL_KEY}:${encodeURIComponent(route)}`;
+    return `${SCROLL_KEY}:${encodeURIComponent(canonicalScrollRoute(route))}`;
   }
 
   function scrollIndexKey() {
@@ -263,7 +275,11 @@ export function installShell(ctx) {
   }
 
   function touchScrollRoute(route) {
-    const index = [route, ...getScrollIndex().filter((entry) => entry !== route)];
+    const normalizedRoute = canonicalScrollRoute(route);
+    const index = [
+      normalizedRoute,
+      ...getScrollIndex().filter((entry) => entry !== normalizedRoute),
+    ];
     const retained = index.slice(0, SCROLL_ROUTE_LIMIT);
     for (const evicted of index.slice(SCROLL_ROUTE_LIMIT)) {
       sessionStorage.removeItem(scrollEntryKey(evicted));
@@ -277,12 +293,20 @@ export function installShell(ctx) {
       const value = Number(raw);
       if (Number.isFinite(value)) return Math.max(0, value);
     }
-    return getScrollMap()[route];
+    const legacyRaw = sessionStorage.getItem(
+      `${SCROLL_KEY}:${encodeURIComponent(route)}`,
+    );
+    if (legacyRaw !== null) {
+      const value = Number(legacyRaw);
+      if (Number.isFinite(value)) return Math.max(0, value);
+    }
+    const map = getScrollMap();
+    return map[canonicalScrollRoute(route)] ?? map[route];
   }
 
   function saveScroll() {
     if (!state.scroller || !state.currentRouteKey) return;
-    const route = state.currentRouteKey;
+    const route = canonicalScrollRoute(state.currentRouteKey);
     const value = Math.max(0, Math.round(state.scroller.scrollTop));
     if (storedScroll(route) === value) return;
     sessionStorage.setItem(scrollEntryKey(route), String(value));

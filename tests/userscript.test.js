@@ -5,8 +5,10 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { installAdapters } from "../src/adapters.js";
 import { installBoardState } from "../src/board-state.js";
+import { installPagination } from "../src/pagination.js";
 import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
+import { canonicalScrollRoute } from "../src/shell.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
@@ -30,7 +32,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.9/);
+  assert.match(source, /@version\s+0\.6\.10/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -79,6 +81,107 @@ test("endless loading is single-flight, deduplicated, and recoverable", () => {
   assert.doesNotMatch(source, /searchParams\.get\("t"\)/);
 });
 
+test("pagination merges unique batches and recovers after structured and HTML failure", async () => {
+  const originals = new Map();
+  const replaceGlobal = (key, value) => {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, {
+      configurable: true,
+      writable: true,
+      value,
+    });
+  };
+  const state = {
+    nativeMode: false,
+    boardLoading: false,
+    boardEnd: false,
+    boardNextHref: "/boards/test?f=one",
+    boardLoadedPages: new Set(["/boards/test"]),
+    boardPosts: [{ id: "1" }],
+    boardPostIndex: new Map([["1", 0]]),
+    boardPostPages: new Map([["1", "/boards/test"]]),
+    boardTitle: "Test",
+    boardId: "1",
+    boardLastPosted: "",
+    boardRetentionLimited: false,
+    boardLoadAbort: null,
+    boardAutoCooldownUntil: 0,
+    boardError: "",
+  };
+  let structuredAttempt = 0;
+  const models = [
+    {
+      id: "1",
+      title: "Test",
+      posts: [{ id: "1" }, { id: "2" }],
+      nextOlderHref: "/boards/test?f=two",
+    },
+    {
+      id: "1",
+      title: "Test",
+      posts: [{ id: "2" }, { id: "3" }],
+      nextOlderHref: "",
+    },
+  ];
+  const ctx = {
+    PAGE_LOAD_TIMEOUT_MS: 1_000,
+    OLDER_TRIGGER_PX: 900,
+    BOARD_POST_LIMIT: 1_000,
+    state,
+    routeType: () => "board",
+    routeKey: () => "/boards/test",
+    normalizeHref: (value) => value,
+    syncNativeBoardRead: async () => true,
+    fetchStructuredModel: async () => {
+      structuredAttempt += 1;
+      if (structuredAttempt === 2) throw new Error("Synthetic structured failure");
+      return { model: structuredAttempt === 1 ? models[0] : models[1] };
+    },
+    structuredCacheKey: (type, href) => `${type}:${href}`,
+    storeStructuredEntry() {},
+    readBoardFromDom() {
+      throw new Error("HTML parser must not run for an HTTP failure");
+    },
+    scheduleRender() {},
+    recordTraffic() {},
+  };
+
+  replaceGlobal("document", { visibilityState: "visible" });
+  replaceGlobal("location", {
+    origin: "https://kapybara.okoun.cz",
+    pathname: "/boards/test",
+  });
+  replaceGlobal("window", {
+    setTimeout,
+    clearTimeout,
+  });
+  replaceGlobal("fetch", async () => ({ ok: false, status: 503 }));
+
+  try {
+    installBoardState(ctx);
+    installPagination(ctx);
+
+    await ctx.loadOlderPosts();
+    assert.deepEqual(state.boardPosts.map(({ id }) => id), ["1", "2"]);
+    assert.equal(state.boardNextHref, "/boards/test?f=two");
+
+    await ctx.loadOlderPosts();
+    assert.equal(state.boardError, "Starší příspěvky se nepodařilo načíst.");
+    assert.deepEqual(state.boardPosts.map(({ id }) => id), ["1", "2"]);
+
+    await ctx.loadOlderPosts();
+    assert.deepEqual(state.boardPosts.map(({ id }) => id), ["1", "2", "3"]);
+    assert.equal(state.boardPostIndex.size, 3);
+    assert.equal(state.boardError, "");
+    assert.equal(state.boardEnd, true);
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
 test("full/native handoff follows the visible post without reloading", () => {
   assert.match(source, /function captureBokounAnchor/);
   assert.match(source, /function captureNativeAnchor/);
@@ -92,6 +195,21 @@ test("scroll restoration happens after the lite content is rendered", () => {
   assert.ok(renderIndex > -1);
   assert.ok(restoreIndex > renderIndex);
   assert.match(source, /requestAnimationFrame\(\(\) => \{\s*requestAnimationFrame/);
+});
+
+test("scroll positions ignore the temporary Bokoun mode query", () => {
+  assert.equal(
+    canonicalScrollRoute("/fav/activity?bokoun=on"),
+    "/fav/activity",
+  );
+  assert.equal(
+    canonicalScrollRoute("/boards/test?rootId=42&bokoun=off"),
+    "/boards/test?rootId=42",
+  );
+  assert.equal(
+    canonicalScrollRoute("/boards/test?f=older&bokoun=on"),
+    "/boards/test?f=older",
+  );
 });
 
 test("simple writing uses hidden native Kapybara composers only", () => {

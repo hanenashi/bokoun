@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.9
+// @version      0.6.10
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1219,7 +1219,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.9";
+  var VERSION = "0.6.10";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1378,6 +1378,16 @@
   var gmMenu = typeof GM_registerMenuCommand === "function" ? GM_registerMenuCommand : () => void 0;
 
   // src/shell.js
+  function canonicalScrollRoute(route, origin = "") {
+    try {
+      const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+      const url = new URL(route, base);
+      url.searchParams.delete("bokoun");
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return route;
+    }
+  }
   function installShell(ctx2) {
     const {
       VERSION: VERSION2,
@@ -1601,7 +1611,7 @@
       }
     }
     function scrollEntryKey(route) {
-      return `${SCROLL_KEY2}:${encodeURIComponent(route)}`;
+      return `${SCROLL_KEY2}:${encodeURIComponent(canonicalScrollRoute(route))}`;
     }
     function scrollIndexKey() {
       return `${SCROLL_KEY2}.index`;
@@ -1615,7 +1625,11 @@
       }
     }
     function touchScrollRoute(route) {
-      const index = [route, ...getScrollIndex().filter((entry) => entry !== route)];
+      const normalizedRoute = canonicalScrollRoute(route);
+      const index = [
+        normalizedRoute,
+        ...getScrollIndex().filter((entry) => entry !== normalizedRoute)
+      ];
       const retained = index.slice(0, SCROLL_ROUTE_LIMIT2);
       for (const evicted of index.slice(SCROLL_ROUTE_LIMIT2)) {
         sessionStorage.removeItem(scrollEntryKey(evicted));
@@ -1628,11 +1642,19 @@
         const value = Number(raw);
         if (Number.isFinite(value)) return Math.max(0, value);
       }
-      return getScrollMap()[route];
+      const legacyRaw = sessionStorage.getItem(
+        `${SCROLL_KEY2}:${encodeURIComponent(route)}`
+      );
+      if (legacyRaw !== null) {
+        const value = Number(legacyRaw);
+        if (Number.isFinite(value)) return Math.max(0, value);
+      }
+      const map = getScrollMap();
+      return map[canonicalScrollRoute(route)] ?? map[route];
     }
     function saveScroll() {
       if (!state2.scroller || !state2.currentRouteKey) return;
-      const route = state2.currentRouteKey;
+      const route = canonicalScrollRoute(state2.currentRouteKey);
       const value = Math.max(0, Math.round(state2.scroller.scrollTop));
       if (storedScroll(route) === value) return;
       sessionStorage.setItem(scrollEntryKey(route), String(value));
