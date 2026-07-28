@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.11`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.12`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.11` prototype reads Favorites, boards and older post pages from
+The `0.6.12` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -736,6 +736,11 @@ cancel/reopen and discard; a live run requires
 composer nodes, waits for visible launch/actions and replaces retained native
 Markdown instead of appending to it. Ambiguous confirmation keeps the draft,
 disables resubmission and has deterministic no-duplicate regression coverage.
+
+Version `0.6.12` preserves multiline Markdown on Android by updating
+Kapybara's own exposed Lexical editor state, with the browser editing command
+kept as a compatibility fallback. This avoids Chromium collapsing line breaks
+while leaving Kapybara's native validation and submit transport in control.
 
 ### Phase 4 — direct transport experiment
 

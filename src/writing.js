@@ -266,12 +266,8 @@ export function installWriting(ctx) {
       "Native Markdown editor did not open",
     );
     editable.focus();
-    const range = document.createRange();
-    range.selectNodeContents(editable);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    const accepted = document.execCommand("insertText", false, body);
+    const accepted = replaceLexicalMarkdown(editable, body)
+      || replaceBrowserText(editable, body);
     if (!accepted) throw new Error("Native editor rejected the draft");
 
     await waitForNative(
@@ -279,6 +275,45 @@ export function installWriting(ctx) {
       3_000,
       "Native editor did not retain the draft",
     );
+  }
+
+  function replaceLexicalMarkdown(editable, body) {
+    try {
+      const editor = editable?.__lexicalEditor;
+      if (
+        !editor
+        || typeof editor.getEditorState !== "function"
+        || typeof editor.parseEditorState !== "function"
+        || typeof editor.setEditorState !== "function"
+      ) return false;
+
+      const json = editor.getEditorState().toJSON();
+      const container = json?.root?.children?.[0];
+      const textNode = container?.children?.find((node) => node?.type === "text");
+      if (!container || !textNode) return false;
+
+      textNode.text = body;
+      container.children = [textNode];
+      json.root.children = [container];
+      editor.setEditorState(editor.parseEditorState(json));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function replaceBrowserText(editable, body) {
+    try {
+      editable.focus();
+      const range = document.createRange();
+      range.selectNodeContents(editable);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return document.execCommand("insertText", false, body);
+    } catch {
+      return false;
+    }
   }
 
   function normalizeEditorText(value) {
@@ -488,6 +523,8 @@ export function installWriting(ctx) {
     visibleNativeElement,
     visibleNativeComposer,
     injectNativeMarkdown,
+    replaceLexicalMarkdown,
+    replaceBrowserText,
     normalizeEditorText,
     findCreatedPost,
     waitForCreatedPost,

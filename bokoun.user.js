@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.11
+// @version      0.6.12
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1219,7 +1219,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.11";
+  var VERSION = "0.6.12";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -3050,18 +3050,43 @@
         "Native Markdown editor did not open"
       );
       editable.focus();
-      const range = document.createRange();
-      range.selectNodeContents(editable);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      const accepted = document.execCommand("insertText", false, body);
+      const accepted = replaceLexicalMarkdown(editable, body) || replaceBrowserText(editable, body);
       if (!accepted) throw new Error("Native editor rejected the draft");
       await waitForNative(
         () => normalizeEditorText(editable.innerText) === normalizeEditorText(body),
         3e3,
         "Native editor did not retain the draft"
       );
+    }
+    function replaceLexicalMarkdown(editable, body) {
+      try {
+        const editor = editable?.__lexicalEditor;
+        if (!editor || typeof editor.getEditorState !== "function" || typeof editor.parseEditorState !== "function" || typeof editor.setEditorState !== "function") return false;
+        const json = editor.getEditorState().toJSON();
+        const container = json?.root?.children?.[0];
+        const textNode = container?.children?.find((node) => node?.type === "text");
+        if (!container || !textNode) return false;
+        textNode.text = body;
+        container.children = [textNode];
+        json.root.children = [container];
+        editor.setEditorState(editor.parseEditorState(json));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    function replaceBrowserText(editable, body) {
+      try {
+        editable.focus();
+        const range = document.createRange();
+        range.selectNodeContents(editable);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return document.execCommand("insertText", false, body);
+      } catch {
+        return false;
+      }
     }
     function normalizeEditorText(value) {
       return String(value || "").replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ").trim();
@@ -3243,6 +3268,8 @@
       visibleNativeElement,
       visibleNativeComposer,
       injectNativeMarkdown,
+      replaceLexicalMarkdown,
+      replaceBrowserText,
       normalizeEditorText,
       findCreatedPost,
       waitForCreatedPost,

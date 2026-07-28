@@ -33,7 +33,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.11/);
+  assert.match(source, /@version\s+0\.6\.12/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -220,6 +220,9 @@ test("simple writing uses hidden native Kapybara composers only", () => {
   assert.match(source, /postReplyAction: "\.reply-action"/);
   assert.match(source, /document\.execCommand\("insertText", false, body\)/);
   assert.doesNotMatch(source, /range\.collapse\(false\)/);
+  assert.match(source, /editable\?\.__lexicalEditor/);
+  assert.match(source, /editor\.setEditorState\(editor\.parseEditorState\(json\)\)/);
+  assert.match(source, /replaceLexicalMarkdown\(editable, body\)\s*\|\|\s*replaceBrowserText/);
   assert.match(source, /composerMarkdownNode: "code\[data-language='markdown'\]"/);
   assert.match(
     source,
