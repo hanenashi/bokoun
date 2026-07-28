@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.12
+// @version      0.6.13
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1219,7 +1219,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.12";
+  var VERSION = "0.6.13";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -4601,6 +4601,20 @@
   }
 
   // src/navigation.js
+  function preserveForcedBokounMode(href, currentHref, origin = "") {
+    try {
+      const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+      const target = new URL(href, base);
+      const current = new URL(currentHref, base);
+      const supported = target.pathname === "/fav/activity" || target.pathname === "/fav/topics" || /^\/boards\/[^/]+\/?$/.test(target.pathname);
+      if (supported && current.searchParams.get("bokoun") === "on" && !target.searchParams.has("bokoun")) {
+        target.searchParams.set("bokoun", "on");
+      }
+      return target;
+    } catch {
+      return new URL(href, origin || "https://kapybara.okoun.cz");
+    }
+  }
   function installNavigation(ctx2) {
     const {
       HOST_ID: HOST_ID2,
@@ -4623,11 +4637,11 @@
     function navigateNative(href) {
       if (!href) return;
       saveScroll();
-      const target = new URL(href, location.origin);
+      const target = preserveForcedBokounMode(href, location.href, location.origin);
       if (routeType() === "board" && target.pathname !== location.pathname) {
         leaveBoardVisit(location.pathname);
       }
-      const nativeLink = [...document.querySelectorAll("a[href]")].find((link) => {
+      const nativeLink = target.searchParams.get("bokoun") === "on" ? null : [...document.querySelectorAll("a[href]")].find((link) => {
         if (link.closest(`#${HOST_ID2}`)) return false;
         try {
           return new URL(link.href, location.origin).href === target.href;
@@ -4725,7 +4739,7 @@
       });
     }
     async function navigateNativeRoute(href, postId) {
-      const target = new URL(href, location.origin);
+      const target = preserveForcedBokounMode(href, location.href, location.origin);
       if (target.origin !== location.origin || routeType(target.pathname) !== "board") {
         throw new Error("Unsafe native route");
       }

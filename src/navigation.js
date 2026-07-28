@@ -1,3 +1,25 @@
+export function preserveForcedBokounMode(href, currentHref, origin = "") {
+  try {
+    const base = origin
+      || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+    const target = new URL(href, base);
+    const current = new URL(currentHref, base);
+    const supported = target.pathname === "/fav/activity"
+      || target.pathname === "/fav/topics"
+      || /^\/boards\/[^/]+\/?$/.test(target.pathname);
+    if (
+      supported
+      && current.searchParams.get("bokoun") === "on"
+      && !target.searchParams.has("bokoun")
+    ) {
+      target.searchParams.set("bokoun", "on");
+    }
+    return target;
+  } catch {
+    return new URL(href, origin || "https://kapybara.okoun.cz");
+  }
+}
+
 export function installNavigation(ctx) {
   const {
     HOST_ID,
@@ -21,11 +43,13 @@ export function installNavigation(ctx) {
   function navigateNative(href) {
     if (!href) return;
     saveScroll();
-    const target = new URL(href, location.origin);
+    const target = preserveForcedBokounMode(href, location.href, location.origin);
     if (routeType() === "board" && target.pathname !== location.pathname) {
       leaveBoardVisit(location.pathname);
     }
-    const nativeLink = [...document.querySelectorAll("a[href]")]
+    const nativeLink = target.searchParams.get("bokoun") === "on"
+      ? null
+      : [...document.querySelectorAll("a[href]")]
       .find((link) => {
         if (link.closest(`#${HOST_ID}`)) return false;
         try {
@@ -139,7 +163,7 @@ export function installNavigation(ctx) {
   }
 
   async function navigateNativeRoute(href, postId) {
-    const target = new URL(href, location.origin);
+    const target = preserveForcedBokounMode(href, location.href, location.origin);
     if (target.origin !== location.origin || routeType(target.pathname) !== "board") {
       throw new Error("Unsafe native route");
     }

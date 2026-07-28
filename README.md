@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.12`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.13`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.12` prototype reads Favorites, boards and older post pages from
+The `0.6.13` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -741,6 +741,12 @@ Version `0.6.12` preserves multiline Markdown on Android by updating
 Kapybara's own exposed Lexical editor state, with the browser editing command
 kept as a compatibility fallback. This avoids Chromium collapsing line breaks
 while leaving Kapybara's native validation and submit transport in control.
+
+Version `0.6.13` completes desktop forced-mode recovery. Once a supported
+desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,
+thread and native-handoff navigation preserve that explicit mode until the
+user chooses `?bokoun=off` or opens an unsupported native page. Scroll storage
+continues to ignore the mode parameter, so Back restores the same position.
 
 ### Phase 4 — direct transport experiment
 

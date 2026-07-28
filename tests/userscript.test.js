@@ -10,6 +10,7 @@ import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
 import { canonicalScrollRoute } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
+import { preserveForcedBokounMode } from "../src/navigation.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
@@ -33,7 +34,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.12/);
+  assert.match(source, /@version\s+0\.6\.13/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -210,6 +211,50 @@ test("scroll positions ignore the temporary Bokoun mode query", () => {
   assert.equal(
     canonicalScrollRoute("/boards/test?f=older&bokoun=on"),
     "/boards/test?f=older",
+  );
+});
+
+test("forced desktop mode follows Bokoun-owned supported navigation", () => {
+  const origin = "https://kapybara.okoun.cz";
+  assert.equal(
+    preserveForcedBokounMode(
+      "/boards/test",
+      `${origin}/fav/activity?bokoun=on`,
+      origin,
+    ).href,
+    `${origin}/boards/test?bokoun=on`,
+  );
+  assert.equal(
+    preserveForcedBokounMode(
+      "/fav/activity",
+      `${origin}/boards/test?bokoun=on`,
+      origin,
+    ).href,
+    `${origin}/fav/activity?bokoun=on`,
+  );
+  assert.equal(
+    preserveForcedBokounMode(
+      "/boards/test?rootId=42",
+      `${origin}/boards/test?bokoun=on`,
+      origin,
+    ).href,
+    `${origin}/boards/test?rootId=42&bokoun=on`,
+  );
+  assert.equal(
+    preserveForcedBokounMode(
+      "/messages",
+      `${origin}/boards/test?bokoun=on`,
+      origin,
+    ).href,
+    `${origin}/messages`,
+  );
+  assert.equal(
+    preserveForcedBokounMode(
+      "/boards/test?bokoun=off",
+      `${origin}/fav/activity?bokoun=on`,
+      origin,
+    ).href,
+    `${origin}/boards/test?bokoun=off`,
   );
 });
 
