@@ -90,6 +90,40 @@ The first practical test loop is:
 4. use Bokoun's Back arrow;
 5. confirm Favorites returns to the same position.
 
+## Android QA
+
+The read-only Kiwi smoke runner attaches to Teneichan's real authenticated
+browser over Chrome DevTools Protocol. It does not handle credentials or post
+content. It opens `nepotrebny_pokus`, so the club's read marker may advance,
+but it never opens or submits a composer.
+
+First enable paired Wireless debugging and prepare the forwards:
+
+```sh
+~/GIT/overture/bin/android-browser-qa.sh forward
+~/GIT/overture/bin/android-browser-qa.sh foreground kiwi
+```
+
+Keep Kapybara in mobile-site mode, then run:
+
+```sh
+npm run qa:android:kiwi
+```
+
+The smoke uses genuine Playwright pointer clicks for Favorites and the
+root-post menu, Android's real Back key for thread/board navigation, verifies
+Favorites scroll restoration, watches console/page errors and confirms that
+an idle 10.5-second window generates no requests. Set `BOKOUN_QA_BOARD` to use
+another dedicated test club, `BOKOUN_KIWI_CDP` for a non-default CDP endpoint,
+or `ADB_SERIAL` when more than one Android device is connected.
+
+For true foreground/background checks, detach DevTools before sending Android
+Home: an attached debugger can keep Chromium reporting the page as visible.
+The verified detached test records `visible → hidden → visible`, zero hidden
+GraphQL activity, and exactly one structured refresh after more than two
+minutes away. Screenshots should be captured with Overture's ADB helper because
+CDP screenshots from Android Chromium can be incorrectly tiled.
+
 ## Executive TL;DR
 
 Bokoun will let the official Kapybara application remain the authenticated
