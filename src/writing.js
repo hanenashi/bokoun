@@ -4,6 +4,8 @@ export function installWriting(ctx) {
     COMPOSER_TIMEOUT_MS,
     POST_CONFIRM_TIMEOUT_MS,
     WRITE_FEEDBACK_MS,
+    DRAFT_SAVE_DELAY_MS = 350,
+    DRAFT_LIMIT = 50,
     DRAFTS_KEY,
     ACTIVE_COMPOSER_KEY,
     SELECTORS,
@@ -45,12 +47,24 @@ export function installWriting(ctx) {
   function saveDraft(kind, replyTo, body, boardId = currentBoardId()) {
     const drafts = getDrafts();
     const key = composerDraftKey(kind, replyTo, boardId);
-    if (body) drafts[key] = body;
+    if (body) {
+      delete drafts[key];
+      drafts[key] = body;
+      while (Object.keys(drafts).length > DRAFT_LIMIT) {
+        delete drafts[Object.keys(drafts)[0]];
+      }
+    }
     else delete drafts[key];
     gmSet(DRAFTS_KEY, drafts);
   }
 
+  function cancelDraftSave() {
+    clearTimeout(state.draftSaveTimer);
+    state.draftSaveTimer = 0;
+  }
+
   function clearDraft(kind, replyTo = "", boardId = currentBoardId()) {
+    cancelDraftSave();
     saveDraft(kind, replyTo, "", boardId);
   }
 
@@ -128,6 +142,7 @@ export function installWriting(ctx) {
 
   function closeComposer() {
     if (state.writeBusy) return;
+    persistComposerDraft();
     if (!state.composer?.ambiguous) dismissNativeComposers();
     forgetActiveComposer();
     state.composer = null;
@@ -137,6 +152,7 @@ export function installWriting(ctx) {
   function discardComposerDraft() {
     if (!state.composer || state.writeBusy) return;
     const { kind, replyTo, boardId, ambiguous } = state.composer;
+    cancelDraftSave();
     clearDraft(kind, replyTo, boardId);
     forgetActiveComposer();
     if (!ambiguous) dismissNativeComposers();
@@ -144,13 +160,13 @@ export function installWriting(ctx) {
     scheduleRender({ force: true });
   }
 
-  function updateDraftUi(value) {
+  function updateDraftUi(value, { pending = false } = {}) {
     const hasDraft = Boolean(value);
     const status = state.shadow?.querySelector("[data-draft-status]");
     const discard = state.shadow?.querySelector("[data-action='discard-draft']");
     if (status) {
       status.textContent = hasDraft
-        ? "Koncept uložen v zařízení"
+        ? pending ? "Ukládám koncept…" : "Koncept uložen v zařízení"
         : "Koncept se ukládá automaticky";
     }
     if (discard) discard.hidden = !hasDraft;
@@ -160,13 +176,17 @@ export function installWriting(ctx) {
     if (!state.composer || state.writeBusy) return;
     state.composer.body = value;
     state.composer.error = "";
-    saveDraft(state.composer.kind, state.composer.replyTo, value, state.composer.boardId);
-    rememberActiveComposer(state.composer);
-    updateDraftUi(value);
+    cancelDraftSave();
+    state.draftSaveTimer = window.setTimeout(
+      persistComposerDraft,
+      DRAFT_SAVE_DELAY_MS,
+    );
+    updateDraftUi(value, { pending: true });
   }
 
   function persistComposerDraft() {
     if (!state.composer) return;
+    cancelDraftSave();
     const textarea = state.shadow?.querySelector(".composer-textarea");
     if (textarea) state.composer.body = textarea.value;
     saveDraft(
@@ -176,6 +196,7 @@ export function installWriting(ctx) {
       state.composer.boardId,
     );
     rememberActiveComposer(state.composer);
+    updateDraftUi(state.composer.body);
   }
 
   function clearWriteFeedback({ render = true } = {}) {
@@ -370,6 +391,7 @@ export function installWriting(ctx) {
     state.composer.status = "sending";
     state.composer.error = "";
     state.writeBusy = true;
+    cancelDraftSave();
     saveDraft(
       state.composer.kind,
       state.composer.replyTo,
@@ -422,6 +444,7 @@ export function installWriting(ctx) {
     getDrafts,
     loadDraft,
     saveDraft,
+    cancelDraftSave,
     clearDraft,
     getActiveComposer,
     rememberActiveComposer,

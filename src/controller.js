@@ -2,10 +2,11 @@ export function installController(ctx) {
   const {
     VERSION,
     BOOT_TIMEOUT_MS,
-    ROUTE_POLL_MS,
+    ROUTE_FALLBACK_POLL_MS,
     ROUTE_DATA_FALLBACK_MS,
     STRUCTURED_RESUME_MS,
     SESSION_DISABLED_KEY,
+    SELECTORS,
     state,
   } = ctx;
   const routeType = (...args) => ctx.routeType(...args);
@@ -62,8 +63,48 @@ export function installController(ctx) {
         snapshot: () => trafficSnapshot(),
         reset: () => resetTrafficCounters(),
         refresh: () => requestStructuredRefresh("manual-refresh", { force: true }),
+        measure: () => measureRenderScale(),
       }),
     });
+  }
+
+  function measureRenderScale() {
+    const measurements = [];
+    for (const count of [100, 500, 1_000]) {
+      const posts = Array.from({ length: count }, (_, index) => ({
+        id: String(index + 1),
+        author: `reader-${index % 12}`,
+        avatarUrl: "",
+        date: "28.7.2026 12:00:00",
+        datetime: "2026-07-28T03:00:00.000Z",
+        rootId: "",
+        depth: 0,
+        bodyHtml: `<p>Kontrolní příspěvek ${index + 1}</p>`,
+        replyReference: "",
+      }));
+      const model = {
+        title: "Bokoun render scale",
+        posts,
+        threadRootId: "",
+        threadCount: posts.length,
+        newPostIds: [],
+        nextOlderHref: "",
+        loading: false,
+        end: true,
+        retentionLimited: count >= 1_000,
+        loadedPageCount: Math.ceil(count / 20),
+      };
+      const startedAt = performance.now();
+      const template = document.createElement("template");
+      template.innerHTML = boardMarkup(model);
+      const durationMs = performance.now() - startedAt;
+      measurements.push(Object.freeze({
+        posts: count,
+        renderedPosts: template.content.querySelectorAll("article.post").length,
+        durationMs: Math.round(durationMs * 10) / 10,
+      }));
+    }
+    return Object.freeze(measurements);
   }
 
   function finalizeBoardVisitTransition(previousKey, nextKey) {
@@ -206,12 +247,15 @@ export function installController(ctx) {
       persistComposerDraft();
       saveScroll();
       state.boardLoadAbort?.abort();
+      suspendNativeObservation();
       if (routeType() === "board") void syncBoardVisitRead();
       return;
     }
 
     const hiddenFor = state.hiddenAt ? Date.now() - state.hiddenAt : 0;
     state.hiddenAt = 0;
+    resumeNativeObservation();
+    handleRouteChange();
     if (
       state.disabled
       || state.nativeMode
@@ -220,19 +264,131 @@ export function installController(ctx) {
     void requestStructuredRefresh("visibility-resume");
   }
 
+  function nativeObservationRoot() {
+    const anchor = document.querySelector(
+      `${SELECTORS.favoritesPage}, ${SELECTORS.boardHeader}`,
+    );
+    if (!anchor) return null;
+    let root = anchor;
+    while (root.parentElement && root.parentElement !== document.body) {
+      root = root.parentElement;
+    }
+    return root === state.host ? null : root;
+  }
+
+  function connectNativeObserver() {
+    if (!state.observer || document.visibilityState === "hidden") return;
+    state.observer.disconnect();
+    state.observer.observe(document.body, { childList: true });
+    const root = nativeObservationRoot();
+    state.observedNativeRoot = root;
+    if (root && root !== document.body) {
+      state.observer.observe(root, { childList: true, subtree: true });
+    }
+  }
+
+  function startRouteFallback() {
+    clearInterval(state.routeTimer);
+    if (document.visibilityState === "hidden") return;
+    state.routeTimer = window.setInterval(handleRouteChange, ROUTE_FALLBACK_POLL_MS);
+  }
+
+  function suspendNativeObservation() {
+    clearInterval(state.routeTimer);
+    state.routeTimer = 0;
+    state.observer?.disconnect();
+    state.observedNativeRoot = null;
+  }
+
+  function resumeNativeObservation() {
+    if (!state.observing || state.disabled || state.nativeMode) return;
+    connectNativeObserver();
+    startRouteFallback();
+  }
+
+  function queueRouteCheck() {
+    clearTimeout(state.routeEventTimer);
+    state.routeEventTimer = window.setTimeout(handleRouteChange, 0);
+  }
+
+  function patchHistoryNavigation() {
+    if (state.patchedPushState || state.patchedReplaceState) return;
+    state.originalPushState = history.pushState;
+    state.originalReplaceState = history.replaceState;
+    state.patchedPushState = function bokounPushState(...args) {
+      const result = state.originalPushState.apply(this, args);
+      queueRouteCheck();
+      return result;
+    };
+    state.patchedReplaceState = function bokounReplaceState(...args) {
+      const result = state.originalReplaceState.apply(this, args);
+      queueRouteCheck();
+      return result;
+    };
+    history.pushState = state.patchedPushState;
+    history.replaceState = state.patchedReplaceState;
+  }
+
+  function restoreHistoryNavigation() {
+    if (history.pushState === state.patchedPushState && state.originalPushState) {
+      history.pushState = state.originalPushState;
+    }
+    if (history.replaceState === state.patchedReplaceState && state.originalReplaceState) {
+      history.replaceState = state.originalReplaceState;
+    }
+    state.originalPushState = null;
+    state.originalReplaceState = null;
+    state.patchedPushState = null;
+    state.patchedReplaceState = null;
+  }
+
+  function handlePageHide() {
+    persistComposerDraft();
+    saveScroll();
+    if (routeType() === "board") void syncBoardVisitRead();
+  }
+
   function observeNative() {
     if (state.observing) return;
-    state.observer = new MutationObserver(() => scheduleRender());
-    state.observer.observe(document.body, { childList: true, subtree: true });
-    state.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS);
-    window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", () => {
-      persistComposerDraft();
-      saveScroll();
-      if (routeType() === "board") void syncBoardVisitRead();
+    state.observer = new MutationObserver((records) => {
+      if (
+        !state.observedNativeRoot?.isConnected
+        || records.some((record) => record.target === document.body)
+      ) connectNativeObserver();
+      scheduleRender();
     });
+    state.popStateHandler = queueRouteCheck;
+    state.hashChangeHandler = queueRouteCheck;
+    state.pageHideHandler = handlePageHide;
+    patchHistoryNavigation();
+    window.addEventListener("popstate", state.popStateHandler);
+    window.addEventListener("hashchange", state.hashChangeHandler);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", state.pageHideHandler);
     state.observing = true;
+    resumeNativeObservation();
+  }
+
+  function stopRouteObservation() {
+    suspendNativeObservation();
+    clearTimeout(state.routeEventTimer);
+    state.routeEventTimer = 0;
+    if (state.popStateHandler) {
+      window.removeEventListener("popstate", state.popStateHandler);
+    }
+    if (state.hashChangeHandler) {
+      window.removeEventListener("hashchange", state.hashChangeHandler);
+    }
+    if (state.pageHideHandler) {
+      window.removeEventListener("pagehide", state.pageHideHandler);
+    }
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    restoreHistoryNavigation();
+    state.observer = null;
+    state.popStateHandler = null;
+    state.hashChangeHandler = null;
+    state.pageHideHandler = null;
+    state.observing = false;
   }
 
   async function boot() {
@@ -277,9 +433,20 @@ export function installController(ctx) {
     scheduleRender,
     handleRouteChange,
     handleVisibilityChange,
+    nativeObservationRoot,
+    connectNativeObserver,
+    startRouteFallback,
+    suspendNativeObservation,
+    resumeNativeObservation,
+    queueRouteCheck,
+    patchHistoryNavigation,
+    restoreHistoryNavigation,
+    handlePageHide,
     requestStructuredRefresh,
     exposeDebugTools,
+    measureRenderScale,
     observeNative,
+    stopRouteObservation,
     boot,
   });
 }

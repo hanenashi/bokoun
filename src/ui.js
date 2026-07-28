@@ -411,6 +411,7 @@ export function installUi(ctx) {
   }
 
   function postMenuMarkup(post) {
+    const threadRootId = post.rootId || post.id;
     return `
       <div class="post-menu" role="menu" aria-label="Akce příspěvku">
         <button
@@ -419,12 +420,12 @@ export function installUi(ctx) {
           data-action="reply"
           data-post-id="${escapeHtml(post.id)}"
         >Odpovědět</button>
-        ${post.rootId ? `
+        ${threadRootId ? `
           <button
             type="button"
             role="menuitem"
             data-action="thread"
-            data-root-id="${escapeHtml(post.rootId)}"
+            data-root-id="${escapeHtml(threadRootId)}"
           >Vlákno</button>
         ` : ""}
       </div>
@@ -546,7 +547,13 @@ export function installUi(ctx) {
         <button class="tail-action tail-action--accent" type="button" data-action="load-older">Zkusit znovu</button>
       `;
     } else if (board.end) {
-      tailState = `<div class="tail-end">${threadMode ? "Celé vlákno." : "Začátek klubu."}</div>`;
+      tailState = `<div class="tail-end">${
+        threadMode
+          ? "Celé vlákno."
+          : board.retentionLimited
+            ? `Načteno posledních ${escapeHtml(board.posts.length)} příspěvků.`
+            : "Začátek klubu."
+      }</div>`;
     } else {
       tailState = '<button class="tail-action" type="button" data-action="load-older">Načíst starší</button>';
     }

@@ -30,7 +30,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.8/);
+  assert.match(source, /@version\s+0\.6\.9/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -108,7 +108,7 @@ test("simple writing uses hidden native Kapybara composers only", () => {
 test("composer preserves drafts and prevents ambiguous retries", () => {
   assert.match(source, /const DRAFTS_KEY = "bokoun\.drafts\.v1"/);
   assert.match(source, /const ACTIVE_COMPOSER_KEY = "bokoun\.active-composer\.v1"/);
-  assert.match(source, /saveDraft\(state\.composer\.kind, state\.composer\.replyTo, value, state\.composer\.boardId\)/);
+  assert.match(source, /state\.draftSaveTimer = window\.setTimeout\(\s*persistComposerDraft,\s*DRAFT_SAVE_DELAY_MS/);
   assert.match(source, /function rememberActiveComposer/);
   assert.match(source, /function restoreActiveComposer/);
   assert.match(source, /function persistComposerDraft/);
@@ -295,7 +295,79 @@ test("reply metadata follows the body and reply moved into the popout menu", () 
   assert.doesNotMatch(source, /<div class="post-actions">\s*<button class="reply-button"/);
   assert.match(source, /data-setting="reply-meta"/);
   assert.match(source, /data-action="thread"/);
+  assert.match(source, /const threadRootId = post\.rootId \|\| post\.id/);
+  assert.match(source, /data-root-id="\$\{escapeHtml\(threadRootId\)\}"/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
+});
+
+test("Phase 2 navigation and persistence are event-driven and bounded", () => {
+  assert.match(controllerSource, /history\.pushState = state\.patchedPushState/);
+  assert.match(controllerSource, /history\.replaceState = state\.patchedReplaceState/);
+  assert.match(controllerSource, /window\.addEventListener\("popstate", state\.popStateHandler\)/);
+  assert.match(controllerSource, /ROUTE_FALLBACK_POLL_MS/);
+  assert.doesNotMatch(controllerSource, /ROUTE_POLL_MS|150/);
+  assert.match(controllerSource, /state\.observer\.observe\(document\.body, \{ childList: true \}\)/);
+  assert.doesNotMatch(
+    controllerSource,
+    /state\.observer\.observe\(document\.body, \{ childList: true, subtree: true \}\)/,
+  );
+  assert.match(controllerSource, /suspendNativeObservation\(\)/);
+  assert.match(source, /SCROLL_SAVE_DELAY_MS/);
+  assert.match(source, /scrollEntryKey\(route\)/);
+  assert.match(source, /SCROLL_ROUTE_LIMIT/);
+  assert.match(source, /STRUCTURED_CACHE_LIMIT/);
+  assert.match(source, /BOARD_POST_LIMIT/);
+  assert.match(source, /for \(const count of \[100, 500, 1_000\]\)/);
+});
+
+test("structured models use a bounded least-recently-used cache", () => {
+  const adapters = {
+    STRUCTURED_CACHE_LIMIT: 2,
+    state: {
+      structuredCache: new Map(),
+      structuredFailures: new Map(),
+    },
+  };
+  installAdapters(adapters);
+  adapters.storeStructuredEntry("board:a", { model: { title: "A" } });
+  adapters.storeStructuredEntry("board:b", { model: { title: "B" } });
+  adapters.storeStructuredEntry("board:c", { model: { title: "C" } });
+  assert.deepEqual([...adapters.state.structuredCache.keys()], ["board:b", "board:c"]);
+  assert.match(source, /state\.structuredCache\.delete\(cacheKey\);\s*state\.structuredCache\.set\(cacheKey, entry\)/);
+});
+
+test("accumulated board models stop at the retained-post limit", () => {
+  const state = {
+    boardId: "",
+    boardTitle: "",
+    boardLastPosted: "",
+    boardPosts: [],
+    boardPostIndex: new Map(),
+    boardPostPages: new Map(),
+    boardLoadedPages: new Set(),
+    boardNextHref: "",
+    boardEnd: false,
+    boardRetentionLimited: false,
+  };
+  const boards = {
+    BOARD_POST_LIMIT: 3,
+    state,
+    routeKey: () => "/boards/test",
+    normalizeHref: (value) => value,
+  };
+  installBoardState(boards);
+  const added = boards.mergeBoardPage({
+    id: "1",
+    title: "Test",
+    posts: [1, 2, 3, 4].map((id) => ({ id: String(id) })),
+    nextOlderHref: "/boards/test?f=older",
+  }, "/boards/test", { setNext: true });
+  assert.equal(added, 3);
+  assert.equal(state.boardPosts.length, 3);
+  assert.equal(state.boardPostIndex.size, 3);
+  assert.equal(state.boardRetentionLimited, true);
+  assert.equal(state.boardEnd, true);
+  assert.equal(state.boardNextHref, "");
 });
 
 test("composers stay in the board flow and dim non-target posts while replying", () => {

@@ -2,6 +2,7 @@ export function installBoardState(ctx) {
   const {
     BOARD_VISIT_KEY = "bokoun.board-visit.v1",
     BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1",
+    BOARD_POST_LIMIT = 1_000,
     gmGet = () => ({}),
     gmSet = () => undefined,
     state,
@@ -245,6 +246,7 @@ export function installBoardState(ctx) {
     state.boardNextHref = "";
     state.boardLoading = false;
     state.boardEnd = false;
+    state.boardRetentionLimited = false;
     state.boardError = "";
     state.boardAutoCooldownUntil = 0;
     state.boardStructuredReady = structured;
@@ -254,6 +256,7 @@ export function installBoardState(ctx) {
   function mergeBoardPage(model, pageHref, { setNext = false } = {}) {
     const normalizedPage = normalizeHref(pageHref);
     let added = 0;
+    let retentionLimited = false;
 
     if (normalizedPage) state.boardLoadedPages.add(normalizedPage);
     if (model.title) state.boardTitle = model.title;
@@ -263,6 +266,10 @@ export function installBoardState(ctx) {
     for (const post of model.posts) {
       const index = state.boardPostIndex.get(post.id);
       if (index === undefined) {
+        if (state.boardPosts.length >= BOARD_POST_LIMIT) {
+          retentionLimited = true;
+          break;
+        }
         const page = normalizedPage || post.pageHref || routeKey();
         state.boardPostIndex.set(post.id, state.boardPosts.length);
         state.boardPostPages.set(post.id, page);
@@ -277,6 +284,14 @@ export function installBoardState(ctx) {
     if (setNext) {
       state.boardNextHref = model.nextOlderHref;
       state.boardEnd = !model.nextOlderHref;
+    }
+    if (
+      retentionLimited
+      || (state.boardPosts.length >= BOARD_POST_LIMIT && Boolean(model.nextOlderHref))
+    ) {
+      state.boardRetentionLimited = true;
+      state.boardEnd = true;
+      state.boardNextHref = "";
     }
     return added;
   }
@@ -306,6 +321,10 @@ export function installBoardState(ctx) {
       state.boardPosts.push({ ...post, pageHref: normalizedPage || post.pageHref });
     }
     for (const { post, pageHref: olderPageHref } of older) {
+      if (state.boardPosts.length >= BOARD_POST_LIMIT) {
+        state.boardRetentionLimited = true;
+        break;
+      }
       state.boardPostIndex.set(post.id, state.boardPosts.length);
       state.boardPostPages.set(post.id, olderPageHref);
       state.boardPosts.push(post);
@@ -329,6 +348,7 @@ export function installBoardState(ctx) {
       nextOlderHref: state.boardNextHref,
       loading: state.boardLoading,
       end: state.boardEnd,
+      retentionLimited: state.boardRetentionLimited,
       error: state.boardError,
       loadedPageCount: state.boardLoadedPages.size,
     };

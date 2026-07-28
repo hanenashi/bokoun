@@ -3,6 +3,7 @@ export function installAdapters(ctx) {
     VERSION,
     STRUCTURED_REFRESH_MS,
     STRUCTURED_RESUME_MS = 2 * 60_000,
+    STRUCTURED_CACHE_LIMIT = 24,
     SELECTORS,
     state,
   } = ctx;
@@ -347,7 +348,24 @@ export function installAdapters(ctx) {
   }
 
   function cachedStructuredModel(type, pageHref) {
-    return state.structuredCache.get(structuredCacheKey(type, pageHref))?.model || null;
+    const cacheKey = structuredCacheKey(type, pageHref);
+    const entry = state.structuredCache.get(cacheKey);
+    if (!entry) return null;
+    state.structuredCache.delete(cacheKey);
+    state.structuredCache.set(cacheKey, entry);
+    return entry.model || null;
+  }
+
+  function storeStructuredEntry(cacheKey, entry) {
+    state.structuredCache.delete(cacheKey);
+    state.structuredCache.set(cacheKey, entry);
+    while (state.structuredCache.size > STRUCTURED_CACHE_LIMIT) {
+      const oldestKey = state.structuredCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      state.structuredCache.delete(oldestKey);
+      state.structuredFailures.delete(oldestKey);
+    }
+    return entry;
   }
 
   function ensureStructuredModel(
@@ -386,14 +404,20 @@ export function installAdapters(ctx) {
       reason,
     })
       .then((entry) => {
-        state.structuredCache.set(cacheKey, entry);
+        storeStructuredEntry(cacheKey, entry);
         state.structuredFailures.delete(cacheKey);
         state.currentSignature = "";
         scheduleRender({ force: true });
       })
       .catch((error) => {
         if (error?.name === "AbortError") return null;
+        state.structuredFailures.delete(cacheKey);
         state.structuredFailures.set(cacheKey, now());
+        while (state.structuredFailures.size > STRUCTURED_CACHE_LIMIT) {
+          const oldestKey = state.structuredFailures.keys().next().value;
+          if (oldestKey === undefined) break;
+          state.structuredFailures.delete(oldestKey);
+        }
         console.warn(
           `[Bokoun ${VERSION}] Structured ${type} data unavailable; using DOM fallback.`,
           error?.name || "Error",
@@ -587,6 +611,7 @@ export function installAdapters(ctx) {
     structuredDataUrl,
     fetchStructuredModel,
     structuredCacheKey,
+    storeStructuredEntry,
     cachedStructuredModel,
     ensureStructuredModel,
     abortStructuredRequests,

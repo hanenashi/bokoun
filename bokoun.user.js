@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.8
+// @version      0.6.9
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -22,12 +22,15 @@
   var runtime_exports = {};
   __export(runtime_exports, {
     ACTIVE_COMPOSER_KEY: () => ACTIVE_COMPOSER_KEY,
+    BOARD_POST_LIMIT: () => BOARD_POST_LIMIT,
     BOARD_READ_BOUNDARIES_KEY: () => BOARD_READ_BOUNDARIES_KEY,
     BOARD_VISIT_KEY: () => BOARD_VISIT_KEY,
     BOOT_TIMEOUT_MS: () => BOOT_TIMEOUT_MS,
     COMPOSER_TIMEOUT_MS: () => COMPOSER_TIMEOUT_MS,
     DISPLAY_SETTINGS_KEY: () => DISPLAY_SETTINGS_KEY,
     DRAFTS_KEY: () => DRAFTS_KEY,
+    DRAFT_LIMIT: () => DRAFT_LIMIT,
+    DRAFT_SAVE_DELAY_MS: () => DRAFT_SAVE_DELAY_MS,
     FAVORITES_ORDER_KEY: () => FAVORITES_ORDER_KEY,
     FAVORITES_SETTINGS_KEY: () => FAVORITES_SETTINGS_KEY,
     FONT_SETTINGS_KEY: () => FONT_SETTINGS_KEY,
@@ -44,10 +47,13 @@
     READ_SYNC_STATE_KEY: () => READ_SYNC_STATE_KEY,
     RETURN_HOST_ID: () => RETURN_HOST_ID,
     ROUTE_DATA_FALLBACK_MS: () => ROUTE_DATA_FALLBACK_MS,
-    ROUTE_POLL_MS: () => ROUTE_POLL_MS,
+    ROUTE_FALLBACK_POLL_MS: () => ROUTE_FALLBACK_POLL_MS,
     SCROLL_KEY: () => SCROLL_KEY,
+    SCROLL_ROUTE_LIMIT: () => SCROLL_ROUTE_LIMIT,
+    SCROLL_SAVE_DELAY_MS: () => SCROLL_SAVE_DELAY_MS,
     SELECTORS: () => SELECTORS,
     SESSION_DISABLED_KEY: () => SESSION_DISABLED_KEY,
+    STRUCTURED_CACHE_LIMIT: () => STRUCTURED_CACHE_LIMIT,
     STRUCTURED_REFRESH_MS: () => STRUCTURED_REFRESH_MS,
     STRUCTURED_RESUME_MS: () => STRUCTURED_RESUME_MS,
     STYLES: () => STYLES,
@@ -1213,7 +1219,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.8";
+  var VERSION = "0.6.9";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1223,8 +1229,14 @@
   var WRITE_FEEDBACK_MS = 8e3;
   var STRUCTURED_REFRESH_MS = 3e4;
   var STRUCTURED_RESUME_MS = 2 * 6e4;
-  var ROUTE_POLL_MS = 150;
+  var ROUTE_FALLBACK_POLL_MS = 1e4;
   var ROUTE_DATA_FALLBACK_MS = 2e3;
+  var DRAFT_SAVE_DELAY_MS = 350;
+  var SCROLL_SAVE_DELAY_MS = 250;
+  var STRUCTURED_CACHE_LIMIT = 24;
+  var SCROLL_ROUTE_LIMIT = 30;
+  var BOARD_POST_LIMIT = 1e3;
+  var DRAFT_LIMIT = 50;
   var OLDER_TRIGGER_PX = 900;
   var READ_SYNC_MIN_INTERVAL_MS = 5e3;
   var READ_SYNC_BACKOFF_BASE_MS = 15e3;
@@ -1300,11 +1312,21 @@
     bootTimer: 0,
     renderTimer: 0,
     routeTimer: 0,
+    routeEventTimer: 0,
     routeFallbackTimer: 0,
     saveTimer: 0,
+    draftSaveTimer: 0,
     feedbackTimer: 0,
     observer: null,
+    observedNativeRoot: null,
     observing: false,
+    originalPushState: null,
+    originalReplaceState: null,
+    patchedPushState: null,
+    patchedReplaceState: null,
+    pageHideHandler: null,
+    popStateHandler: null,
+    hashChangeHandler: null,
     nativeMode: false,
     pendingAnchor: null,
     boardKey: "",
@@ -1318,6 +1340,7 @@
     boardNextHref: "",
     boardLoading: false,
     boardEnd: false,
+    boardRetentionLimited: false,
     boardError: "",
     boardLoadAbort: null,
     boardAutoCooldownUntil: 0,
@@ -1363,6 +1386,8 @@
       MOBILE_QUERY: MOBILE_QUERY2,
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       SCROLL_KEY: SCROLL_KEY2,
+      SCROLL_SAVE_DELAY_MS: SCROLL_SAVE_DELAY_MS2 = 250,
+      SCROLL_ROUTE_LIMIT: SCROLL_ROUTE_LIMIT2 = 30,
       PREF_ENABLED_KEY: PREF_ENABLED_KEY2,
       SELECTORS: SELECTORS2,
       STYLES: STYLES2,
@@ -1376,6 +1401,7 @@
     const restoreNativeAnchor = (...args) => ctx2.restoreNativeAnchor(...args);
     const navigateNativeRoute = (...args) => ctx2.navigateNativeRoute(...args);
     const returnToBokoun = (...args) => ctx2.returnToBokoun(...args);
+    const stopRouteObservation = (...args) => ctx2.stopRouteObservation?.(...args);
     function routeType(pathname = location.pathname) {
       if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
       if (/^\/boards\/[^/]+\/?$/.test(pathname)) return "board";
@@ -1492,10 +1518,7 @@
         clearTimeout(state2.bootTimer);
         clearTimeout(state2.renderTimer);
         clearTimeout(state2.routeFallbackTimer);
-        clearInterval(state2.routeTimer);
-        state2.observer?.disconnect();
-        state2.observer = null;
-        state2.observing = false;
+        stopRouteObservation();
       }
     }
     async function openFullKapybara() {
@@ -1577,22 +1600,54 @@
         return {};
       }
     }
+    function scrollEntryKey(route) {
+      return `${SCROLL_KEY2}:${encodeURIComponent(route)}`;
+    }
+    function scrollIndexKey() {
+      return `${SCROLL_KEY2}.index`;
+    }
+    function getScrollIndex() {
+      try {
+        const index = JSON.parse(sessionStorage.getItem(scrollIndexKey()) || "[]");
+        return Array.isArray(index) ? index.filter((route) => typeof route === "string") : [];
+      } catch {
+        return [];
+      }
+    }
+    function touchScrollRoute(route) {
+      const index = [route, ...getScrollIndex().filter((entry) => entry !== route)];
+      const retained = index.slice(0, SCROLL_ROUTE_LIMIT2);
+      for (const evicted of index.slice(SCROLL_ROUTE_LIMIT2)) {
+        sessionStorage.removeItem(scrollEntryKey(evicted));
+      }
+      sessionStorage.setItem(scrollIndexKey(), JSON.stringify(retained));
+    }
+    function storedScroll(route) {
+      const raw = sessionStorage.getItem(scrollEntryKey(route));
+      if (raw !== null) {
+        const value = Number(raw);
+        if (Number.isFinite(value)) return Math.max(0, value);
+      }
+      return getScrollMap()[route];
+    }
     function saveScroll() {
       if (!state2.scroller || !state2.currentRouteKey) return;
-      const map = getScrollMap();
-      map[state2.currentRouteKey] = Math.max(0, Math.round(state2.scroller.scrollTop));
-      sessionStorage.setItem(SCROLL_KEY2, JSON.stringify(map));
+      const route = state2.currentRouteKey;
+      const value = Math.max(0, Math.round(state2.scroller.scrollTop));
+      if (storedScroll(route) === value) return;
+      sessionStorage.setItem(scrollEntryKey(route), String(value));
+      touchScrollRoute(route);
     }
     function scheduleScrollSave() {
       clearTimeout(state2.saveTimer);
-      state2.saveTimer = window.setTimeout(saveScroll, 100);
+      state2.saveTimer = window.setTimeout(saveScroll, SCROLL_SAVE_DELAY_MS2);
     }
     function handleBokounScroll() {
       scheduleScrollSave();
       maybeLoadOlder();
     }
     function restoreScroll(key, fallback = 0) {
-      const y = getScrollMap()[key] ?? fallback;
+      const y = storedScroll(key) ?? fallback;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           state2.scroller?.scrollTo({ top: y, behavior: "auto" });
@@ -1625,6 +1680,9 @@
       showReturnControl,
       registerMenus,
       getScrollMap,
+      scrollEntryKey,
+      getScrollIndex,
+      storedScroll,
       saveScroll,
       scheduleScrollSave,
       handleBokounScroll,
@@ -1639,6 +1697,7 @@
       VERSION: VERSION2,
       STRUCTURED_REFRESH_MS: STRUCTURED_REFRESH_MS2,
       STRUCTURED_RESUME_MS: STRUCTURED_RESUME_MS2 = 2 * 6e4,
+      STRUCTURED_CACHE_LIMIT: STRUCTURED_CACHE_LIMIT2 = 24,
       SELECTORS: SELECTORS2,
       state: state2
     } = ctx2;
@@ -1921,7 +1980,23 @@
       return `${type}:${normalizeHref(pageHref)}`;
     }
     function cachedStructuredModel(type, pageHref) {
-      return state2.structuredCache.get(structuredCacheKey(type, pageHref))?.model || null;
+      const cacheKey = structuredCacheKey(type, pageHref);
+      const entry = state2.structuredCache.get(cacheKey);
+      if (!entry) return null;
+      state2.structuredCache.delete(cacheKey);
+      state2.structuredCache.set(cacheKey, entry);
+      return entry.model || null;
+    }
+    function storeStructuredEntry(cacheKey, entry) {
+      state2.structuredCache.delete(cacheKey);
+      state2.structuredCache.set(cacheKey, entry);
+      while (state2.structuredCache.size > STRUCTURED_CACHE_LIMIT2) {
+        const oldestKey = state2.structuredCache.keys().next().value;
+        if (oldestKey === void 0) break;
+        state2.structuredCache.delete(oldestKey);
+        state2.structuredFailures.delete(oldestKey);
+      }
+      return entry;
     }
     function ensureStructuredModel(type, pageHref, {
       reason = "initial-route",
@@ -1950,13 +2025,19 @@
         signal: controller.signal,
         reason
       }).then((entry) => {
-        state2.structuredCache.set(cacheKey, entry);
+        storeStructuredEntry(cacheKey, entry);
         state2.structuredFailures.delete(cacheKey);
         state2.currentSignature = "";
         scheduleRender({ force: true });
       }).catch((error) => {
         if (error?.name === "AbortError") return null;
+        state2.structuredFailures.delete(cacheKey);
         state2.structuredFailures.set(cacheKey, now());
+        while (state2.structuredFailures.size > STRUCTURED_CACHE_LIMIT2) {
+          const oldestKey = state2.structuredFailures.keys().next().value;
+          if (oldestKey === void 0) break;
+          state2.structuredFailures.delete(oldestKey);
+        }
         console.warn(
           `[Bokoun ${VERSION2}] Structured ${type} data unavailable; using DOM fallback.`,
           error?.name || "Error"
@@ -2158,6 +2239,7 @@
       structuredDataUrl,
       fetchStructuredModel,
       structuredCacheKey,
+      storeStructuredEntry,
       cachedStructuredModel,
       ensureStructuredModel,
       abortStructuredRequests,
@@ -2399,6 +2481,7 @@
     const {
       BOARD_VISIT_KEY: BOARD_VISIT_KEY2 = "bokoun.board-visit.v1",
       BOARD_READ_BOUNDARIES_KEY: BOARD_READ_BOUNDARIES_KEY2 = "bokoun.board-read-boundaries.v1",
+      BOARD_POST_LIMIT: BOARD_POST_LIMIT2 = 1e3,
       gmGet: gmGet2 = () => ({}),
       gmSet: gmSet2 = () => void 0,
       state: state2
@@ -2597,6 +2680,7 @@
       state2.boardNextHref = "";
       state2.boardLoading = false;
       state2.boardEnd = false;
+      state2.boardRetentionLimited = false;
       state2.boardError = "";
       state2.boardAutoCooldownUntil = 0;
       state2.boardStructuredReady = structured;
@@ -2605,6 +2689,7 @@
     function mergeBoardPage(model, pageHref, { setNext = false } = {}) {
       const normalizedPage = normalizeHref(pageHref);
       let added = 0;
+      let retentionLimited = false;
       if (normalizedPage) state2.boardLoadedPages.add(normalizedPage);
       if (model.title) state2.boardTitle = model.title;
       if (model.id) state2.boardId = model.id;
@@ -2612,6 +2697,10 @@
       for (const post of model.posts) {
         const index = state2.boardPostIndex.get(post.id);
         if (index === void 0) {
+          if (state2.boardPosts.length >= BOARD_POST_LIMIT2) {
+            retentionLimited = true;
+            break;
+          }
           const page = normalizedPage || post.pageHref || routeKey();
           state2.boardPostIndex.set(post.id, state2.boardPosts.length);
           state2.boardPostPages.set(post.id, page);
@@ -2625,6 +2714,11 @@
       if (setNext) {
         state2.boardNextHref = model.nextOlderHref;
         state2.boardEnd = !model.nextOlderHref;
+      }
+      if (retentionLimited || state2.boardPosts.length >= BOARD_POST_LIMIT2 && Boolean(model.nextOlderHref)) {
+        state2.boardRetentionLimited = true;
+        state2.boardEnd = true;
+        state2.boardNextHref = "";
       }
       return added;
     }
@@ -2649,6 +2743,10 @@
         state2.boardPosts.push({ ...post, pageHref: normalizedPage || post.pageHref });
       }
       for (const { post, pageHref: olderPageHref } of older) {
+        if (state2.boardPosts.length >= BOARD_POST_LIMIT2) {
+          state2.boardRetentionLimited = true;
+          break;
+        }
         state2.boardPostIndex.set(post.id, state2.boardPosts.length);
         state2.boardPostPages.set(post.id, olderPageHref);
         state2.boardPosts.push(post);
@@ -2670,6 +2768,7 @@
         nextOlderHref: state2.boardNextHref,
         loading: state2.boardLoading,
         end: state2.boardEnd,
+        retentionLimited: state2.boardRetentionLimited,
         error: state2.boardError,
         loadedPageCount: state2.boardLoadedPages.size
       };
@@ -2705,6 +2804,8 @@
       COMPOSER_TIMEOUT_MS: COMPOSER_TIMEOUT_MS2,
       POST_CONFIRM_TIMEOUT_MS: POST_CONFIRM_TIMEOUT_MS2,
       WRITE_FEEDBACK_MS: WRITE_FEEDBACK_MS2,
+      DRAFT_SAVE_DELAY_MS: DRAFT_SAVE_DELAY_MS2 = 350,
+      DRAFT_LIMIT: DRAFT_LIMIT2 = 50,
       DRAFTS_KEY: DRAFTS_KEY2,
       ACTIVE_COMPOSER_KEY: ACTIVE_COMPOSER_KEY2,
       SELECTORS: SELECTORS2,
@@ -2741,11 +2842,21 @@
     function saveDraft(kind, replyTo, body, boardId = currentBoardId()) {
       const drafts = getDrafts();
       const key = composerDraftKey(kind, replyTo, boardId);
-      if (body) drafts[key] = body;
-      else delete drafts[key];
+      if (body) {
+        delete drafts[key];
+        drafts[key] = body;
+        while (Object.keys(drafts).length > DRAFT_LIMIT2) {
+          delete drafts[Object.keys(drafts)[0]];
+        }
+      } else delete drafts[key];
       gmSet2(DRAFTS_KEY2, drafts);
     }
+    function cancelDraftSave() {
+      clearTimeout(state2.draftSaveTimer);
+      state2.draftSaveTimer = 0;
+    }
     function clearDraft(kind, replyTo = "", boardId = currentBoardId()) {
+      cancelDraftSave();
       saveDraft(kind, replyTo, "", boardId);
     }
     function getActiveComposer() {
@@ -2813,6 +2924,7 @@
     }
     function closeComposer() {
       if (state2.writeBusy) return;
+      persistComposerDraft();
       if (!state2.composer?.ambiguous) dismissNativeComposers();
       forgetActiveComposer();
       state2.composer = null;
@@ -2821,18 +2933,19 @@
     function discardComposerDraft() {
       if (!state2.composer || state2.writeBusy) return;
       const { kind, replyTo, boardId, ambiguous } = state2.composer;
+      cancelDraftSave();
       clearDraft(kind, replyTo, boardId);
       forgetActiveComposer();
       if (!ambiguous) dismissNativeComposers();
       state2.composer = null;
       scheduleRender({ force: true });
     }
-    function updateDraftUi(value) {
+    function updateDraftUi(value, { pending = false } = {}) {
       const hasDraft = Boolean(value);
       const status = state2.shadow?.querySelector("[data-draft-status]");
       const discard = state2.shadow?.querySelector("[data-action='discard-draft']");
       if (status) {
-        status.textContent = hasDraft ? "Koncept uložen v zařízení" : "Koncept se ukládá automaticky";
+        status.textContent = hasDraft ? pending ? "Ukládám koncept…" : "Koncept uložen v zařízení" : "Koncept se ukládá automaticky";
       }
       if (discard) discard.hidden = !hasDraft;
     }
@@ -2840,12 +2953,16 @@
       if (!state2.composer || state2.writeBusy) return;
       state2.composer.body = value;
       state2.composer.error = "";
-      saveDraft(state2.composer.kind, state2.composer.replyTo, value, state2.composer.boardId);
-      rememberActiveComposer(state2.composer);
-      updateDraftUi(value);
+      cancelDraftSave();
+      state2.draftSaveTimer = window.setTimeout(
+        persistComposerDraft,
+        DRAFT_SAVE_DELAY_MS2
+      );
+      updateDraftUi(value, { pending: true });
     }
     function persistComposerDraft() {
       if (!state2.composer) return;
+      cancelDraftSave();
       const textarea = state2.shadow?.querySelector(".composer-textarea");
       if (textarea) state2.composer.body = textarea.value;
       saveDraft(
@@ -2855,6 +2972,7 @@
         state2.composer.boardId
       );
       rememberActiveComposer(state2.composer);
+      updateDraftUi(state2.composer.body);
     }
     function clearWriteFeedback({ render: render2 = true } = {}) {
       clearTimeout(state2.feedbackTimer);
@@ -3019,6 +3137,7 @@
       state2.composer.status = "sending";
       state2.composer.error = "";
       state2.writeBusy = true;
+      cancelDraftSave();
       saveDraft(
         state2.composer.kind,
         state2.composer.replyTo,
@@ -3065,6 +3184,7 @@
       getDrafts,
       loadDraft,
       saveDraft,
+      cancelDraftSave,
       clearDraft,
       getActiveComposer,
       rememberActiveComposer,
@@ -3100,6 +3220,7 @@
     const text = (...args) => ctx2.text(...args);
     const fetchStructuredModel = (...args) => ctx2.fetchStructuredModel(...args);
     const structuredCacheKey = (...args) => ctx2.structuredCacheKey(...args);
+    const storeStructuredEntry = (...args) => ctx2.storeStructuredEntry(...args);
     const readBoardFromDom = (...args) => ctx2.readBoardFromDom(...args);
     const mergeBoardPage = (...args) => ctx2.mergeBoardPage(...args);
     const scheduleRender = (...args) => ctx2.scheduleRender(...args);
@@ -3145,7 +3266,7 @@
             reason: "pagination"
           });
           model = entry.model;
-          state2.structuredCache.set(structuredCacheKey("board", targetHref), entry);
+          storeStructuredEntry(structuredCacheKey("board", targetHref), entry);
         } catch (structuredError) {
           if (structuredError?.name === "AbortError") throw structuredError;
           if (document.visibilityState === "hidden") {
@@ -3933,6 +4054,7 @@
       return post.avatarUrl ? `<img class="${className}" src="${escapeHtml(post.avatarUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="${className} avatar-fallback" aria-hidden="true">${escapeHtml(post.author.slice(0, 1).toUpperCase())}</span>`;
     }
     function postMenuMarkup(post) {
+      const threadRootId = post.rootId || post.id;
       return `
       <div class="post-menu" role="menu" aria-label="Akce příspěvku">
         <button
@@ -3941,12 +4063,12 @@
           data-action="reply"
           data-post-id="${escapeHtml(post.id)}"
         >Odpovědět</button>
-        ${post.rootId ? `
+        ${threadRootId ? `
           <button
             type="button"
             role="menuitem"
             data-action="thread"
-            data-root-id="${escapeHtml(post.rootId)}"
+            data-root-id="${escapeHtml(threadRootId)}"
           >Vlákno</button>
         ` : ""}
       </div>
@@ -4050,7 +4172,7 @@
         <button class="tail-action tail-action--accent" type="button" data-action="load-older">Zkusit znovu</button>
       `;
       } else if (board.end) {
-        tailState = `<div class="tail-end">${threadMode ? "Celé vlákno." : "Začátek klubu."}</div>`;
+        tailState = `<div class="tail-end">${threadMode ? "Celé vlákno." : board.retentionLimited ? `Načteno posledních ${escapeHtml(board.posts.length)} příspěvků.` : "Začátek klubu."}</div>`;
       } else {
         tailState = '<button class="tail-action" type="button" data-action="load-older">Načíst starší</button>';
       }
@@ -4588,10 +4710,11 @@
     const {
       VERSION: VERSION2,
       BOOT_TIMEOUT_MS: BOOT_TIMEOUT_MS2,
-      ROUTE_POLL_MS: ROUTE_POLL_MS2,
+      ROUTE_FALLBACK_POLL_MS: ROUTE_FALLBACK_POLL_MS2,
       ROUTE_DATA_FALLBACK_MS: ROUTE_DATA_FALLBACK_MS2,
       STRUCTURED_RESUME_MS: STRUCTURED_RESUME_MS2,
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
+      SELECTORS: SELECTORS2,
       state: state2
     } = ctx2;
     const routeType = (...args) => ctx2.routeType(...args);
@@ -4645,9 +4768,48 @@
         value: Object.freeze({
           snapshot: () => trafficSnapshot(),
           reset: () => resetTrafficCounters(),
-          refresh: () => requestStructuredRefresh("manual-refresh", { force: true })
+          refresh: () => requestStructuredRefresh("manual-refresh", { force: true }),
+          measure: () => measureRenderScale()
         })
       });
+    }
+    function measureRenderScale() {
+      const measurements = [];
+      for (const count of [100, 500, 1e3]) {
+        const posts = Array.from({ length: count }, (_, index) => ({
+          id: String(index + 1),
+          author: `reader-${index % 12}`,
+          avatarUrl: "",
+          date: "28.7.2026 12:00:00",
+          datetime: "2026-07-28T03:00:00.000Z",
+          rootId: "",
+          depth: 0,
+          bodyHtml: `<p>Kontrolní příspěvek ${index + 1}</p>`,
+          replyReference: ""
+        }));
+        const model = {
+          title: "Bokoun render scale",
+          posts,
+          threadRootId: "",
+          threadCount: posts.length,
+          newPostIds: [],
+          nextOlderHref: "",
+          loading: false,
+          end: true,
+          retentionLimited: count >= 1e3,
+          loadedPageCount: Math.ceil(count / 20)
+        };
+        const startedAt = performance.now();
+        const template = document.createElement("template");
+        template.innerHTML = boardMarkup(model);
+        const durationMs = performance.now() - startedAt;
+        measurements.push(Object.freeze({
+          posts: count,
+          renderedPosts: template.content.querySelectorAll("article.post").length,
+          durationMs: Math.round(durationMs * 10) / 10
+        }));
+      }
+      return Object.freeze(measurements);
     }
     function finalizeBoardVisitTransition(previousKey, nextKey) {
       try {
@@ -4763,27 +4925,129 @@
         persistComposerDraft();
         saveScroll();
         state2.boardLoadAbort?.abort();
+        suspendNativeObservation();
         if (routeType() === "board") void syncBoardVisitRead();
         return;
       }
       const hiddenFor = state2.hiddenAt ? Date.now() - state2.hiddenAt : 0;
       state2.hiddenAt = 0;
+      resumeNativeObservation();
+      handleRouteChange();
       if (state2.disabled || state2.nativeMode || hiddenFor < STRUCTURED_RESUME_MS2) return;
       void requestStructuredRefresh("visibility-resume");
     }
+    function nativeObservationRoot() {
+      const anchor = document.querySelector(
+        `${SELECTORS2.favoritesPage}, ${SELECTORS2.boardHeader}`
+      );
+      if (!anchor) return null;
+      let root = anchor;
+      while (root.parentElement && root.parentElement !== document.body) {
+        root = root.parentElement;
+      }
+      return root === state2.host ? null : root;
+    }
+    function connectNativeObserver() {
+      if (!state2.observer || document.visibilityState === "hidden") return;
+      state2.observer.disconnect();
+      state2.observer.observe(document.body, { childList: true });
+      const root = nativeObservationRoot();
+      state2.observedNativeRoot = root;
+      if (root && root !== document.body) {
+        state2.observer.observe(root, { childList: true, subtree: true });
+      }
+    }
+    function startRouteFallback() {
+      clearInterval(state2.routeTimer);
+      if (document.visibilityState === "hidden") return;
+      state2.routeTimer = window.setInterval(handleRouteChange, ROUTE_FALLBACK_POLL_MS2);
+    }
+    function suspendNativeObservation() {
+      clearInterval(state2.routeTimer);
+      state2.routeTimer = 0;
+      state2.observer?.disconnect();
+      state2.observedNativeRoot = null;
+    }
+    function resumeNativeObservation() {
+      if (!state2.observing || state2.disabled || state2.nativeMode) return;
+      connectNativeObserver();
+      startRouteFallback();
+    }
+    function queueRouteCheck() {
+      clearTimeout(state2.routeEventTimer);
+      state2.routeEventTimer = window.setTimeout(handleRouteChange, 0);
+    }
+    function patchHistoryNavigation() {
+      if (state2.patchedPushState || state2.patchedReplaceState) return;
+      state2.originalPushState = history.pushState;
+      state2.originalReplaceState = history.replaceState;
+      state2.patchedPushState = function bokounPushState(...args) {
+        const result = state2.originalPushState.apply(this, args);
+        queueRouteCheck();
+        return result;
+      };
+      state2.patchedReplaceState = function bokounReplaceState(...args) {
+        const result = state2.originalReplaceState.apply(this, args);
+        queueRouteCheck();
+        return result;
+      };
+      history.pushState = state2.patchedPushState;
+      history.replaceState = state2.patchedReplaceState;
+    }
+    function restoreHistoryNavigation() {
+      if (history.pushState === state2.patchedPushState && state2.originalPushState) {
+        history.pushState = state2.originalPushState;
+      }
+      if (history.replaceState === state2.patchedReplaceState && state2.originalReplaceState) {
+        history.replaceState = state2.originalReplaceState;
+      }
+      state2.originalPushState = null;
+      state2.originalReplaceState = null;
+      state2.patchedPushState = null;
+      state2.patchedReplaceState = null;
+    }
+    function handlePageHide() {
+      persistComposerDraft();
+      saveScroll();
+      if (routeType() === "board") void syncBoardVisitRead();
+    }
     function observeNative() {
       if (state2.observing) return;
-      state2.observer = new MutationObserver(() => scheduleRender());
-      state2.observer.observe(document.body, { childList: true, subtree: true });
-      state2.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS2);
-      window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-      window.addEventListener("pagehide", () => {
-        persistComposerDraft();
-        saveScroll();
-        if (routeType() === "board") void syncBoardVisitRead();
+      state2.observer = new MutationObserver((records) => {
+        if (!state2.observedNativeRoot?.isConnected || records.some((record) => record.target === document.body)) connectNativeObserver();
+        scheduleRender();
       });
+      state2.popStateHandler = queueRouteCheck;
+      state2.hashChangeHandler = queueRouteCheck;
+      state2.pageHideHandler = handlePageHide;
+      patchHistoryNavigation();
+      window.addEventListener("popstate", state2.popStateHandler);
+      window.addEventListener("hashchange", state2.hashChangeHandler);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      window.addEventListener("pagehide", state2.pageHideHandler);
       state2.observing = true;
+      resumeNativeObservation();
+    }
+    function stopRouteObservation() {
+      suspendNativeObservation();
+      clearTimeout(state2.routeEventTimer);
+      state2.routeEventTimer = 0;
+      if (state2.popStateHandler) {
+        window.removeEventListener("popstate", state2.popStateHandler);
+      }
+      if (state2.hashChangeHandler) {
+        window.removeEventListener("hashchange", state2.hashChangeHandler);
+      }
+      if (state2.pageHideHandler) {
+        window.removeEventListener("pagehide", state2.pageHideHandler);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      restoreHistoryNavigation();
+      state2.observer = null;
+      state2.popStateHandler = null;
+      state2.hashChangeHandler = null;
+      state2.pageHideHandler = null;
+      state2.observing = false;
     }
     async function boot() {
       registerMenus();
@@ -4823,9 +5087,20 @@
       scheduleRender,
       handleRouteChange,
       handleVisibilityChange,
+      nativeObservationRoot,
+      connectNativeObserver,
+      startRouteFallback,
+      suspendNativeObservation,
+      resumeNativeObservation,
+      queueRouteCheck,
+      patchHistoryNavigation,
+      restoreHistoryNavigation,
+      handlePageHide,
       requestStructuredRefresh,
       exposeDebugTools,
+      measureRenderScale,
       observeNative,
+      stopRouteObservation,
       boot
     });
   }

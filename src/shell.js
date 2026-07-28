@@ -6,6 +6,8 @@ export function installShell(ctx) {
     MOBILE_QUERY,
     SESSION_DISABLED_KEY,
     SCROLL_KEY,
+    SCROLL_SAVE_DELAY_MS = 250,
+    SCROLL_ROUTE_LIMIT = 30,
     PREF_ENABLED_KEY,
     SELECTORS,
     STYLES,
@@ -19,6 +21,7 @@ export function installShell(ctx) {
   const restoreNativeAnchor = (...args) => ctx.restoreNativeAnchor(...args);
   const navigateNativeRoute = (...args) => ctx.navigateNativeRoute(...args);
   const returnToBokoun = (...args) => ctx.returnToBokoun(...args);
+  const stopRouteObservation = (...args) => ctx.stopRouteObservation?.(...args);
 
   function routeType(pathname = location.pathname) {
     if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
@@ -151,10 +154,7 @@ export function installShell(ctx) {
       clearTimeout(state.bootTimer);
       clearTimeout(state.renderTimer);
       clearTimeout(state.routeFallbackTimer);
-      clearInterval(state.routeTimer);
-      state.observer?.disconnect();
-      state.observer = null;
-      state.observing = false;
+      stopRouteObservation();
     }
   }
 
@@ -245,16 +245,53 @@ export function installShell(ctx) {
     }
   }
 
+  function scrollEntryKey(route) {
+    return `${SCROLL_KEY}:${encodeURIComponent(route)}`;
+  }
+
+  function scrollIndexKey() {
+    return `${SCROLL_KEY}.index`;
+  }
+
+  function getScrollIndex() {
+    try {
+      const index = JSON.parse(sessionStorage.getItem(scrollIndexKey()) || "[]");
+      return Array.isArray(index) ? index.filter((route) => typeof route === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function touchScrollRoute(route) {
+    const index = [route, ...getScrollIndex().filter((entry) => entry !== route)];
+    const retained = index.slice(0, SCROLL_ROUTE_LIMIT);
+    for (const evicted of index.slice(SCROLL_ROUTE_LIMIT)) {
+      sessionStorage.removeItem(scrollEntryKey(evicted));
+    }
+    sessionStorage.setItem(scrollIndexKey(), JSON.stringify(retained));
+  }
+
+  function storedScroll(route) {
+    const raw = sessionStorage.getItem(scrollEntryKey(route));
+    if (raw !== null) {
+      const value = Number(raw);
+      if (Number.isFinite(value)) return Math.max(0, value);
+    }
+    return getScrollMap()[route];
+  }
+
   function saveScroll() {
     if (!state.scroller || !state.currentRouteKey) return;
-    const map = getScrollMap();
-    map[state.currentRouteKey] = Math.max(0, Math.round(state.scroller.scrollTop));
-    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(map));
+    const route = state.currentRouteKey;
+    const value = Math.max(0, Math.round(state.scroller.scrollTop));
+    if (storedScroll(route) === value) return;
+    sessionStorage.setItem(scrollEntryKey(route), String(value));
+    touchScrollRoute(route);
   }
 
   function scheduleScrollSave() {
     clearTimeout(state.saveTimer);
-    state.saveTimer = window.setTimeout(saveScroll, 100);
+    state.saveTimer = window.setTimeout(saveScroll, SCROLL_SAVE_DELAY_MS);
   }
 
   function handleBokounScroll() {
@@ -263,7 +300,7 @@ export function installShell(ctx) {
   }
 
   function restoreScroll(key, fallback = 0) {
-    const y = getScrollMap()[key] ?? fallback;
+    const y = storedScroll(key) ?? fallback;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         state.scroller?.scrollTo({ top: y, behavior: "auto" });
@@ -302,6 +339,9 @@ export function installShell(ctx) {
     showReturnControl,
     registerMenus,
     getScrollMap,
+    scrollEntryKey,
+    getScrollIndex,
+    storedScroll,
     saveScroll,
     scheduleScrollSave,
     handleBokounScroll,

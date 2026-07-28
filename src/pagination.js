@@ -8,6 +8,7 @@ export function installPagination(ctx) {
   const text = (...args) => ctx.text(...args);
   const fetchStructuredModel = (...args) => ctx.fetchStructuredModel(...args);
   const structuredCacheKey = (...args) => ctx.structuredCacheKey(...args);
+  const storeStructuredEntry = (...args) => ctx.storeStructuredEntry(...args);
   const readBoardFromDom = (...args) => ctx.readBoardFromDom(...args);
   const mergeBoardPage = (...args) => ctx.mergeBoardPage(...args);
   const scheduleRender = (...args) => ctx.scheduleRender(...args);
@@ -65,7 +66,7 @@ export function installPagination(ctx) {
           reason: "pagination",
         });
         model = entry.model;
-        state.structuredCache.set(structuredCacheKey("board", targetHref), entry);
+        storeStructuredEntry(structuredCacheKey("board", targetHref), entry);
       } catch (structuredError) {
         if (structuredError?.name === "AbortError") throw structuredError;
         if (document.visibilityState === "hidden") {

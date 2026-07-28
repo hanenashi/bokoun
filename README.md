@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.8`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.9`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.8` prototype reads Favorites, boards and older post pages from
+The `0.6.9` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -645,6 +645,18 @@ interval plus exponential failure backoff. Local
 development can inspect request counts with
 `window.__bokounDebug.snapshot()`, reset them with `.reset()`, or request an
 explicit refresh with `.refresh()`; nothing is sent outside Kapybara.
+
+Version `0.6.9` completes the client-efficiency review. Kapybara navigation is
+detected through History API, Back and hash events; a visible-only 10-second
+route check remains as a conservative compatibility fallback, replacing the
+old 150 ms heartbeat. Native DOM observation is limited to Kapybara's own
+top-level application root and pauses with route timers while hidden. Drafts
+and scroll positions are debounced, scroll state is stored per route, and
+scroll, structured-data and accumulated-post state have explicit bounds.
+Endless reading retains up to 1,000 posts in one board visit. Root posts now
+offer **Vlákno** from their avatar/name menu using their own post ID. Browser
+render-scale checks for 100, 500 and 1,000 posts are available through
+`window.__bokounDebug.measure()`.
 
 ### Phase 4 — direct transport experiment
 

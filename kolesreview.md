@@ -5,7 +5,10 @@ This note summarizes the AI review Koles ran over Bokoun and turns it into a con
 > Phase 1 status: implemented in Bokoun `0.6.8`. Structured refresh is
 > event-driven and visibility-aware, read synchronization is visit-boundary
 > only with per-board backoff, the board preflight is gone, and local request
-> counters plus regression tests cover the release gate. Phase 2 remains open.
+> counters plus regression tests cover the release gate. Phase 2 was completed
+> in Bokoun `0.6.9`: event-driven navigation, narrow/hidden-suspended native
+> observation, debounced route-scoped persistence, bounded caches and browser
+> render measurements at 100/500/1,000 posts.
 
 ## TL;DR
 

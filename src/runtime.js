@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.6.8";
+export const VERSION = "0.6.9";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;
@@ -10,8 +10,14 @@ export const POST_CONFIRM_TIMEOUT_MS = 15_000;
 export const WRITE_FEEDBACK_MS = 8_000;
 export const STRUCTURED_REFRESH_MS = 30_000;
 export const STRUCTURED_RESUME_MS = 2 * 60_000;
-export const ROUTE_POLL_MS = 150;
+export const ROUTE_FALLBACK_POLL_MS = 10_000;
 export const ROUTE_DATA_FALLBACK_MS = 2_000;
+export const DRAFT_SAVE_DELAY_MS = 350;
+export const SCROLL_SAVE_DELAY_MS = 250;
+export const STRUCTURED_CACHE_LIMIT = 24;
+export const SCROLL_ROUTE_LIMIT = 30;
+export const BOARD_POST_LIMIT = 1_000;
+export const DRAFT_LIMIT = 50;
 export const OLDER_TRIGGER_PX = 900;
 export const READ_SYNC_MIN_INTERVAL_MS = 5_000;
 export const READ_SYNC_BACKOFF_BASE_MS = 15_000;
@@ -89,11 +95,21 @@ export const state = {
   bootTimer: 0,
   renderTimer: 0,
   routeTimer: 0,
+  routeEventTimer: 0,
   routeFallbackTimer: 0,
   saveTimer: 0,
+  draftSaveTimer: 0,
   feedbackTimer: 0,
   observer: null,
+  observedNativeRoot: null,
   observing: false,
+  originalPushState: null,
+  originalReplaceState: null,
+  patchedPushState: null,
+  patchedReplaceState: null,
+  pageHideHandler: null,
+  popStateHandler: null,
+  hashChangeHandler: null,
   nativeMode: false,
   pendingAnchor: null,
   boardKey: "",
@@ -107,6 +123,7 @@ export const state = {
   boardNextHref: "",
   boardLoading: false,
   boardEnd: false,
+  boardRetentionLimited: false,
   boardError: "",
   boardLoadAbort: null,
   boardAutoCooldownUntil: 0,
