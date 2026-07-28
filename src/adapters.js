@@ -2,11 +2,50 @@ export function installAdapters(ctx) {
   const {
     VERSION,
     STRUCTURED_REFRESH_MS,
+    STRUCTURED_RESUME_MS = 2 * 60_000,
     SELECTORS,
     state,
   } = ctx;
   const routeKey = (...args) => ctx.routeKey(...args);
   const scheduleRender = (...args) => ctx.scheduleRender(...args);
+  const now = () => typeof ctx.now === "function" ? ctx.now() : Date.now();
+  const STRUCTURED_REASONS = new Set([
+    "initial-route",
+    "route-transition",
+    "visibility-resume",
+    "successful-post",
+    "manual-refresh",
+    "pagination",
+  ]);
+
+  function recordTraffic(kind, reason = "unspecified") {
+    const counters = state.trafficCounters;
+    if (!counters || !Object.hasOwn(counters, kind)) return;
+    counters[kind] += 1;
+    counters.byReason[reason] = (counters.byReason[reason] || 0) + 1;
+  }
+
+  function trafficSnapshot() {
+    const counters = state.trafficCounters || {};
+    return {
+      structuredGets: Number(counters.structuredGets) || 0,
+      htmlFallbacks: Number(counters.htmlFallbacks) || 0,
+      readMutations: Number(counters.readMutations) || 0,
+      byReason: { ...(counters.byReason || {}) },
+    };
+  }
+
+  function resetTrafficCounters() {
+    if (!state.trafficCounters) return;
+    state.trafficCounters.structuredGets = 0;
+    state.trafficCounters.htmlFallbacks = 0;
+    state.trafficCounters.readMutations = 0;
+    state.trafficCounters.byReason = {};
+  }
+
+  function documentIsHidden() {
+    return typeof document !== "undefined" && document.visibilityState === "hidden";
+  }
 
   function text(node) {
     return node?.textContent?.replace(/\s+/g, " ").trim() || "";
@@ -66,6 +105,7 @@ export function installAdapters(ctx) {
   function readFavoritesFromDom() {
     return [...document.querySelectorAll(SELECTORS.favoriteRows)]
       .map((row) => ({
+        id: String(row.dataset.boardId || ""),
         href: normalizeHref(row.getAttribute("href")),
         name: text(row.querySelector(SELECTORS.favoriteName)),
         unread: unreadCount(row),
@@ -262,6 +302,7 @@ export function installAdapters(ctx) {
       throw new Error("Incomplete structured Favorites data");
     }
     return root.boards.map((board) => ({
+      id: String(board?.id || ""),
       href: `/boards/${encodeURIComponent(String(board?.slug || ""))}`,
       name: String(board?.name || ""),
       unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
@@ -279,7 +320,12 @@ export function installAdapters(ctx) {
     return url;
   }
 
-  async function fetchStructuredModel(type, pageHref, { signal } = {}) {
+  async function fetchStructuredModel(
+    type,
+    pageHref,
+    { signal, reason = "manual-refresh" } = {},
+  ) {
+    recordTraffic("structuredGets", reason);
     const response = await fetch(structuredDataUrl(pageHref), {
       cache: "no-store",
       credentials: "same-origin",
@@ -293,7 +339,7 @@ export function installAdapters(ctx) {
     const model = type === "favorites"
       ? favoritesModelFromSvelteRoots(roots)
       : boardModelFromSvelteRoots(roots, pageHref);
-    return { type, model, fetchedAt: Date.now() };
+    return { type, model, fetchedAt: now() };
   }
 
   function structuredCacheKey(type, pageHref) {
@@ -304,17 +350,41 @@ export function installAdapters(ctx) {
     return state.structuredCache.get(structuredCacheKey(type, pageHref))?.model || null;
   }
 
-  function primeStructuredModel(type, pageHref) {
+  function ensureStructuredModel(
+    type,
+    pageHref,
+    {
+      reason = "initial-route",
+      force = false,
+      minimumAge = reason === "visibility-resume"
+        ? STRUCTURED_RESUME_MS
+        : STRUCTURED_REFRESH_MS,
+    } = {},
+  ) {
+    if (!STRUCTURED_REASONS.has(reason)) {
+      throw new Error(`Unsupported structured refresh reason: ${reason}`);
+    }
+    if (documentIsHidden()) return Promise.resolve(null);
+
     const cacheKey = structuredCacheKey(type, pageHref);
     const cached = state.structuredCache.get(cacheKey);
-    if (
-      (cached && Date.now() - cached.fetchedAt < STRUCTURED_REFRESH_MS)
-      || state.structuredPending.has(cacheKey)
-    ) return;
+    if (!force && cached && now() - cached.fetchedAt < minimumAge) {
+      return Promise.resolve(cached);
+    }
+    const existing = state.structuredPending.get(cacheKey);
+    if (existing) return existing.promise;
     const lastFailure = state.structuredFailures.get(cacheKey) || 0;
-    if (Date.now() - lastFailure < 30_000) return;
+    if (!force && now() - lastFailure < 30_000) return Promise.resolve(null);
 
-    const pending = fetchStructuredModel(type, pageHref)
+    const controller = new AbortController();
+    const pending = {
+      controller,
+      promise: null,
+    };
+    pending.promise = fetchStructuredModel(type, pageHref, {
+      signal: controller.signal,
+      reason,
+    })
       .then((entry) => {
         state.structuredCache.set(cacheKey, entry);
         state.structuredFailures.delete(cacheKey);
@@ -322,18 +392,36 @@ export function installAdapters(ctx) {
         scheduleRender({ force: true });
       })
       .catch((error) => {
-        state.structuredFailures.set(cacheKey, Date.now());
+        if (error?.name === "AbortError") return null;
+        state.structuredFailures.set(cacheKey, now());
         console.warn(
           `[Bokoun ${VERSION}] Structured ${type} data unavailable; using DOM fallback.`,
           error?.name || "Error",
         );
+        return null;
       })
-      .finally(() => state.structuredPending.delete(cacheKey));
+      .finally(() => {
+        if (state.structuredPending.get(cacheKey) === pending) {
+          state.structuredPending.delete(cacheKey);
+        }
+      });
     state.structuredPending.set(cacheKey, pending);
+    return pending.promise;
+  }
+
+  function abortStructuredRequests(exceptType = "", exceptHref = "") {
+    const keep = exceptType && exceptHref
+      ? structuredCacheKey(exceptType, exceptHref)
+      : "";
+    for (const [key, entry] of state.structuredPending) {
+      if (key !== keep) entry.controller?.abort();
+    }
   }
 
   function invalidateStructuredModel(type, pageHref) {
     const cacheKey = structuredCacheKey(type, pageHref);
+    state.structuredPending.get(cacheKey)?.controller?.abort();
+    state.structuredPending.delete(cacheKey);
     state.structuredCache.delete(cacheKey);
     state.structuredFailures.delete(cacheKey);
   }
@@ -500,8 +588,12 @@ export function installAdapters(ctx) {
     fetchStructuredModel,
     structuredCacheKey,
     cachedStructuredModel,
-    primeStructuredModel,
+    ensureStructuredModel,
+    abortStructuredRequests,
     invalidateStructuredModel,
+    recordTraffic,
+    trafficSnapshot,
+    resetTrafficCounters,
     sanitizeHtml,
     safeUrl,
     compactDate,

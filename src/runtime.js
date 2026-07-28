@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.6.7";
+export const VERSION = "0.6.8";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const BOOT_TIMEOUT_MS = 10_000;
@@ -9,12 +9,18 @@ export const COMPOSER_TIMEOUT_MS = 8_000;
 export const POST_CONFIRM_TIMEOUT_MS = 15_000;
 export const WRITE_FEEDBACK_MS = 8_000;
 export const STRUCTURED_REFRESH_MS = 30_000;
+export const STRUCTURED_RESUME_MS = 2 * 60_000;
 export const ROUTE_POLL_MS = 150;
+export const ROUTE_DATA_FALLBACK_MS = 2_000;
 export const OLDER_TRIGGER_PX = 900;
+export const READ_SYNC_MIN_INTERVAL_MS = 5_000;
+export const READ_SYNC_BACKOFF_BASE_MS = 15_000;
+export const READ_SYNC_BACKOFF_MAX_MS = 15 * 60_000;
 export const MOBILE_QUERY = "(max-width: 760px)";
 export const SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
 export const BOARD_VISIT_KEY = "bokoun.board-visit.v1";
 export const BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1";
+export const READ_SYNC_STATE_KEY = "bokoun.read-sync-state.v1";
 export const SCROLL_KEY = "bokoun.scroll.v1";
 export const PREF_ENABLED_KEY = "bokoun.enabled";
 export const DRAFTS_KEY = "bokoun.drafts.v1";
@@ -83,6 +89,7 @@ export const state = {
   bootTimer: 0,
   renderTimer: 0,
   routeTimer: 0,
+  routeFallbackTimer: 0,
   saveTimer: 0,
   feedbackTimer: 0,
   observer: null,
@@ -108,6 +115,13 @@ export const state = {
   structuredCache: new Map(),
   structuredPending: new Map(),
   structuredFailures: new Map(),
+  hiddenAt: 0,
+  trafficCounters: {
+    structuredGets: 0,
+    htmlFallbacks: 0,
+    readMutations: 0,
+    byReason: {},
+  },
   composer: null,
   writeFeedback: null,
   writeBusy: false,

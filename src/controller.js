@@ -3,6 +3,8 @@ export function installController(ctx) {
     VERSION,
     BOOT_TIMEOUT_MS,
     ROUTE_POLL_MS,
+    ROUTE_DATA_FALLBACK_MS,
+    STRUCTURED_RESUME_MS,
     SESSION_DISABLED_KEY,
     state,
   } = ctx;
@@ -20,7 +22,11 @@ export function installController(ctx) {
   const nativeReady = (...args) => ctx.nativeReady(...args);
   const readFavoritesFromDom = (...args) => ctx.readFavoritesFromDom(...args);
   const cachedStructuredModel = (...args) => ctx.cachedStructuredModel(...args);
-  const primeStructuredModel = (...args) => ctx.primeStructuredModel(...args);
+  const ensureStructuredModel = (...args) => ctx.ensureStructuredModel(...args);
+  const abortStructuredRequests = (...args) => ctx.abortStructuredRequests(...args);
+  const invalidateStructuredModel = (...args) => ctx.invalidateStructuredModel(...args);
+  const trafficSnapshot = (...args) => ctx.trafficSnapshot(...args);
+  const resetTrafficCounters = (...args) => ctx.resetTrafficCounters(...args);
   const readBoardFromDom = (...args) => ctx.readBoardFromDom(...args);
   const resetBoardAccumulator = (...args) => ctx.resetBoardAccumulator(...args);
   const mergeBoardPage = (...args) => ctx.mergeBoardPage(...args);
@@ -39,8 +45,26 @@ export function installController(ctx) {
   const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
   const readBoardVisit = (...args) => ctx.readBoardVisit(...args);
   const reconcileFavoriteReadState = (...args) => ctx.reconcileFavoriteReadState(...args);
-  const boardReadTimestamp = (...args) => ctx.boardReadTimestamp(...args);
-  const syncNativeBoardRead = (...args) => ctx.syncNativeBoardRead(...args);
+  const syncBoardVisitRead = (...args) => ctx.syncBoardVisitRead(...args);
+
+  function requestStructuredRefresh(reason, { force = false } = {}) {
+    const type = routeType();
+    const key = routeKey();
+    if (type === "unsupported") return Promise.resolve(null);
+    return ensureStructuredModel(type, key, { reason, force });
+  }
+
+  function exposeDebugTools() {
+    if (typeof window === "undefined") return;
+    Object.defineProperty(window, "__bokounDebug", {
+      configurable: true,
+      value: Object.freeze({
+        snapshot: () => trafficSnapshot(),
+        reset: () => resetTrafficCounters(),
+        refresh: () => requestStructuredRefresh("manual-refresh", { force: true }),
+      }),
+    });
+  }
 
   function finalizeBoardVisitTransition(previousKey, nextKey) {
     try {
@@ -85,7 +109,6 @@ export function installController(ctx) {
     if (!state.host?.isConnected) mountShell();
     applyVisualSettings();
 
-    primeStructuredModel(type, key);
     const structuredRouteModel = cachedStructuredModel(type, key);
     if (!structuredRouteModel && !nativeReady(type)) return;
     const previousY = state.scroller?.scrollTop || 0;
@@ -120,7 +143,6 @@ export function installController(ctx) {
       }
       restoreActiveComposer();
       model = boardViewModel();
-      void syncNativeBoardRead(state.boardId, boardReadTimestamp());
     }
     const signature = signatureFor(type, model);
     if (!force && signature === state.currentSignature) return;
@@ -143,11 +165,7 @@ export function installController(ctx) {
   function handleRouteChange() {
     if (state.disabled || state.nativeMode) return;
     const key = routeKey();
-    if (key === state.currentRouteKey) {
-      const type = routeType();
-      if (type !== "unsupported") primeStructuredModel(type, key);
-      return;
-    }
+    if (key === state.currentRouteKey) return;
 
     finalizeBoardVisitTransition(state.currentRouteKey, key);
 
@@ -156,6 +174,7 @@ export function installController(ctx) {
     state.openHeaderPanel = "";
     state.openPostMenuId = "";
     state.editingFavoriteOrder = false;
+    clearTimeout(state.routeFallbackTimer);
 
     if (routeType() === "unsupported" || !isMobileEligible()) {
       state.currentRouteKey = key;
@@ -164,9 +183,41 @@ export function installController(ctx) {
     }
 
     state.currentRouteKey = key;
+    const type = routeType();
+    abortStructuredRequests();
+    invalidateStructuredModel(type, key);
     if (!state.host?.isConnected) mountShell();
     state.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
+    state.routeFallbackTimer = window.setTimeout(() => {
+      if (
+        state.currentRouteKey === key
+        && !nativeReady(type)
+        && !cachedStructuredModel(type, key)
+      ) {
+        void requestStructuredRefresh("route-transition");
+      }
+    }, ROUTE_DATA_FALLBACK_MS);
     scheduleRender({ force: true });
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === "hidden") {
+      state.hiddenAt = Date.now();
+      persistComposerDraft();
+      saveScroll();
+      state.boardLoadAbort?.abort();
+      if (routeType() === "board") void syncBoardVisitRead();
+      return;
+    }
+
+    const hiddenFor = state.hiddenAt ? Date.now() - state.hiddenAt : 0;
+    state.hiddenAt = 0;
+    if (
+      state.disabled
+      || state.nativeMode
+      || hiddenFor < STRUCTURED_RESUME_MS
+    ) return;
+    void requestStructuredRefresh("visibility-resume");
   }
 
   function observeNative() {
@@ -175,9 +226,11 @@ export function installController(ctx) {
     state.observer.observe(document.body, { childList: true, subtree: true });
     state.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS);
     window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", () => {
       persistComposerDraft();
       saveScroll();
+      if (routeType() === "board") void syncBoardVisitRead();
     });
     state.observing = true;
   }
@@ -204,6 +257,8 @@ export function installController(ctx) {
     finalizeStoredBoardVisit();
     state.currentRouteKey = routeKey();
     observeNative();
+    exposeDebugTools();
+    void requestStructuredRefresh("initial-route");
     render({ force: true });
 
     state.bootTimer = window.setTimeout(() => {
@@ -221,6 +276,9 @@ export function installController(ctx) {
     finalizeStoredBoardVisit,
     scheduleRender,
     handleRouteChange,
+    handleVisibilityChange,
+    requestStructuredRefresh,
+    exposeDebugTools,
     observeNative,
     boot,
   });

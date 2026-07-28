@@ -12,6 +12,7 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
 const sourceDir = path.join(dirname, "..", "src");
 const generatedSource = fs.readFileSync(scriptPath, "utf8");
+const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
 const source = [
   generatedSource,
   ...fs.readdirSync(sourceDir)
@@ -29,7 +30,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.6\.7/);
+  assert.match(source, /@version\s+0\.6\.8/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -412,7 +413,9 @@ test("classic new-post state uses a visit boundary and has no timeout", () => {
     /const BOARD_READ_BOUNDARIES_KEY = "bokoun\.board-read-boundaries\.v1"/,
   );
   assert.match(source, /class="favorite-row/);
-  assert.match(source, /prepareBoardVisitFromFavorite/);
+  assert.match(source, /data-board-id=/);
+  assert.match(source, /startBoardVisitFromFavorite/);
+  assert.doesNotMatch(source, /prepareBoardVisitFromFavorite/);
   assert.match(source, /post--visit-new/);
   assert.match(source, /\.slice\(0, 100\)/);
   assert.doesNotMatch(source, /NEW_POST_TIMEOUT|newPostTimeout/);
@@ -423,6 +426,7 @@ test("decodes a sanitized streamed SvelteKit Favorites contract", () => {
   const model = structured.favoritesModelFromSvelteRoots(roots);
 
   assert.equal(model.length, 1);
+  assert.equal(model[0].id, "42");
   assert.equal(model[0].href, "/boards/fixture-club");
   assert.equal(model[0].name, "Fixture Club");
   assert.equal(model[0].unread, 3);
@@ -451,16 +455,19 @@ test("club header back arrow always targets Bokoun Favorites", () => {
   assert.match(source, /\[data-action='thread-back'\][^\n]*closeThread/);
 });
 
-test("native read sync is stable-page first, deduplicated, and unload-safe", () => {
+test("native read sync is visit-boundary only, deduplicated, and unload-safe", () => {
   assert.match(source, /mutation MarkBoardAsRead/);
   assert.match(source, /markBoardAsRead\(boardId: \$boardId, timestamp: \$timestamp\)/);
   assert.match(source, /credentials: "include"/);
   assert.match(source, /keepalive: true/);
   assert.match(source, /timeZone: "Europe\/Prague"/);
   assert.match(source, /\$\{parts\.year\}\$\{parts\.month\}\$\{parts\.day\}-/);
-  assert.match(source, /void syncNativeBoardRead\(state\.boardId, boardReadTimestamp\(\)\)/);
-  assert.match(source, /if \(successful\.has\(syncKey\)\) return true/);
-  assert.match(source, /if \(pending\.has\(syncKey\)\) return pending\.get\(syncKey\)/);
+  assert.match(source, /return syncNativeBoardRead\(state\.boardId, boardReadTimestamp\(\)\)/);
+  assert.match(source, /successful\.get\(normalizedBoardId\)/);
+  assert.match(source, /pending\.get\(normalizedBoardId\)/);
+  assert.match(source, /X-Client-App": "bokoun"/);
+  assert.match(source, /READ_SYNC_BACKOFF_BASE_MS/);
+  assert.match(source, /const READ_SYNC_STATE_KEY = "bokoun\.read-sync-state\.v1"/);
   assert.match(source, /function finalizeStoredBoardVisit/);
   assert.match(source, /if \(next\.pathname !== visit\.boardPath\) leaveBoardVisit\(visit\.boardPath\)/);
   assert.match(source, /mountShell\(\);\s*finalizeStoredBoardVisit\(\);/);
@@ -476,7 +483,11 @@ test("native read sync coalesces repeated stable-page acknowledgements", async (
   };
   const storage = (entries = {}) => ({
     getItem: (key) => Object.hasOwn(entries, key) ? entries[key] : null,
+    setItem: (key, value) => {
+      entries[key] = value;
+    },
   });
+  const sessionEntries = {};
   const requests = [];
 
   replaceGlobal("document", {
@@ -485,7 +496,7 @@ test("native read sync coalesces repeated stable-page acknowledgements", async (
   });
   replaceGlobal("location", { origin: "https://kapybara.okoun.cz" });
   replaceGlobal("localStorage", storage({ "okoun-api-access-code": "test-code" }));
-  replaceGlobal("sessionStorage", storage());
+  replaceGlobal("sessionStorage", storage(sessionEntries));
   replaceGlobal("fetch", async (endpoint, options) => {
     requests.push({ endpoint, options });
     return { ok: true, json: async () => ({ data: { markBoardAsRead: { id: 42 } } }) };
@@ -502,6 +513,63 @@ test("native read sync coalesces repeated stable-page acknowledgements", async (
     assert.equal(requests[0].endpoint, "https://okapi.okoun.cz/graphql");
     assert.equal(requests[0].options.credentials, "include");
     assert.match(JSON.parse(requests[0].options.body).variables.timestamp, /^\d{8}-\d{6}$/);
+
+    const restoredReadSync = {};
+    installReadSync(restoredReadSync);
+    assert.equal(
+      await restoredReadSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z"),
+      true,
+    );
+    assert.equal(requests.length, 1, "successful boundary must survive a same-tab reload");
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
+test("failed native read sync observes per-board backoff", async () => {
+  const originals = new Map();
+  const replaceGlobal = (key, value) => {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  };
+  const storage = (entries = {}) => ({
+    getItem: (key) => Object.hasOwn(entries, key) ? entries[key] : null,
+    setItem: (key, value) => {
+      entries[key] = value;
+    },
+  });
+  let clock = 100_000;
+  let requests = 0;
+
+  replaceGlobal("document", {
+    cookie: "auth_token=test-token",
+    querySelector: () => ({ content: "https://okapi.okoun.cz/graphql" }),
+  });
+  replaceGlobal("location", { origin: "https://kapybara.okoun.cz" });
+  replaceGlobal("localStorage", storage());
+  replaceGlobal("sessionStorage", storage());
+  replaceGlobal("fetch", async () => {
+    requests += 1;
+    return { ok: false, json: async () => null };
+  });
+
+  try {
+    const readSync = {
+      READ_SYNC_MIN_INTERVAL_MS: 5,
+      READ_SYNC_BACKOFF_BASE_MS: 10,
+      READ_SYNC_BACKOFF_MAX_MS: 100,
+      now: () => clock,
+    };
+    installReadSync(readSync);
+    assert.equal(await readSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z"), false);
+    assert.equal(await readSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z"), false);
+    assert.equal(requests, 1);
+    clock += 11;
+    assert.equal(await readSync.syncNativeBoardRead(42, "2026-07-25T10:00:00.000Z"), false);
+    assert.equal(requests, 2);
   } finally {
     for (const [key, descriptor] of originals) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -584,4 +652,109 @@ test("structured reads are primary and retain an explicit DOM fallback", () => {
   assert.match(source, /else model = readFavoritesFromDom\(\)/);
   assert.match(source, /structuredModel \|\| readBoardFromDom\(document, key\)/);
   assert.match(source, /Structured \$\{type\} data unavailable; using DOM fallback/);
+});
+
+test("structured refresh is explicit, visibility-aware, and instrumented", async () => {
+  const originals = new Map();
+  const replaceGlobal = (key, value) => {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  };
+  let visibilityState = "visible";
+  let clock = 1_000_000;
+  let requests = 0;
+
+  replaceGlobal("document", {
+    get visibilityState() {
+      return visibilityState;
+    },
+  });
+  replaceGlobal("location", { origin: "https://kapybara.okoun.cz" });
+  replaceGlobal("fetch", async () => {
+    requests += 1;
+    return {
+      ok: true,
+      headers: { get: () => "text/sveltekit-data" },
+      text: async () => fixture("favorites.svelte-data.ndjson"),
+    };
+  });
+
+  try {
+    const adapters = {
+      VERSION: "test",
+      STRUCTURED_REFRESH_MS: 30_000,
+      STRUCTURED_RESUME_MS: 120_000,
+      SELECTORS: {},
+      now: () => clock,
+      scheduleRender() {},
+      state: {
+        structuredCache: new Map(),
+        structuredPending: new Map(),
+        structuredFailures: new Map(),
+        trafficCounters: {
+          structuredGets: 0,
+          htmlFallbacks: 0,
+          readMutations: 0,
+          byReason: {},
+        },
+      },
+    };
+    installAdapters(adapters);
+
+    await adapters.ensureStructuredModel("favorites", "/fav/activity", {
+      reason: "initial-route",
+    });
+    assert.equal(requests, 1);
+    assert.deepEqual(adapters.trafficSnapshot(), {
+      structuredGets: 1,
+      htmlFallbacks: 0,
+      readMutations: 0,
+      byReason: { "initial-route": 1 },
+    });
+
+    clock += 60_000;
+    await Promise.resolve();
+    assert.equal(requests, 1, "idle time alone must not trigger another request");
+
+    visibilityState = "hidden";
+    await adapters.ensureStructuredModel("favorites", "/fav/activity", {
+      reason: "manual-refresh",
+      force: true,
+    });
+    assert.equal(requests, 1, "hidden documents must not refresh");
+
+    visibilityState = "visible";
+    clock += 120_000;
+    await adapters.ensureStructuredModel("favorites", "/fav/activity", {
+      reason: "visibility-resume",
+    });
+    assert.equal(requests, 2);
+    assert.equal(adapters.trafficSnapshot().byReason["visibility-resume"], 1);
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
+test("ordinary rerenders are network-quiet and board entry has no preflight", () => {
+  const render = controllerSource.match(
+    /function render\(\{ force = false \} = \{\}\) \{([\s\S]*?)\n  \}\n\n  function scheduleRender/,
+  )?.[1] || "";
+  const sameRoute = controllerSource.match(
+    /function handleRouteChange\(\) \{([\s\S]*?)finalizeBoardVisitTransition/,
+  )?.[1] || "";
+  const favoriteStart = source.match(
+    /function startBoardVisitFromFavorite\([^)]*\) \{([\s\S]*?)\n  \}/,
+  )?.[1] || "";
+
+  assert.doesNotMatch(render, /ensureStructuredModel|syncNativeBoardRead|syncBoardVisitRead/);
+  assert.match(sameRoute, /if \(key === state\.currentRouteKey\) return/);
+  assert.doesNotMatch(favoriteStart, /fetch|ensureStructuredModel/);
+  assert.match(source, /!nativeReady\(type\)[\s\S]*requestStructuredRefresh\("route-transition"\)/);
+  assert.match(source, /ROUTE_DATA_FALLBACK_MS/);
+  assert.match(source, /reason: "successful-post"/);
+  assert.match(source, /document\.visibilityState === "hidden"/);
+  assert.match(source, /state\.boardLoadAbort\?\.abort\(\)/);
 });

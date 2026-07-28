@@ -150,6 +150,7 @@ export function installShell(ctx) {
       state.disabled = true;
       clearTimeout(state.bootTimer);
       clearTimeout(state.renderTimer);
+      clearTimeout(state.routeFallbackTimer);
       clearInterval(state.routeTimer);
       state.observer?.disconnect();
       state.observer = null;

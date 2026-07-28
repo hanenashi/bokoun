@@ -8,8 +8,6 @@ export function installBoardState(ctx) {
   } = ctx;
   const routeKey = (...args) => ctx.routeKey(...args);
   const normalizeHref = (...args) => ctx.normalizeHref(...args);
-  const fetchStructuredModel = (...args) => ctx.fetchStructuredModel(...args);
-  const structuredCacheKey = (...args) => ctx.structuredCacheKey(...args);
   const syncNativeBoardRead = (...args) => ctx.syncNativeBoardRead(...args);
 
   function boardPath(pageHref = routeKey()) {
@@ -27,6 +25,7 @@ export function installBoardState(ctx) {
       if (!visit || typeof visit.boardPath !== "string") return null;
       return {
         boardPath: visit.boardPath,
+        boardId: typeof visit.boardId === "string" ? visit.boardId : "",
         lastRead: typeof visit.lastRead === "string" ? visit.lastRead : "",
         unreadCount: Math.max(0, Number(visit.unreadCount) || 0),
       };
@@ -118,11 +117,17 @@ export function installBoardState(ctx) {
 
   function startBoardVisit(
     pageHref,
-    { lastRead = "", newPostsCount = 0, unreadCount = newPostsCount } = {},
+    {
+      id = "",
+      lastRead = "",
+      newPostsCount = 0,
+      unreadCount = newPostsCount,
+    } = {},
   ) {
     const path = boardPath(pageHref);
     const visit = {
       boardPath: path,
+      boardId: String(id || ""),
       lastRead: laterReadBoundary(
         typeof lastRead === "string" ? lastRead : "",
         localReadBoundary(path),
@@ -138,12 +143,21 @@ export function installBoardState(ctx) {
     const stored = readBoardVisit();
     if (stored?.boardPath === path) {
       if (!stored.lastRead && typeof model.lastRead === "string" && model.lastRead) {
-        return startBoardVisit(pageHref, model);
+        return startBoardVisit(pageHref, {
+          ...model,
+          id: model.id || stored.boardId,
+        });
       }
       state.boardVisit = stored;
       return stored;
     }
     return startBoardVisit(pageHref, model);
+  }
+
+  function syncBoardVisitRead() {
+    const stored = readBoardVisit();
+    if (!stored || !state.boardId) return Promise.resolve(false);
+    return syncNativeBoardRead(state.boardId, boardReadTimestamp());
   }
 
   function leaveBoardVisit(path = "") {
@@ -153,7 +167,7 @@ export function installBoardState(ctx) {
       return;
     }
     if (path && stored?.boardPath && stored.boardPath !== path) return;
-    void syncNativeBoardRead(state.boardId, boardReadTimestamp());
+    void syncBoardVisitRead();
     rememberBoardReadBoundary(stored?.boardPath || path);
     state.boardVisit = null;
     if (typeof sessionStorage === "undefined") return;
@@ -164,16 +178,11 @@ export function installBoardState(ctx) {
     }
   }
 
-  async function prepareBoardVisitFromFavorite(pageHref, fallbackUnreadCount = 0) {
-    let model = null;
-    try {
-      const entry = await fetchStructuredModel("board", pageHref);
-      state.structuredCache.set(structuredCacheKey("board", pageHref), entry);
-      model = entry.model;
-    } catch {
-      // Preserve a count-based fallback when structured preflight is unavailable.
-    }
-    return startBoardVisit(pageHref, model || { newPostsCount: fallbackUnreadCount });
+  function startBoardVisitFromFavorite(pageHref, unreadCount = 0, boardId = "") {
+    return startBoardVisit(pageHref, {
+      id: boardId,
+      newPostsCount: unreadCount,
+    });
   }
 
   function newPostIdsForVisit(posts, visit = state.boardVisit) {
@@ -224,8 +233,9 @@ export function installBoardState(ctx) {
   function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
     state.boardLoadAbort?.abort();
     state.boardLoadAbort = null;
+    const visit = ensureBoardVisit(pageHref, model);
     state.boardKey = boardRouteIdentity(pageHref);
-    state.boardId = model.id || "";
+    state.boardId = model.id || visit?.boardId || "";
     state.boardLastPosted = model.lastPosted || "";
     state.boardTitle = model.title;
     state.boardPosts = [];
@@ -238,7 +248,6 @@ export function installBoardState(ctx) {
     state.boardError = "";
     state.boardAutoCooldownUntil = 0;
     state.boardStructuredReady = structured;
-    ensureBoardVisit(pageHref, model);
     mergeBoardPage(model, pageHref, { setNext: true });
   }
 
@@ -336,8 +345,9 @@ export function installBoardState(ctx) {
     reconcileFavoriteReadState,
     startBoardVisit,
     ensureBoardVisit,
+    syncBoardVisitRead,
     leaveBoardVisit,
-    prepareBoardVisitFromFavorite,
+    startBoardVisitFromFavorite,
     newPostIdsForVisit,
     threadRootId,
     threadPosts,

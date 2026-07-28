@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.6.7
+// @version      0.6.8
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -38,12 +38,18 @@
     PAGE_LOAD_TIMEOUT_MS: () => PAGE_LOAD_TIMEOUT_MS,
     POST_CONFIRM_TIMEOUT_MS: () => POST_CONFIRM_TIMEOUT_MS,
     PREF_ENABLED_KEY: () => PREF_ENABLED_KEY,
+    READ_SYNC_BACKOFF_BASE_MS: () => READ_SYNC_BACKOFF_BASE_MS,
+    READ_SYNC_BACKOFF_MAX_MS: () => READ_SYNC_BACKOFF_MAX_MS,
+    READ_SYNC_MIN_INTERVAL_MS: () => READ_SYNC_MIN_INTERVAL_MS,
+    READ_SYNC_STATE_KEY: () => READ_SYNC_STATE_KEY,
     RETURN_HOST_ID: () => RETURN_HOST_ID,
+    ROUTE_DATA_FALLBACK_MS: () => ROUTE_DATA_FALLBACK_MS,
     ROUTE_POLL_MS: () => ROUTE_POLL_MS,
     SCROLL_KEY: () => SCROLL_KEY,
     SELECTORS: () => SELECTORS,
     SESSION_DISABLED_KEY: () => SESSION_DISABLED_KEY,
     STRUCTURED_REFRESH_MS: () => STRUCTURED_REFRESH_MS,
+    STRUCTURED_RESUME_MS: () => STRUCTURED_RESUME_MS,
     STYLES: () => STYLES,
     VERSION: () => VERSION,
     WRITE_FEEDBACK_MS: () => WRITE_FEEDBACK_MS,
@@ -1207,7 +1213,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.6.7";
+  var VERSION = "0.6.8";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var BOOT_TIMEOUT_MS = 1e4;
@@ -1216,12 +1222,18 @@
   var POST_CONFIRM_TIMEOUT_MS = 15e3;
   var WRITE_FEEDBACK_MS = 8e3;
   var STRUCTURED_REFRESH_MS = 3e4;
+  var STRUCTURED_RESUME_MS = 2 * 6e4;
   var ROUTE_POLL_MS = 150;
+  var ROUTE_DATA_FALLBACK_MS = 2e3;
   var OLDER_TRIGGER_PX = 900;
+  var READ_SYNC_MIN_INTERVAL_MS = 5e3;
+  var READ_SYNC_BACKOFF_BASE_MS = 15e3;
+  var READ_SYNC_BACKOFF_MAX_MS = 15 * 6e4;
   var MOBILE_QUERY = "(max-width: 760px)";
   var SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
   var BOARD_VISIT_KEY = "bokoun.board-visit.v1";
   var BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1";
+  var READ_SYNC_STATE_KEY = "bokoun.read-sync-state.v1";
   var SCROLL_KEY = "bokoun.scroll.v1";
   var PREF_ENABLED_KEY = "bokoun.enabled";
   var DRAFTS_KEY = "bokoun.drafts.v1";
@@ -1288,6 +1300,7 @@
     bootTimer: 0,
     renderTimer: 0,
     routeTimer: 0,
+    routeFallbackTimer: 0,
     saveTimer: 0,
     feedbackTimer: 0,
     observer: null,
@@ -1313,6 +1326,13 @@
     structuredCache: /* @__PURE__ */ new Map(),
     structuredPending: /* @__PURE__ */ new Map(),
     structuredFailures: /* @__PURE__ */ new Map(),
+    hiddenAt: 0,
+    trafficCounters: {
+      structuredGets: 0,
+      htmlFallbacks: 0,
+      readMutations: 0,
+      byReason: {}
+    },
     composer: null,
     writeFeedback: null,
     writeBusy: false,
@@ -1471,6 +1491,7 @@
         state2.disabled = true;
         clearTimeout(state2.bootTimer);
         clearTimeout(state2.renderTimer);
+        clearTimeout(state2.routeFallbackTimer);
         clearInterval(state2.routeTimer);
         state2.observer?.disconnect();
         state2.observer = null;
@@ -1617,11 +1638,46 @@
     const {
       VERSION: VERSION2,
       STRUCTURED_REFRESH_MS: STRUCTURED_REFRESH_MS2,
+      STRUCTURED_RESUME_MS: STRUCTURED_RESUME_MS2 = 2 * 6e4,
       SELECTORS: SELECTORS2,
       state: state2
     } = ctx2;
     const routeKey = (...args) => ctx2.routeKey(...args);
     const scheduleRender = (...args) => ctx2.scheduleRender(...args);
+    const now = () => typeof ctx2.now === "function" ? ctx2.now() : Date.now();
+    const STRUCTURED_REASONS = /* @__PURE__ */ new Set([
+      "initial-route",
+      "route-transition",
+      "visibility-resume",
+      "successful-post",
+      "manual-refresh",
+      "pagination"
+    ]);
+    function recordTraffic(kind, reason = "unspecified") {
+      const counters = state2.trafficCounters;
+      if (!counters || !Object.hasOwn(counters, kind)) return;
+      counters[kind] += 1;
+      counters.byReason[reason] = (counters.byReason[reason] || 0) + 1;
+    }
+    function trafficSnapshot() {
+      const counters = state2.trafficCounters || {};
+      return {
+        structuredGets: Number(counters.structuredGets) || 0,
+        htmlFallbacks: Number(counters.htmlFallbacks) || 0,
+        readMutations: Number(counters.readMutations) || 0,
+        byReason: { ...counters.byReason || {} }
+      };
+    }
+    function resetTrafficCounters() {
+      if (!state2.trafficCounters) return;
+      state2.trafficCounters.structuredGets = 0;
+      state2.trafficCounters.htmlFallbacks = 0;
+      state2.trafficCounters.readMutations = 0;
+      state2.trafficCounters.byReason = {};
+    }
+    function documentIsHidden() {
+      return typeof document !== "undefined" && document.visibilityState === "hidden";
+    }
     function text(node) {
       return node?.textContent?.replace(/\s+/g, " ").trim() || "";
     }
@@ -1670,6 +1726,7 @@
     }
     function readFavoritesFromDom() {
       return [...document.querySelectorAll(SELECTORS2.favoriteRows)].map((row) => ({
+        id: String(row.dataset.boardId || ""),
         href: normalizeHref(row.getAttribute("href")),
         name: text(row.querySelector(SELECTORS2.favoriteName)),
         unread: unreadCount(row),
@@ -1829,6 +1886,7 @@
         throw new Error("Incomplete structured Favorites data");
       }
       return root.boards.map((board) => ({
+        id: String(board?.id || ""),
         href: `/boards/${encodeURIComponent(String(board?.slug || ""))}`,
         name: String(board?.name || ""),
         unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
@@ -1844,7 +1902,8 @@
       url.hash = "";
       return url;
     }
-    async function fetchStructuredModel(type, pageHref, { signal } = {}) {
+    async function fetchStructuredModel(type, pageHref, { signal, reason = "manual-refresh" } = {}) {
+      recordTraffic("structuredGets", reason);
       const response = await fetch(structuredDataUrl(pageHref), {
         cache: "no-store",
         credentials: "same-origin",
@@ -1856,7 +1915,7 @@
       }
       const roots = decodeSvelteDataText(await response.text());
       const model = type === "favorites" ? favoritesModelFromSvelteRoots(roots) : boardModelFromSvelteRoots(roots, pageHref);
-      return { type, model, fetchedAt: Date.now() };
+      return { type, model, fetchedAt: now() };
     }
     function structuredCacheKey(type, pageHref) {
       return `${type}:${normalizeHref(pageHref)}`;
@@ -1864,28 +1923,63 @@
     function cachedStructuredModel(type, pageHref) {
       return state2.structuredCache.get(structuredCacheKey(type, pageHref))?.model || null;
     }
-    function primeStructuredModel(type, pageHref) {
+    function ensureStructuredModel(type, pageHref, {
+      reason = "initial-route",
+      force = false,
+      minimumAge = reason === "visibility-resume" ? STRUCTURED_RESUME_MS2 : STRUCTURED_REFRESH_MS2
+    } = {}) {
+      if (!STRUCTURED_REASONS.has(reason)) {
+        throw new Error(`Unsupported structured refresh reason: ${reason}`);
+      }
+      if (documentIsHidden()) return Promise.resolve(null);
       const cacheKey = structuredCacheKey(type, pageHref);
       const cached = state2.structuredCache.get(cacheKey);
-      if (cached && Date.now() - cached.fetchedAt < STRUCTURED_REFRESH_MS2 || state2.structuredPending.has(cacheKey)) return;
+      if (!force && cached && now() - cached.fetchedAt < minimumAge) {
+        return Promise.resolve(cached);
+      }
+      const existing = state2.structuredPending.get(cacheKey);
+      if (existing) return existing.promise;
       const lastFailure = state2.structuredFailures.get(cacheKey) || 0;
-      if (Date.now() - lastFailure < 3e4) return;
-      const pending = fetchStructuredModel(type, pageHref).then((entry) => {
+      if (!force && now() - lastFailure < 3e4) return Promise.resolve(null);
+      const controller = new AbortController();
+      const pending = {
+        controller,
+        promise: null
+      };
+      pending.promise = fetchStructuredModel(type, pageHref, {
+        signal: controller.signal,
+        reason
+      }).then((entry) => {
         state2.structuredCache.set(cacheKey, entry);
         state2.structuredFailures.delete(cacheKey);
         state2.currentSignature = "";
         scheduleRender({ force: true });
       }).catch((error) => {
-        state2.structuredFailures.set(cacheKey, Date.now());
+        if (error?.name === "AbortError") return null;
+        state2.structuredFailures.set(cacheKey, now());
         console.warn(
           `[Bokoun ${VERSION2}] Structured ${type} data unavailable; using DOM fallback.`,
           error?.name || "Error"
         );
-      }).finally(() => state2.structuredPending.delete(cacheKey));
+        return null;
+      }).finally(() => {
+        if (state2.structuredPending.get(cacheKey) === pending) {
+          state2.structuredPending.delete(cacheKey);
+        }
+      });
       state2.structuredPending.set(cacheKey, pending);
+      return pending.promise;
+    }
+    function abortStructuredRequests(exceptType = "", exceptHref = "") {
+      const keep = exceptType && exceptHref ? structuredCacheKey(exceptType, exceptHref) : "";
+      for (const [key, entry] of state2.structuredPending) {
+        if (key !== keep) entry.controller?.abort();
+      }
     }
     function invalidateStructuredModel(type, pageHref) {
       const cacheKey = structuredCacheKey(type, pageHref);
+      state2.structuredPending.get(cacheKey)?.controller?.abort();
+      state2.structuredPending.delete(cacheKey);
       state2.structuredCache.delete(cacheKey);
       state2.structuredFailures.delete(cacheKey);
     }
@@ -2065,8 +2159,12 @@
       fetchStructuredModel,
       structuredCacheKey,
       cachedStructuredModel,
-      primeStructuredModel,
+      ensureStructuredModel,
+      abortStructuredRequests,
       invalidateStructuredModel,
+      recordTraffic,
+      trafficSnapshot,
+      resetTrafficCounters,
       sanitizeHtml,
       safeUrl,
       compactDate,
@@ -2077,8 +2175,66 @@
 
   // src/read-sync.js
   function installReadSync(ctx2) {
-    const successful = /* @__PURE__ */ new Set();
+    const {
+      READ_SYNC_MIN_INTERVAL_MS: READ_SYNC_MIN_INTERVAL_MS2 = 5e3,
+      READ_SYNC_BACKOFF_BASE_MS: READ_SYNC_BACKOFF_BASE_MS2 = 15e3,
+      READ_SYNC_BACKOFF_MAX_MS: READ_SYNC_BACKOFF_MAX_MS2 = 15 * 6e4,
+      READ_SYNC_STATE_KEY: READ_SYNC_STATE_KEY2 = "bokoun.read-sync-state.v1"
+    } = ctx2;
+    const now = () => typeof ctx2.now === "function" ? ctx2.now() : Date.now();
+    const recordTraffic = (...args) => ctx2.recordTraffic?.(...args);
+    const successful = /* @__PURE__ */ new Map();
+    const submitted = /* @__PURE__ */ new Map();
     const pending = /* @__PURE__ */ new Map();
+    const lastAttempt = /* @__PURE__ */ new Map();
+    const failures = /* @__PURE__ */ new Map();
+    function restoreSyncState() {
+      if (typeof sessionStorage === "undefined") return;
+      let stored;
+      try {
+        stored = JSON.parse(sessionStorage?.getItem(READ_SYNC_STATE_KEY2) || "{}");
+      } catch {
+        stored = {};
+      }
+      if (!stored || typeof stored !== "object" || Array.isArray(stored)) return;
+      for (const [rawBoardId, value] of Object.entries(stored)) {
+        const boardId = Number.parseInt(rawBoardId, 10);
+        if (!Number.isSafeInteger(boardId) || !value || typeof value !== "object") continue;
+        const success = Number(value.success) || 0;
+        const submittedBoundary = Number(value.submitted) || 0;
+        const attemptedAt = Number(value.attemptedAt) || 0;
+        const attempts = Math.max(0, Number(value.attempts) || 0);
+        const retryAt = Number(value.retryAt) || 0;
+        if (success > 0) successful.set(boardId, success);
+        if (submittedBoundary > 0) submitted.set(boardId, submittedBoundary);
+        if (attemptedAt > 0) lastAttempt.set(boardId, attemptedAt);
+        if (attempts > 0 && retryAt > 0) failures.set(boardId, { attempts, retryAt });
+      }
+    }
+    function persistSyncState() {
+      if (typeof sessionStorage === "undefined") return;
+      const boardIds = /* @__PURE__ */ new Set([
+        ...successful.keys(),
+        ...submitted.keys(),
+        ...lastAttempt.keys(),
+        ...failures.keys()
+      ]);
+      const entries = [...boardIds].map((boardId) => {
+        const failure = failures.get(boardId);
+        return [boardId, {
+          success: successful.get(boardId) || 0,
+          submitted: submitted.get(boardId) || 0,
+          attemptedAt: lastAttempt.get(boardId) || 0,
+          attempts: failure?.attempts || 0,
+          retryAt: failure?.retryAt || 0
+        }];
+      }).sort((left, right) => Math.max(right[1].success, right[1].submitted, right[1].attemptedAt, right[1].retryAt) - Math.max(left[1].success, left[1].submitted, left[1].attemptedAt, left[1].retryAt)).slice(0, 100);
+      try {
+        sessionStorage?.setItem(READ_SYNC_STATE_KEY2, JSON.stringify(Object.fromEntries(entries)));
+      } catch {
+      }
+    }
+    restoreSyncState();
     function storageValue(store, key) {
       try {
         return store?.getItem(key) || "";
@@ -2132,25 +2288,56 @@
       }
       return `${parts.year}${parts.month}${parts.day}-${parts.hour}${parts.minute}${parts.second}`;
     }
+    function noteFailure(boardId) {
+      const attempts = (failures.get(boardId)?.attempts || 0) + 1;
+      const delay = Math.min(
+        READ_SYNC_BACKOFF_MAX_MS2,
+        READ_SYNC_BACKOFF_BASE_MS2 * 2 ** (attempts - 1)
+      );
+      failures.set(boardId, { attempts, retryAt: now() + delay });
+      persistSyncState();
+    }
     async function syncNativeBoardRead(boardId, timestamp) {
       const normalizedBoardId = Number.parseInt(String(boardId || ""), 10);
+      const boundary = new Date(timestamp).getTime();
       const nativeTimestamp = nativeReadTimestamp(timestamp);
       if (!Number.isSafeInteger(normalizedBoardId) || normalizedBoardId < 1) return false;
-      if (!nativeTimestamp) return false;
+      if (!nativeTimestamp || !Number.isFinite(boundary)) return false;
+      if ((successful.get(normalizedBoardId) || 0) >= boundary) return true;
+      const currentPending = pending.get(normalizedBoardId);
+      if (currentPending) {
+        if (currentPending.boundary >= boundary) return currentPending.promise;
+        return currentPending.promise.then(() => syncNativeBoardRead(normalizedBoardId, timestamp));
+      }
+      if ((submitted.get(normalizedBoardId) || 0) >= boundary) return true;
+      const failure = failures.get(normalizedBoardId);
+      if (failure && now() < failure.retryAt) return false;
+      const previousAttempt = lastAttempt.get(normalizedBoardId);
+      if (previousAttempt !== void 0 && now() - previousAttempt < READ_SYNC_MIN_INTERVAL_MS2) {
+        return false;
+      }
       const token = currentAuthToken();
       const endpoint = nativeGraphqlEndpoint();
       if (!token || !endpoint) return false;
-      const syncKey = `${normalizedBoardId}:${nativeTimestamp}`;
-      if (successful.has(syncKey)) return true;
-      if (pending.has(syncKey)) return pending.get(syncKey);
       const headers = {
         "Content-Type": "application/json",
-        "X-Client-App": "www",
+        "X-Client-App": "bokoun",
         Authorization: `Bearer ${token}`
       };
       const accessCode = storageValue(localStorage, "okoun-api-access-code");
       if (accessCode) headers["X-API-Access-Code"] = accessCode;
-      const request = (async () => {
+      lastAttempt.set(normalizedBoardId, now());
+      submitted.set(
+        normalizedBoardId,
+        Math.max(submitted.get(normalizedBoardId) || 0, boundary)
+      );
+      persistSyncState();
+      recordTraffic("readMutations", "visit-boundary");
+      const entry = {
+        boundary,
+        promise: null
+      };
+      entry.promise = (async () => {
         try {
           const response = await fetch(endpoint, {
             method: "POST",
@@ -2167,19 +2354,42 @@
               }
             })
           });
-          if (!response.ok) return false;
+          if (!response.ok) {
+            if (submitted.get(normalizedBoardId) === boundary) {
+              submitted.delete(normalizedBoardId);
+            }
+            noteFailure(normalizedBoardId);
+            return false;
+          }
           const payload = await response.json().catch(() => null);
           const synced = Boolean(payload?.data?.markBoardAsRead?.id);
-          if (synced) successful.add(syncKey);
+          if (synced) {
+            successful.set(
+              normalizedBoardId,
+              Math.max(successful.get(normalizedBoardId) || 0, boundary)
+            );
+            submitted.delete(normalizedBoardId);
+            failures.delete(normalizedBoardId);
+            persistSyncState();
+          } else {
+            if (submitted.get(normalizedBoardId) === boundary) {
+              submitted.delete(normalizedBoardId);
+            }
+            noteFailure(normalizedBoardId);
+          }
           return synced;
         } catch {
+          if (submitted.get(normalizedBoardId) === boundary) {
+            submitted.delete(normalizedBoardId);
+          }
+          noteFailure(normalizedBoardId);
           return false;
         } finally {
-          pending.delete(syncKey);
+          if (pending.get(normalizedBoardId) === entry) pending.delete(normalizedBoardId);
         }
       })();
-      pending.set(syncKey, request);
-      return request;
+      pending.set(normalizedBoardId, entry);
+      return entry.promise;
     }
     Object.assign(ctx2, { syncNativeBoardRead });
   }
@@ -2195,8 +2405,6 @@
     } = ctx2;
     const routeKey = (...args) => ctx2.routeKey(...args);
     const normalizeHref = (...args) => ctx2.normalizeHref(...args);
-    const fetchStructuredModel = (...args) => ctx2.fetchStructuredModel(...args);
-    const structuredCacheKey = (...args) => ctx2.structuredCacheKey(...args);
     const syncNativeBoardRead = (...args) => ctx2.syncNativeBoardRead(...args);
     function boardPath(pageHref = routeKey()) {
       try {
@@ -2212,6 +2420,7 @@
         if (!visit || typeof visit.boardPath !== "string") return null;
         return {
           boardPath: visit.boardPath,
+          boardId: typeof visit.boardId === "string" ? visit.boardId : "",
           lastRead: typeof visit.lastRead === "string" ? visit.lastRead : "",
           unreadCount: Math.max(0, Number(visit.unreadCount) || 0)
         };
@@ -2279,10 +2488,16 @@
         return Number.isFinite(boundary) && Number.isFinite(lastPosted) && boundary >= lastPosted ? { ...club, unread: 0 } : club;
       });
     }
-    function startBoardVisit(pageHref, { lastRead = "", newPostsCount = 0, unreadCount = newPostsCount } = {}) {
+    function startBoardVisit(pageHref, {
+      id = "",
+      lastRead = "",
+      newPostsCount = 0,
+      unreadCount = newPostsCount
+    } = {}) {
       const path = boardPath(pageHref);
       const visit = {
         boardPath: path,
+        boardId: String(id || ""),
         lastRead: laterReadBoundary(
           typeof lastRead === "string" ? lastRead : "",
           localReadBoundary(path)
@@ -2297,12 +2512,20 @@
       const stored = readBoardVisit();
       if (stored?.boardPath === path) {
         if (!stored.lastRead && typeof model.lastRead === "string" && model.lastRead) {
-          return startBoardVisit(pageHref, model);
+          return startBoardVisit(pageHref, {
+            ...model,
+            id: model.id || stored.boardId
+          });
         }
         state2.boardVisit = stored;
         return stored;
       }
       return startBoardVisit(pageHref, model);
+    }
+    function syncBoardVisitRead() {
+      const stored = readBoardVisit();
+      if (!stored || !state2.boardId) return Promise.resolve(false);
+      return syncNativeBoardRead(state2.boardId, boardReadTimestamp());
     }
     function leaveBoardVisit(path = "") {
       const stored = readBoardVisit();
@@ -2311,7 +2534,7 @@
         return;
       }
       if (path && stored?.boardPath && stored.boardPath !== path) return;
-      void syncNativeBoardRead(state2.boardId, boardReadTimestamp());
+      void syncBoardVisitRead();
       rememberBoardReadBoundary(stored?.boardPath || path);
       state2.boardVisit = null;
       if (typeof sessionStorage === "undefined") return;
@@ -2320,15 +2543,11 @@
       } catch {
       }
     }
-    async function prepareBoardVisitFromFavorite(pageHref, fallbackUnreadCount = 0) {
-      let model = null;
-      try {
-        const entry = await fetchStructuredModel("board", pageHref);
-        state2.structuredCache.set(structuredCacheKey("board", pageHref), entry);
-        model = entry.model;
-      } catch {
-      }
-      return startBoardVisit(pageHref, model || { newPostsCount: fallbackUnreadCount });
+    function startBoardVisitFromFavorite(pageHref, unreadCount = 0, boardId = "") {
+      return startBoardVisit(pageHref, {
+        id: boardId,
+        newPostsCount: unreadCount
+      });
     }
     function newPostIdsForVisit(posts, visit = state2.boardVisit) {
       if (!visit) return [];
@@ -2366,8 +2585,9 @@
     function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
       state2.boardLoadAbort?.abort();
       state2.boardLoadAbort = null;
+      const visit = ensureBoardVisit(pageHref, model);
       state2.boardKey = boardRouteIdentity(pageHref);
-      state2.boardId = model.id || "";
+      state2.boardId = model.id || visit?.boardId || "";
       state2.boardLastPosted = model.lastPosted || "";
       state2.boardTitle = model.title;
       state2.boardPosts = [];
@@ -2380,7 +2600,6 @@
       state2.boardError = "";
       state2.boardAutoCooldownUntil = 0;
       state2.boardStructuredReady = structured;
-      ensureBoardVisit(pageHref, model);
       mergeBoardPage(model, pageHref, { setNext: true });
     }
     function mergeBoardPage(model, pageHref, { setNext = false } = {}) {
@@ -2466,8 +2685,9 @@
       reconcileFavoriteReadState,
       startBoardVisit,
       ensureBoardVisit,
+      syncBoardVisitRead,
       leaveBoardVisit,
-      prepareBoardVisitFromFavorite,
+      startBoardVisitFromFavorite,
       newPostIdsForVisit,
       threadRootId,
       threadPosts,
@@ -2496,6 +2716,7 @@
     const routeKey = (...args) => ctx2.routeKey(...args);
     const text = (...args) => ctx2.text(...args);
     const invalidateStructuredModel = (...args) => ctx2.invalidateStructuredModel(...args);
+    const ensureStructuredModel = (...args) => ctx2.ensureStructuredModel(...args);
     const readBoardFromDom = (...args) => ctx2.readBoardFromDom(...args);
     const resetBoardAccumulator = (...args) => ctx2.resetBoardAccumulator(...args);
     const nativePostById = (...args) => ctx2.nativePostById(...args);
@@ -2815,6 +3036,10 @@
         state2.writeBusy = false;
         showWriteFeedback(sent, result.postId);
         invalidateStructuredModel("board", result.pageHref);
+        void ensureStructuredModel("board", result.pageHref, {
+          reason: "successful-post",
+          force: true
+        });
         resetBoardAccumulator(result.model, result.pageHref);
         state2.currentSignature = "";
         render({ force: true });
@@ -2878,6 +3103,7 @@
     const readBoardFromDom = (...args) => ctx2.readBoardFromDom(...args);
     const mergeBoardPage = (...args) => ctx2.mergeBoardPage(...args);
     const scheduleRender = (...args) => ctx2.scheduleRender(...args);
+    const recordTraffic = (...args) => ctx2.recordTraffic?.(...args);
     function validatedOlderPage(value) {
       if (!value) return null;
       try {
@@ -2891,7 +3117,7 @@
       }
     }
     async function loadOlderPosts() {
-      if (state2.nativeMode || state2.boardLoading || state2.boardEnd || routeType() !== "board") return;
+      if (state2.nativeMode || document.visibilityState === "hidden" || state2.boardLoading || state2.boardEnd || routeType() !== "board") return;
       const target = validatedOlderPage(state2.boardNextHref);
       if (!target) {
         state2.boardEnd = true;
@@ -2915,12 +3141,17 @@
         let model;
         try {
           const entry = await fetchStructuredModel("board", targetHref, {
-            signal: state2.boardLoadAbort.signal
+            signal: state2.boardLoadAbort.signal,
+            reason: "pagination"
           });
           model = entry.model;
           state2.structuredCache.set(structuredCacheKey("board", targetHref), entry);
         } catch (structuredError) {
           if (structuredError?.name === "AbortError") throw structuredError;
+          if (document.visibilityState === "hidden") {
+            throw new DOMException("Document hidden", "AbortError");
+          }
+          recordTraffic("htmlFallbacks", "pagination");
           const response = await fetch(targetHref, {
             credentials: "same-origin",
             headers: { Accept: "text/html" },
@@ -2952,7 +3183,7 @@
       }
     }
     function maybeLoadOlder() {
-      if (state2.nativeMode || routeType() !== "board" || !state2.scroller || state2.boardLoading || state2.boardEnd || state2.boardError || Date.now() < state2.boardAutoCooldownUntil) return;
+      if (state2.nativeMode || document.visibilityState === "hidden" || routeType() !== "board" || !state2.scroller || state2.boardLoading || state2.boardEnd || state2.boardError || Date.now() < state2.boardAutoCooldownUntil) return;
       const remaining = state2.scroller.scrollHeight - state2.scroller.scrollTop - state2.scroller.clientHeight;
       if (remaining <= OLDER_TRIGGER_PX2) loadOlderPosts();
     }
@@ -3348,7 +3579,7 @@
     const unreadHeat = (...args) => ctx2.unreadHeat(...args);
     const openThread = (...args) => ctx2.openThread(...args);
     const closeThread = (...args) => ctx2.closeThread(...args);
-    const prepareBoardVisitFromFavorite = (...args) => ctx2.prepareBoardVisitFromFavorite(...args);
+    const startBoardVisitFromFavorite = (...args) => ctx2.startBoardVisitFromFavorite(...args);
     function escapeHtml(value) {
       const div = document.createElement("div");
       div.textContent = value ?? "";
@@ -3421,6 +3652,7 @@
               class="favorite-row${heatClass}"
               href="${escapeHtml(club.href)}"
               data-native-href="${escapeHtml(club.href)}"
+              data-board-id="${escapeHtml(club.id)}"
               data-unread-count="${escapeHtml(club.unread)}"
               aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
               ${editing ? 'aria-disabled="true"' : ""}
@@ -4080,13 +4312,16 @@
         button.addEventListener("click", () => openThread(button.dataset.rootId));
       }
       for (const link of state2.shadow.querySelectorAll("[data-native-href]")) {
-        link.addEventListener("click", async (event) => {
+        link.addEventListener("click", (event) => {
           event.preventDefault();
           if (state2.editingFavoriteOrder && link.closest(".favorite-item")) return;
           const href = link.getAttribute("data-native-href");
           if (link.closest(".favorite-item")) {
-            link.setAttribute("aria-busy", "true");
-            await prepareBoardVisitFromFavorite(href, link.dataset.unreadCount);
+            startBoardVisitFromFavorite(
+              href,
+              link.dataset.unreadCount,
+              link.dataset.boardId
+            );
           }
           navigateNative(href);
         });
@@ -4354,6 +4589,8 @@
       VERSION: VERSION2,
       BOOT_TIMEOUT_MS: BOOT_TIMEOUT_MS2,
       ROUTE_POLL_MS: ROUTE_POLL_MS2,
+      ROUTE_DATA_FALLBACK_MS: ROUTE_DATA_FALLBACK_MS2,
+      STRUCTURED_RESUME_MS: STRUCTURED_RESUME_MS2,
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       state: state2
     } = ctx2;
@@ -4371,7 +4608,11 @@
     const nativeReady = (...args) => ctx2.nativeReady(...args);
     const readFavoritesFromDom = (...args) => ctx2.readFavoritesFromDom(...args);
     const cachedStructuredModel = (...args) => ctx2.cachedStructuredModel(...args);
-    const primeStructuredModel = (...args) => ctx2.primeStructuredModel(...args);
+    const ensureStructuredModel = (...args) => ctx2.ensureStructuredModel(...args);
+    const abortStructuredRequests = (...args) => ctx2.abortStructuredRequests(...args);
+    const invalidateStructuredModel = (...args) => ctx2.invalidateStructuredModel(...args);
+    const trafficSnapshot = (...args) => ctx2.trafficSnapshot(...args);
+    const resetTrafficCounters = (...args) => ctx2.resetTrafficCounters(...args);
     const readBoardFromDom = (...args) => ctx2.readBoardFromDom(...args);
     const resetBoardAccumulator = (...args) => ctx2.resetBoardAccumulator(...args);
     const mergeBoardPage = (...args) => ctx2.mergeBoardPage(...args);
@@ -4390,8 +4631,24 @@
     const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
     const readBoardVisit = (...args) => ctx2.readBoardVisit(...args);
     const reconcileFavoriteReadState = (...args) => ctx2.reconcileFavoriteReadState(...args);
-    const boardReadTimestamp = (...args) => ctx2.boardReadTimestamp(...args);
-    const syncNativeBoardRead = (...args) => ctx2.syncNativeBoardRead(...args);
+    const syncBoardVisitRead = (...args) => ctx2.syncBoardVisitRead(...args);
+    function requestStructuredRefresh(reason, { force = false } = {}) {
+      const type = routeType();
+      const key = routeKey();
+      if (type === "unsupported") return Promise.resolve(null);
+      return ensureStructuredModel(type, key, { reason, force });
+    }
+    function exposeDebugTools() {
+      if (typeof window === "undefined") return;
+      Object.defineProperty(window, "__bokounDebug", {
+        configurable: true,
+        value: Object.freeze({
+          snapshot: () => trafficSnapshot(),
+          reset: () => resetTrafficCounters(),
+          refresh: () => requestStructuredRefresh("manual-refresh", { force: true })
+        })
+      });
+    }
     function finalizeBoardVisitTransition(previousKey, nextKey) {
       try {
         const previous = new URL(previousKey, location.origin);
@@ -4425,7 +4682,6 @@
       }
       if (!state2.host?.isConnected) mountShell();
       applyVisualSettings();
-      primeStructuredModel(type, key);
       const structuredRouteModel = cachedStructuredModel(type, key);
       if (!structuredRouteModel && !nativeReady(type)) return;
       const previousY = state2.scroller?.scrollTop || 0;
@@ -4457,7 +4713,6 @@
         }
         restoreActiveComposer();
         model = boardViewModel();
-        void syncNativeBoardRead(state2.boardId, boardReadTimestamp());
       }
       const signature = signatureFor(type, model);
       if (!force && signature === state2.currentSignature) return;
@@ -4476,26 +4731,45 @@
     function handleRouteChange() {
       if (state2.disabled || state2.nativeMode) return;
       const key = routeKey();
-      if (key === state2.currentRouteKey) {
-        const type = routeType();
-        if (type !== "unsupported") primeStructuredModel(type, key);
-        return;
-      }
+      if (key === state2.currentRouteKey) return;
       finalizeBoardVisitTransition(state2.currentRouteKey, key);
       saveScroll();
       state2.currentSignature = "";
       state2.openHeaderPanel = "";
       state2.openPostMenuId = "";
       state2.editingFavoriteOrder = false;
+      clearTimeout(state2.routeFallbackTimer);
       if (routeType() === "unsupported" || !isMobileEligible()) {
         state2.currentRouteKey = key;
         revealNative();
         return;
       }
       state2.currentRouteKey = key;
+      const type = routeType();
+      abortStructuredRequests();
+      invalidateStructuredModel(type, key);
       if (!state2.host?.isConnected) mountShell();
       state2.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
+      state2.routeFallbackTimer = window.setTimeout(() => {
+        if (state2.currentRouteKey === key && !nativeReady(type) && !cachedStructuredModel(type, key)) {
+          void requestStructuredRefresh("route-transition");
+        }
+      }, ROUTE_DATA_FALLBACK_MS2);
       scheduleRender({ force: true });
+    }
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        state2.hiddenAt = Date.now();
+        persistComposerDraft();
+        saveScroll();
+        state2.boardLoadAbort?.abort();
+        if (routeType() === "board") void syncBoardVisitRead();
+        return;
+      }
+      const hiddenFor = state2.hiddenAt ? Date.now() - state2.hiddenAt : 0;
+      state2.hiddenAt = 0;
+      if (state2.disabled || state2.nativeMode || hiddenFor < STRUCTURED_RESUME_MS2) return;
+      void requestStructuredRefresh("visibility-resume");
     }
     function observeNative() {
       if (state2.observing) return;
@@ -4503,9 +4777,11 @@
       state2.observer.observe(document.body, { childList: true, subtree: true });
       state2.routeTimer = window.setInterval(handleRouteChange, ROUTE_POLL_MS2);
       window.addEventListener("popstate", () => window.setTimeout(handleRouteChange, 0));
+      document.addEventListener("visibilitychange", handleVisibilityChange);
       window.addEventListener("pagehide", () => {
         persistComposerDraft();
         saveScroll();
+        if (routeType() === "board") void syncBoardVisitRead();
       });
       state2.observing = true;
     }
@@ -4529,6 +4805,8 @@
       finalizeStoredBoardVisit();
       state2.currentRouteKey = routeKey();
       observeNative();
+      exposeDebugTools();
+      void requestStructuredRefresh("initial-route");
       render({ force: true });
       state2.bootTimer = window.setTimeout(() => {
         const type = routeType();
@@ -4544,6 +4822,9 @@
       finalizeStoredBoardVisit,
       scheduleRender,
       handleRouteChange,
+      handleVisibilityChange,
+      requestStructuredRefresh,
+      exposeDebugTools,
       observeNative,
       boot
     });

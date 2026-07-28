@@ -11,6 +11,7 @@ export function installPagination(ctx) {
   const readBoardFromDom = (...args) => ctx.readBoardFromDom(...args);
   const mergeBoardPage = (...args) => ctx.mergeBoardPage(...args);
   const scheduleRender = (...args) => ctx.scheduleRender(...args);
+  const recordTraffic = (...args) => ctx.recordTraffic?.(...args);
 
   function validatedOlderPage(value) {
     if (!value) return null;
@@ -28,6 +29,7 @@ export function installPagination(ctx) {
   async function loadOlderPosts() {
     if (
       state.nativeMode
+      || document.visibilityState === "hidden"
       || state.boardLoading
       || state.boardEnd
       || routeType() !== "board"
@@ -60,11 +62,16 @@ export function installPagination(ctx) {
       try {
         const entry = await fetchStructuredModel("board", targetHref, {
           signal: state.boardLoadAbort.signal,
+          reason: "pagination",
         });
         model = entry.model;
         state.structuredCache.set(structuredCacheKey("board", targetHref), entry);
       } catch (structuredError) {
         if (structuredError?.name === "AbortError") throw structuredError;
+        if (document.visibilityState === "hidden") {
+          throw new DOMException("Document hidden", "AbortError");
+        }
+        recordTraffic("htmlFallbacks", "pagination");
         const response = await fetch(targetHref, {
           credentials: "same-origin",
           headers: { Accept: "text/html" },
@@ -101,6 +108,7 @@ export function installPagination(ctx) {
   function maybeLoadOlder() {
     if (
       state.nativeMode
+      || document.visibilityState === "hidden"
       || routeType() !== "board"
       || !state.scroller
       || state.boardLoading

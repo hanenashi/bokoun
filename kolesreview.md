@@ -2,6 +2,11 @@
 
 This note summarizes the AI review Koles ran over Bokoun and turns it into a concrete implementation plan for Codex.
 
+> Phase 1 status: implemented in Bokoun `0.6.8`. Structured refresh is
+> event-driven and visibility-aware, read synchronization is visit-boundary
+> only with per-board backoff, the board preflight is gone, and local request
+> counters plus regression tests cover the release gate. Phase 2 remains open.
+
 ## TL;DR
 
 The review was positive about Bokoun's UX ideas, especially:

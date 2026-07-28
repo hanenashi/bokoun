@@ -15,6 +15,7 @@ export function installWriting(ctx) {
   const routeKey = (...args) => ctx.routeKey(...args);
   const text = (...args) => ctx.text(...args);
   const invalidateStructuredModel = (...args) => ctx.invalidateStructuredModel(...args);
+  const ensureStructuredModel = (...args) => ctx.ensureStructuredModel(...args);
   const readBoardFromDom = (...args) => ctx.readBoardFromDom(...args);
   const resetBoardAccumulator = (...args) => ctx.resetBoardAccumulator(...args);
   const nativePostById = (...args) => ctx.nativePostById(...args);
@@ -387,6 +388,10 @@ export function installWriting(ctx) {
       state.writeBusy = false;
       showWriteFeedback(sent, result.postId);
       invalidateStructuredModel("board", result.pageHref);
+      void ensureStructuredModel("board", result.pageHref, {
+        reason: "successful-post",
+        force: true,
+      });
       resetBoardAccumulator(result.model, result.pageHref);
       state.currentSignature = "";
       render({ force: true });

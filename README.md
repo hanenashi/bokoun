@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.7`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, and inline Markdown writing pre-alpha (`0.6.8`).
 
 ## Install the first prototype
 
@@ -23,12 +23,12 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.6.7` prototype reads Favorites, boards and older post pages from
+The `0.6.8` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
 GraphQL for post reads or writing, and does not store credentials or mirror read
-post content. While a structured board is displayed, it uses Kapybara's native
+post content. When a board visit is finalized, it uses Kapybara's native
 read-state mutation to mark the latest displayed post as read. It keeps
 preferences, explicit unsent drafts and one compact last-seen timestamp per
 recent club locally on the device. Unsupported routes and initialization
@@ -313,8 +313,10 @@ normal Kapybara automatically.
 1. The adapter fetches Kapybara's authenticated `__data.json` stream.
 2. SvelteKit chunks are defensively decoded and normalized into Bokoun objects.
 3. Bokoun renders its own list.
-4. Route changes, periodic refreshes and pagination update the normalized model.
-5. Kapybara continues owning server synchronization and read-state behavior.
+4. Route entry, meaningful foreground return, successful posting, manual
+   refresh and user-driven pagination can update the normalized model.
+5. Read-state synchronization happens once at deliberate visit boundaries,
+   with per-board deduplication and failure backoff.
 6. A decode/request failure transparently selects the semantic DOM adapter.
 
 Post bodies must be treated as untrusted even when supplied as server-rendered
@@ -555,8 +557,8 @@ Exit condition: native post and Favorites DOM can change without affecting the
 visible Bokoun UI.
 
 Implemented in `0.4.0`. Bokoun decodes newline-delimited SvelteKit data chunks,
-uses structured board/Favorites/pagination models by default, refreshes them
-periodically, reports the active adapter through `data-read-source`, and falls
+uses structured board/Favorites/pagination models by default, reports the
+active adapter through `data-read-source`, and falls
 back to semantic DOM reads after a request or contract failure. Structured boot
 does not depend on the old native post/Favorites selectors. Synthetic fixtures
 exercise the transport without retaining private club content.
@@ -628,6 +630,21 @@ Version `0.6.7` corrects the scope of those appearance controls: Favorites keep
 their clean text-only list, with font controls and a true vertical-padding slider
 that can make rows very tight. Avatar size, circle/rounded/square shape and the
 existing inline/left position control now live under club post display settings.
+
+Version `0.6.8` implements the first traffic-discipline review. Structured
+reads are now event-driven instead of being refreshed by the 150 ms route
+watcher or ordinary rerenders. Hidden documents neither refresh nor paginate;
+a foreground refresh requires at least two minutes away. Favorite-to-board
+routing consumes Kapybara's own freshly rendered route and only performs a
+structured request if that native result is still unavailable after a short
+fallback delay; the separate board preflight is gone. Native read synchronization
+runs only when a visit is finalized or the document is being hidden, uses the
+distinct `bokoun` client label, tracks the last successful boundary per board,
+keeps that deduplication state across same-tab reloads, and applies a minimum
+interval plus exponential failure backoff. Local
+development can inspect request counts with
+`window.__bokounDebug.snapshot()`, reset them with `.reset()`, or request an
+explicit refresh with `.refresh()`; nothing is sent outside Kapybara.
 
 ### Phase 4 — direct transport experiment
 

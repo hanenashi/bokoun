@@ -31,7 +31,7 @@ export function installUi(ctx) {
   const unreadHeat = (...args) => ctx.unreadHeat(...args);
   const openThread = (...args) => ctx.openThread(...args);
   const closeThread = (...args) => ctx.closeThread(...args);
-  const prepareBoardVisitFromFavorite = (...args) => ctx.prepareBoardVisitFromFavorite(...args);
+  const startBoardVisitFromFavorite = (...args) => ctx.startBoardVisitFromFavorite(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -115,6 +115,7 @@ export function installUi(ctx) {
               class="favorite-row${heatClass}"
               href="${escapeHtml(club.href)}"
               data-native-href="${escapeHtml(club.href)}"
+              data-board-id="${escapeHtml(club.id)}"
               data-unread-count="${escapeHtml(club.unread)}"
               aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
               ${editing ? 'aria-disabled="true"' : ""}
@@ -823,13 +824,16 @@ export function installUi(ctx) {
       button.addEventListener("click", () => openThread(button.dataset.rootId));
     }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
-      link.addEventListener("click", async (event) => {
+      link.addEventListener("click", (event) => {
         event.preventDefault();
         if (state.editingFavoriteOrder && link.closest(".favorite-item")) return;
         const href = link.getAttribute("data-native-href");
         if (link.closest(".favorite-item")) {
-          link.setAttribute("aria-busy", "true");
-          await prepareBoardVisitFromFavorite(href, link.dataset.unreadCount);
+          startBoardVisitFromFavorite(
+            href,
+            link.dataset.unreadCount,
+            link.dataset.boardId,
+          );
         }
         navigateNative(href);
       });
