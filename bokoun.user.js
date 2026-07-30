@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.1
+// @version      0.8.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -38,6 +38,7 @@
     HOST_ID: () => HOST_ID,
     ICONS: () => ICONS,
     MOBILE_QUERY: () => MOBILE_QUERY,
+    NAVIGATION_INTENT_KEY: () => NAVIGATION_INTENT_KEY,
     OLDER_TRIGGER_PX: () => OLDER_TRIGGER_PX,
     PAGE_LOAD_TIMEOUT_MS: () => PAGE_LOAD_TIMEOUT_MS,
     POST_CONFIRM_TIMEOUT_MS: () => POST_CONFIRM_TIMEOUT_MS,
@@ -1666,7 +1667,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.1";
+  var VERSION = "0.8.2";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1703,6 +1704,7 @@
   var FAVORITES_SETTINGS_KEY = "bokoun.favorites.v1";
   var FAVORITES_ORDER_KEY = "bokoun.favorites-order.v1";
   var RECENT_CLUBS_KEY = "bokoun.recent-clubs.v1";
+  var NAVIGATION_INTENT_KEY = "bokoun.navigation-intent.v1";
   var SELECTORS = Object.freeze({
     favoritesPage: ".favorites-page",
     favoriteRows: ".favorites-page a[href^='/boards/']",
@@ -1824,7 +1826,11 @@
     favoriteSourceClubs: [],
     favoriteViewClubs: [],
     editingFavoriteOrder: false,
-    recentClubs: null
+    recentClubs: null,
+    pendingNavigationIntent: null,
+    routeTransitionAnimation: null,
+    historyTraversalPending: false,
+    navigationEntryTransitionConsumed: false
   };
   var gmGet = typeof GM_getValue === "function" ? GM_getValue : (key, fallback) => {
     const raw = localStorage.getItem(`bokoun.gm.${key}`);
@@ -2155,14 +2161,15 @@
       if (currentDisplaySettings().compareHandle) showCompareHandle();
       else removeCompareHandle();
     }
-    async function revealBokoun({ initial = false } = {}) {
+    async function revealBokoun({ initial = false, instant = false } = {}) {
       if (!state2.host || state2.revealRunning) return;
       state2.revealPending = false;
       state2.revealRunning = true;
       removeCompareHandle();
       setLayered("transition", true);
+      if (instant) setHostReveal(100);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      await animateHostReveal(0, 100);
+      if (!instant) await animateHostReveal(0, 100);
       setLayered("transition", false);
       state2.revealRunning = false;
       syncCompareMode();
@@ -2363,6 +2370,7 @@
       waitForDocumentElement,
       waitForBody,
       mountShell,
+      prefersReducedMotion,
       revealNative,
       setLayered,
       setHostReveal,
@@ -4062,6 +4070,7 @@
     interfacePreset: "default",
     colorScheme: "system",
     showClubStrip: true,
+    pageTransitions: true,
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -4163,6 +4172,7 @@
         interfacePreset: INTERFACE_PRESETS.has(value.interfacePreset) ? value.interfacePreset : DEFAULT_DISPLAY_SETTINGS.interfacePreset,
         colorScheme: COLOR_SCHEMES.has(value.colorScheme) ? value.colorScheme : DEFAULT_DISPLAY_SETTINGS.colorScheme,
         showClubStrip: value.showClubStrip !== false,
+        pageTransitions: value.pageTransitions !== false,
         showAvatars: value.showAvatars !== false,
         avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
         avatarSize: normalizeAvatarSize(value.avatarSize),
@@ -4422,6 +4432,7 @@
       scroller.dataset.interfacePreset = display.interfacePreset;
       scroller.dataset.colorScheme = display.colorScheme;
       scroller.dataset.clubStrip = display.interfacePreset === "compact-reader" && display.showClubStrip ? "visible" : "hidden";
+      scroller.dataset.pageTransitions = display.interfacePreset === "compact-reader" && display.pageTransitions ? "enabled" : "disabled";
       scroller.dataset.avatarPosition = display.avatarPosition;
       scroller.dataset.avatarShape = display.avatarShape;
       scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
@@ -4933,6 +4944,15 @@
           ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
         >
       </label>
+      <label class="settings-switch">
+        <span>Přechody stránek</span>
+        <input
+          type="checkbox"
+          data-setting="page-transitions"
+          ${display.pageTransitions ? "checked" : ""}
+          ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
+        >
+      </label>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
     }
@@ -5228,6 +5248,9 @@
       state2.shadow.querySelector("[data-setting='show-club-strip']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ showClubStrip: event.currentTarget.checked });
       });
+      state2.shadow.querySelector("[data-setting='page-transitions']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ pageTransitions: event.currentTarget.checked });
+      });
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });
       });
@@ -5468,11 +5491,43 @@
       return false;
     }
   }
+  function transitionRouteKey(value, origin = "") {
+    try {
+      const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+      const url = new URL(value, base);
+      if (url.origin !== base) return "";
+      if (url.pathname === "/fav/activity" || url.pathname === "/fav/topics") {
+        return "/fav/activity";
+      }
+      if (!/^\/boards\/[^/]+\/?$/.test(url.pathname)) return "";
+      const rootId = url.searchParams.get("rootId");
+      const path = url.pathname.replace(/\/$/, "");
+      return rootId && /^\d+$/.test(rootId) ? `${path}?rootId=${rootId}` : path;
+    } catch {
+      return "";
+    }
+  }
+  function inferNavigationDirection(from, to, { historyTraversal = false } = {}) {
+    const fromKey = transitionRouteKey(from);
+    const toKey = transitionRouteKey(to);
+    if (!fromKey || !toKey || fromKey === toKey) return "";
+    const fromFavorite = fromKey === "/fav/activity";
+    const toFavorite = toKey === "/fav/activity";
+    if (fromFavorite && !toFavorite) return "forward";
+    if (!fromFavorite && toFavorite) return "back";
+    const fromThread = fromKey.includes("?rootId=");
+    const toThread = toKey.includes("?rootId=");
+    if (!fromThread && toThread) return "forward";
+    if (fromThread && !toThread) return "back";
+    if (historyTraversal) return "back";
+    return "lateral";
+  }
   function installNavigation(ctx2) {
     const {
       HOST_ID: HOST_ID2,
       RETURN_HOST_ID: RETURN_HOST_ID2,
       BOOT_TIMEOUT_MS: BOOT_TIMEOUT_MS2,
+      NAVIGATION_INTENT_KEY: NAVIGATION_INTENT_KEY2 = "bokoun.navigation-intent.v1",
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       SELECTORS: SELECTORS2,
       state: state2
@@ -5490,10 +5545,104 @@
     const setLayered = (...args) => ctx2.setLayered(...args);
     const setHostReveal = (...args) => ctx2.setHostReveal(...args);
     const revealBokoun = (...args) => ctx2.revealBokoun(...args);
-    function navigateNative(href) {
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
+    const prefersReducedMotion = (...args) => ctx2.prefersReducedMotion(...args);
+    function transitionsEnabled() {
+      const display = currentDisplaySettings();
+      return display.interfacePreset === "compact-reader" && display.pageTransitions;
+    }
+    function prepareNavigationTransition(href, {
+      direction = "",
+      sourceHref = location.href,
+      persist = true,
+      preserveExisting = false
+    } = {}) {
+      if (!transitionsEnabled()) {
+        state2.pendingNavigationIntent = null;
+        if (persist) sessionStorage.removeItem(NAVIGATION_INTENT_KEY2);
+        return null;
+      }
+      const target = transitionRouteKey(href, location.origin);
+      const source = transitionRouteKey(sourceHref, location.origin);
+      if (!target || !source || target === source) return null;
+      if (preserveExisting && state2.pendingNavigationIntent?.target === target && Date.now() - state2.pendingNavigationIntent.createdAt < 5e3) return state2.pendingNavigationIntent;
+      const resolvedDirection = ["forward", "back", "lateral"].includes(direction) ? direction : inferNavigationDirection(source, target);
+      if (!resolvedDirection) return null;
+      const intent = {
+        source,
+        target,
+        direction: resolvedDirection,
+        createdAt: Date.now()
+      };
+      state2.pendingNavigationIntent = intent;
+      if (persist) sessionStorage.setItem(NAVIGATION_INTENT_KEY2, JSON.stringify(intent));
+      return intent;
+    }
+    function consumeNavigationTransition(href = location.href) {
+      if (!transitionsEnabled()) {
+        state2.pendingNavigationIntent = null;
+        state2.navigationEntryTransitionConsumed = true;
+        state2.routeTransitionAnimation?.cancel();
+        state2.routeTransitionAnimation = null;
+        sessionStorage.removeItem(NAVIGATION_INTENT_KEY2);
+        return "";
+      }
+      let intent = state2.pendingNavigationIntent;
+      if (!intent) {
+        try {
+          intent = JSON.parse(sessionStorage.getItem(NAVIGATION_INTENT_KEY2) || "null");
+        } catch {
+          intent = null;
+        }
+      }
+      sessionStorage.removeItem(NAVIGATION_INTENT_KEY2);
+      state2.pendingNavigationIntent = null;
+      const target = transitionRouteKey(href, location.origin);
+      const intentAge = Date.now() - Number(intent?.createdAt || 0);
+      if (intent && intent.target === target && ["forward", "back", "lateral"].includes(intent.direction) && intentAge >= 0 && intentAge < 5e3) {
+        state2.navigationEntryTransitionConsumed = true;
+        return intent.direction;
+      }
+      if (state2.navigationEntryTransitionConsumed) return "";
+      state2.navigationEntryTransitionConsumed = true;
+      const navigation = performance.getEntriesByType?.("navigation")?.[0];
+      return navigation?.type === "back_forward" ? "back" : "";
+    }
+    function animateRouteEntry(direction) {
+      if (!["forward", "back", "lateral"].includes(direction)) return Promise.resolve();
+      if (!transitionsEnabled() || prefersReducedMotion()) {
+        state2.routeTransitionAnimation?.cancel();
+        state2.routeTransitionAnimation = null;
+        return Promise.resolve();
+      }
+      const routeContainer = state2.scroller;
+      if (!routeContainer || typeof routeContainer.animate !== "function") {
+        return Promise.resolve();
+      }
+      state2.routeTransitionAnimation?.cancel();
+      const offset = direction === "back" ? "-10%" : "10%";
+      const animation = routeContainer.animate(
+        [
+          { transform: `translate3d(${offset}, 0, 0)`, opacity: 0.82 },
+          { transform: "translate3d(0, 0, 0)", opacity: 1 }
+        ],
+        {
+          duration: 210,
+          easing: "cubic-bezier(.2,.75,.25,1)"
+        }
+      );
+      state2.routeTransitionAnimation = animation;
+      return animation.finished.catch(() => void 0).then(() => {
+        if (state2.routeTransitionAnimation === animation) {
+          state2.routeTransitionAnimation = null;
+        }
+      });
+    }
+    function navigateNative(href, { direction = "" } = {}) {
       if (!href) return;
       saveScroll();
       const target = preserveForcedBokounMode(href, location.href, location.origin);
+      prepareNavigationTransition(target.href, { direction });
       if (routeType() === "board" && target.pathname !== location.pathname) {
         leaveBoardVisit(location.pathname);
       }
@@ -5517,7 +5666,7 @@
     }
     function goBack() {
       saveScroll();
-      navigateNative("/fav/activity");
+      navigateNative("/fav/activity", { direction: "back" });
     }
     function openThread(rootId) {
       const normalized = String(rootId || "");
@@ -5525,14 +5674,14 @@
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.set("rootId", normalized);
-      navigateNative(`${target.pathname}${target.search}`);
+      navigateNative(`${target.pathname}${target.search}`, { direction: "forward" });
     }
     function closeThread() {
       if (routeType() !== "board") return;
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.delete("rootId");
-      navigateNative(`${target.pathname}${target.search}`);
+      navigateNative(`${target.pathname}${target.search}`, { direction: "back" });
     }
     function captureBokounAnchor() {
       if (!state2.scroller || !state2.shadow) return null;
@@ -5669,6 +5818,9 @@
     }
     Object.assign(ctx2, {
       navigateNative,
+      prepareNavigationTransition,
+      consumeNavigationTransition,
+      animateRouteEntry,
       goBack,
       openThread,
       closeThread,
@@ -5736,6 +5888,9 @@
     const setLayered = (...args) => ctx2.setLayered(...args);
     const setHostReveal = (...args) => ctx2.setHostReveal(...args);
     const rememberRecentClub = (...args) => ctx2.rememberRecentClub(...args);
+    const prepareNavigationTransition = (...args) => ctx2.prepareNavigationTransition(...args);
+    const consumeNavigationTransition = (...args) => ctx2.consumeNavigationTransition(...args);
+    const animateRouteEntry = (...args) => ctx2.animateRouteEntry(...args);
     function requestStructuredRefresh(reason, { force = false } = {}) {
       const type = routeType();
       const key = routeKey();
@@ -5866,8 +6021,12 @@
       const inner = state2.shadow.querySelector(".app-inner");
       inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
       attachUiEvents();
+      const transitionDirection = consumeNavigationTransition(key);
       restoreScroll(key, previousKey === key ? previousY : 0);
-      if (state2.revealPending) void revealBokoun({ initial: true });
+      void animateRouteEntry(transitionDirection);
+      if (state2.revealPending) {
+        void revealBokoun({ initial: true, instant: Boolean(transitionDirection) });
+      }
     }
     function scheduleRender({ force = false } = {}) {
       clearTimeout(state2.renderTimer);
@@ -5877,6 +6036,13 @@
       if (state2.disabled || state2.nativeMode) return;
       const key = routeKey();
       if (key === state2.currentRouteKey) return;
+      prepareNavigationTransition(key, {
+        direction: state2.historyTraversalPending ? "back" : "",
+        sourceHref: state2.currentRouteKey,
+        persist: false,
+        preserveExisting: true
+      });
+      state2.historyTraversalPending = false;
       finalizeBoardVisitTransition(state2.currentRouteKey, key);
       saveScroll();
       state2.currentSignature = "";
@@ -6000,7 +6166,10 @@
         if (!state2.observedNativeRoot?.isConnected || records.some((record) => record.target === document.body)) connectNativeObserver();
         scheduleRender();
       });
-      state2.popStateHandler = queueRouteCheck;
+      state2.popStateHandler = () => {
+        state2.historyTraversalPending = true;
+        queueRouteCheck();
+      };
       state2.hashChangeHandler = queueRouteCheck;
       state2.pageHideHandler = handlePageHide;
       patchHistoryNavigation();

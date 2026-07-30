@@ -33,11 +33,48 @@ export function sameFavoriteRoute(left, right, origin = "") {
   }
 }
 
+export function transitionRouteKey(value, origin = "") {
+  try {
+    const base = origin
+      || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+    const url = new URL(value, base);
+    if (url.origin !== base) return "";
+    if (url.pathname === "/fav/activity" || url.pathname === "/fav/topics") {
+      return "/fav/activity";
+    }
+    if (!/^\/boards\/[^/]+\/?$/.test(url.pathname)) return "";
+    const rootId = url.searchParams.get("rootId");
+    const path = url.pathname.replace(/\/$/, "");
+    return rootId && /^\d+$/.test(rootId)
+      ? `${path}?rootId=${rootId}`
+      : path;
+  } catch {
+    return "";
+  }
+}
+
+export function inferNavigationDirection(from, to, { historyTraversal = false } = {}) {
+  const fromKey = transitionRouteKey(from);
+  const toKey = transitionRouteKey(to);
+  if (!fromKey || !toKey || fromKey === toKey) return "";
+  const fromFavorite = fromKey === "/fav/activity";
+  const toFavorite = toKey === "/fav/activity";
+  if (fromFavorite && !toFavorite) return "forward";
+  if (!fromFavorite && toFavorite) return "back";
+  const fromThread = fromKey.includes("?rootId=");
+  const toThread = toKey.includes("?rootId=");
+  if (!fromThread && toThread) return "forward";
+  if (fromThread && !toThread) return "back";
+  if (historyTraversal) return "back";
+  return "lateral";
+}
+
 export function installNavigation(ctx) {
   const {
     HOST_ID,
     RETURN_HOST_ID,
     BOOT_TIMEOUT_MS,
+    NAVIGATION_INTENT_KEY = "bokoun.navigation-intent.v1",
     SESSION_DISABLED_KEY,
     SELECTORS,
     state,
@@ -55,11 +92,124 @@ export function installNavigation(ctx) {
   const setLayered = (...args) => ctx.setLayered(...args);
   const setHostReveal = (...args) => ctx.setHostReveal(...args);
   const revealBokoun = (...args) => ctx.revealBokoun(...args);
+  const currentDisplaySettings = (...args) => ctx.currentDisplaySettings(...args);
+  const prefersReducedMotion = (...args) => ctx.prefersReducedMotion(...args);
 
-  function navigateNative(href) {
+  function transitionsEnabled() {
+    const display = currentDisplaySettings();
+    return display.interfacePreset === "compact-reader" && display.pageTransitions;
+  }
+
+  function prepareNavigationTransition(
+    href,
+    {
+      direction = "",
+      sourceHref = location.href,
+      persist = true,
+      preserveExisting = false,
+    } = {},
+  ) {
+    if (!transitionsEnabled()) {
+      state.pendingNavigationIntent = null;
+      if (persist) sessionStorage.removeItem(NAVIGATION_INTENT_KEY);
+      return null;
+    }
+    const target = transitionRouteKey(href, location.origin);
+    const source = transitionRouteKey(sourceHref, location.origin);
+    if (!target || !source || target === source) return null;
+    if (
+      preserveExisting
+      && state.pendingNavigationIntent?.target === target
+      && Date.now() - state.pendingNavigationIntent.createdAt < 5_000
+    ) return state.pendingNavigationIntent;
+    const resolvedDirection = ["forward", "back", "lateral"].includes(direction)
+      ? direction
+      : inferNavigationDirection(source, target);
+    if (!resolvedDirection) return null;
+    const intent = {
+      source,
+      target,
+      direction: resolvedDirection,
+      createdAt: Date.now(),
+    };
+    state.pendingNavigationIntent = intent;
+    if (persist) sessionStorage.setItem(NAVIGATION_INTENT_KEY, JSON.stringify(intent));
+    return intent;
+  }
+
+  function consumeNavigationTransition(href = location.href) {
+    if (!transitionsEnabled()) {
+      state.pendingNavigationIntent = null;
+      state.navigationEntryTransitionConsumed = true;
+      state.routeTransitionAnimation?.cancel();
+      state.routeTransitionAnimation = null;
+      sessionStorage.removeItem(NAVIGATION_INTENT_KEY);
+      return "";
+    }
+    let intent = state.pendingNavigationIntent;
+    if (!intent) {
+      try {
+        intent = JSON.parse(sessionStorage.getItem(NAVIGATION_INTENT_KEY) || "null");
+      } catch {
+        intent = null;
+      }
+    }
+    sessionStorage.removeItem(NAVIGATION_INTENT_KEY);
+    state.pendingNavigationIntent = null;
+    const target = transitionRouteKey(href, location.origin);
+    const intentAge = Date.now() - Number(intent?.createdAt || 0);
+    if (
+      intent
+      && intent.target === target
+      && ["forward", "back", "lateral"].includes(intent.direction)
+      && intentAge >= 0
+      && intentAge < 5_000
+    ) {
+      state.navigationEntryTransitionConsumed = true;
+      return intent.direction;
+    }
+    if (state.navigationEntryTransitionConsumed) return "";
+    state.navigationEntryTransitionConsumed = true;
+    const navigation = performance.getEntriesByType?.("navigation")?.[0];
+    return navigation?.type === "back_forward" ? "back" : "";
+  }
+
+  function animateRouteEntry(direction) {
+    if (!["forward", "back", "lateral"].includes(direction)) return Promise.resolve();
+    if (!transitionsEnabled() || prefersReducedMotion()) {
+      state.routeTransitionAnimation?.cancel();
+      state.routeTransitionAnimation = null;
+      return Promise.resolve();
+    }
+    const routeContainer = state.scroller;
+    if (!routeContainer || typeof routeContainer.animate !== "function") {
+      return Promise.resolve();
+    }
+    state.routeTransitionAnimation?.cancel();
+    const offset = direction === "back" ? "-10%" : "10%";
+    const animation = routeContainer.animate(
+      [
+        { transform: `translate3d(${offset}, 0, 0)`, opacity: 0.82 },
+        { transform: "translate3d(0, 0, 0)", opacity: 1 },
+      ],
+      {
+        duration: 210,
+        easing: "cubic-bezier(.2,.75,.25,1)",
+      },
+    );
+    state.routeTransitionAnimation = animation;
+    return animation.finished.catch(() => undefined).then(() => {
+      if (state.routeTransitionAnimation === animation) {
+        state.routeTransitionAnimation = null;
+      }
+    });
+  }
+
+  function navigateNative(href, { direction = "" } = {}) {
     if (!href) return;
     saveScroll();
     const target = preserveForcedBokounMode(href, location.href, location.origin);
+    prepareNavigationTransition(target.href, { direction });
     if (routeType() === "board" && target.pathname !== location.pathname) {
       leaveBoardVisit(location.pathname);
     }
@@ -89,7 +239,7 @@ export function installNavigation(ctx) {
 
   function goBack() {
     saveScroll();
-    navigateNative("/fav/activity");
+    navigateNative("/fav/activity", { direction: "back" });
   }
 
   function openThread(rootId) {
@@ -98,7 +248,7 @@ export function installNavigation(ctx) {
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.set("rootId", normalized);
-    navigateNative(`${target.pathname}${target.search}`);
+    navigateNative(`${target.pathname}${target.search}`, { direction: "forward" });
   }
 
   function closeThread() {
@@ -106,7 +256,7 @@ export function installNavigation(ctx) {
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.delete("rootId");
-    navigateNative(`${target.pathname}${target.search}`);
+    navigateNative(`${target.pathname}${target.search}`, { direction: "back" });
   }
 
   function captureBokounAnchor() {
@@ -266,6 +416,9 @@ export function installNavigation(ctx) {
 
   Object.assign(ctx, {
     navigateNative,
+    prepareNavigationTransition,
+    consumeNavigationTransition,
+    animateRouteEntry,
     goBack,
     openThread,
     closeThread,

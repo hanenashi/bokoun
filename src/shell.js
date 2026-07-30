@@ -347,14 +347,15 @@ export function installShell(ctx) {
     else removeCompareHandle();
   }
 
-  async function revealBokoun({ initial = false } = {}) {
+  async function revealBokoun({ initial = false, instant = false } = {}) {
     if (!state.host || state.revealRunning) return;
     state.revealPending = false;
     state.revealRunning = true;
     removeCompareHandle();
     setLayered("transition", true);
+    if (instant) setHostReveal(100);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await animateHostReveal(0, 100);
+    if (!instant) await animateHostReveal(0, 100);
     setLayered("transition", false);
     state.revealRunning = false;
     syncCompareMode();
@@ -580,6 +581,7 @@ export function installShell(ctx) {
     waitForDocumentElement,
     waitForBody,
     mountShell,
+    prefersReducedMotion,
     revealNative,
     setLayered,
     setHostReveal,

@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.1`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.2`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.1` prototype reads Favorites, boards and older post pages from
+The `0.8.2` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -764,6 +764,14 @@ marks the current destination and uses the existing Bokoun navigation and read
 state. The locally stored history is bounded to eight clubs, causes no extra
 network requests, and can be switched off independently in either appearance
 panel.
+
+Version `0.8.2` adds optional directional page transitions to **Kompaktní
+čtečka**. Favorites-to-club and club-to-thread navigation enters from the
+right; Back enters from the opposite direction; club-to-club switching stays
+horizontal. The transition intent survives Kapybara document navigation for
+five seconds, is consumed once, cancels cleanly when interrupted, animates only
+the existing route container and is skipped under reduced-motion preferences.
+It does not clone post models, prefetch routes or delay read-state handling.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

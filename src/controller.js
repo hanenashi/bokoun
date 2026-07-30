@@ -51,6 +51,9 @@ export function installController(ctx) {
   const setLayered = (...args) => ctx.setLayered(...args);
   const setHostReveal = (...args) => ctx.setHostReveal(...args);
   const rememberRecentClub = (...args) => ctx.rememberRecentClub(...args);
+  const prepareNavigationTransition = (...args) => ctx.prepareNavigationTransition(...args);
+  const consumeNavigationTransition = (...args) => ctx.consumeNavigationTransition(...args);
+  const animateRouteEntry = (...args) => ctx.animateRouteEntry(...args);
 
   function requestStructuredRefresh(reason, { force = false } = {}) {
     const type = routeType();
@@ -200,8 +203,12 @@ export function installController(ctx) {
     inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
     attachUiEvents();
 
+    const transitionDirection = consumeNavigationTransition(key);
     restoreScroll(key, previousKey === key ? previousY : 0);
-    if (state.revealPending) void revealBokoun({ initial: true });
+    void animateRouteEntry(transitionDirection);
+    if (state.revealPending) {
+      void revealBokoun({ initial: true, instant: Boolean(transitionDirection) });
+    }
   }
 
   function scheduleRender({ force = false } = {}) {
@@ -214,6 +221,13 @@ export function installController(ctx) {
     const key = routeKey();
     if (key === state.currentRouteKey) return;
 
+    prepareNavigationTransition(key, {
+      direction: state.historyTraversalPending ? "back" : "",
+      sourceHref: state.currentRouteKey,
+      persist: false,
+      preserveExisting: true,
+    });
+    state.historyTraversalPending = false;
     finalizeBoardVisitTransition(state.currentRouteKey, key);
 
     saveScroll();
@@ -363,7 +377,10 @@ export function installController(ctx) {
       ) connectNativeObserver();
       scheduleRender();
     });
-    state.popStateHandler = queueRouteCheck;
+    state.popStateHandler = () => {
+      state.historyTraversalPending = true;
+      queueRouteCheck();
+    };
     state.hashChangeHandler = queueRouteCheck;
     state.pageHideHandler = handlePageHide;
     patchHistoryNavigation();

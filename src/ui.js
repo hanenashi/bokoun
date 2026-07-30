@@ -481,6 +481,15 @@ export function installUi(ctx) {
           ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
         >
       </label>
+      <label class="settings-switch">
+        <span>Přechody stránek</span>
+        <input
+          type="checkbox"
+          data-setting="page-transitions"
+          ${display.pageTransitions ? "checked" : ""}
+          ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
+        >
+      </label>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
   }
@@ -817,6 +826,9 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='show-club-strip']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ showClubStrip: event.currentTarget.checked });
+    });
+    state.shadow.querySelector("[data-setting='page-transitions']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ pageTransitions: event.currentTarget.checked });
     });
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });

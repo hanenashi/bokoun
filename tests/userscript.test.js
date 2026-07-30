@@ -10,7 +10,13 @@ import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
 import { canonicalScrollRoute } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
-import { preserveForcedBokounMode, sameFavoriteRoute } from "../src/navigation.js";
+import {
+  inferNavigationDirection,
+  installNavigation,
+  preserveForcedBokounMode,
+  sameFavoriteRoute,
+  transitionRouteKey,
+} from "../src/navigation.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
@@ -35,7 +41,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.1/);
+  assert.match(source, /@version\s+0\.8\.2/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -421,6 +427,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     interfacePreset: "default",
     colorScheme: "system",
     showClubStrip: true,
+    pageTransitions: true,
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -445,6 +452,8 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.equal(stored.get("display").colorScheme, "dark");
   settings.updateDisplaySettings({ showClubStrip: false });
   assert.equal(stored.get("display").showClubStrip, false);
+  settings.updateDisplaySettings({ pageTransitions: false });
+  assert.equal(stored.get("display").pageTransitions, false);
   settings.updateDisplaySettings({
     interfacePreset: "unknown",
     colorScheme: "sepia",
@@ -626,6 +635,103 @@ test("compact reader club strip is optional, bounded, and request-free", () => {
     uiSource.indexOf("function favoritesMarkup"),
   );
   assert.doesNotMatch(clubStripSource, /\bfetch\(/);
+});
+
+test("compact reader route transitions are directional, bounded, and optional", () => {
+  assert.equal(
+    transitionRouteKey("https://kapybara.okoun.cz/boards/test?bokoun=on"),
+    "/boards/test",
+  );
+  assert.equal(
+    transitionRouteKey("https://kapybara.okoun.cz/boards/test?rootId=42&f=older"),
+    "/boards/test?rootId=42",
+  );
+  assert.equal(inferNavigationDirection("/fav/activity", "/boards/test"), "forward");
+  assert.equal(inferNavigationDirection("/boards/test", "/fav/activity"), "back");
+  assert.equal(
+    inferNavigationDirection("/boards/test", "/boards/test?rootId=42"),
+    "forward",
+  );
+  assert.equal(
+    inferNavigationDirection("/boards/test?rootId=42", "/boards/test"),
+    "back",
+  );
+  assert.equal(
+    inferNavigationDirection("/boards/a", "/boards/b", { historyTraversal: true }),
+    "back",
+  );
+  assert.equal(inferNavigationDirection("/boards/a", "/boards/b"), "lateral");
+  assert.match(source, /data-setting="page-transitions"/);
+  assert.match(source, /duration: 210/);
+  assert.match(source, /prefersReducedMotion\(\)/);
+  assert.match(source, /routeTransitionAnimation\?\.cancel\(\)/);
+  assert.match(source, /intentAge >= 0/);
+  assert.match(source, /intentAge < 5_000/);
+  assert.match(source, /if \(state\.navigationEntryTransitionConsumed\) return ""/);
+});
+
+test("route transition intent is consumed once and disabling cancels active motion", () => {
+  const originalLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const originalSessionStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const stored = new Map();
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: {
+      href: "https://kapybara.okoun.cz/fav/activity",
+      origin: "https://kapybara.okoun.cz",
+    },
+  });
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: {
+      getItem: (key) => stored.get(key) ?? null,
+      setItem: (key, value) => stored.set(key, value),
+      removeItem: (key) => stored.delete(key),
+    },
+  });
+  try {
+    let enabled = true;
+    let cancelled = 0;
+    const ctx = {
+      NAVIGATION_INTENT_KEY: "transition",
+      state: {
+        pendingNavigationIntent: {
+          source: "/boards/test",
+          target: "/fav/activity",
+          direction: "back",
+          createdAt: Date.now(),
+        },
+        navigationEntryTransitionConsumed: false,
+        routeTransitionAnimation: null,
+      },
+      currentDisplaySettings: () => ({
+        interfacePreset: "compact-reader",
+        pageTransitions: enabled,
+      }),
+      prefersReducedMotion: () => false,
+    };
+    installNavigation(ctx);
+    assert.equal(ctx.consumeNavigationTransition("/fav/activity"), "back");
+    assert.equal(ctx.consumeNavigationTransition("/fav/activity"), "");
+
+    ctx.state.routeTransitionAnimation = {
+      cancel: () => {
+        cancelled += 1;
+      },
+    };
+    enabled = false;
+    assert.equal(ctx.consumeNavigationTransition("/fav/activity"), "");
+    assert.equal(cancelled, 1);
+    assert.equal(ctx.state.routeTransitionAnimation, null);
+  } finally {
+    if (originalLocation) Object.defineProperty(globalThis, "location", originalLocation);
+    else delete globalThis.location;
+    if (originalSessionStorage) {
+      Object.defineProperty(globalThis, "sessionStorage", originalSessionStorage);
+    } else {
+      delete globalThis.sessionStorage;
+    }
+  }
 });
 
 test("reply metadata follows the body and reply moved into the popout menu", () => {
@@ -866,7 +972,7 @@ test("hardware Back finalizes a board visit before Favorites render", () => {
 
 test("club header back arrow always targets Bokoun Favorites", () => {
   const goBack = source.match(/function goBack\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
-  assert.match(goBack, /navigateNative\("\/fav\/activity"\)/);
+  assert.match(goBack, /navigateNative\("\/fav\/activity", \{ direction: "back" \}\)/);
   assert.doesNotMatch(goBack, /history\.back/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
   assert.match(source, /\[data-action='thread-back'\][^\n]*closeThread/);

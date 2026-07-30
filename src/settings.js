@@ -2,6 +2,7 @@ const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   interfacePreset: "default",
   colorScheme: "system",
   showClubStrip: true,
+  pageTransitions: true,
   showAvatars: true,
   avatarPosition: "inline",
   avatarSize: 40,
@@ -115,6 +116,7 @@ export function installSettings(ctx) {
         ? value.colorScheme
         : DEFAULT_DISPLAY_SETTINGS.colorScheme,
       showClubStrip: value.showClubStrip !== false,
+      pageTransitions: value.pageTransitions !== false,
       showAvatars: value.showAvatars !== false,
       avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition)
         ? value.avatarPosition
@@ -441,6 +443,9 @@ export function installSettings(ctx) {
     scroller.dataset.clubStrip = (
       display.interfacePreset === "compact-reader" && display.showClubStrip
     ) ? "visible" : "hidden";
+    scroller.dataset.pageTransitions = (
+      display.interfacePreset === "compact-reader" && display.pageTransitions
+    ) ? "enabled" : "disabled";
     scroller.dataset.avatarPosition = display.avatarPosition;
     scroller.dataset.avatarShape = display.avatarShape;
     scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);

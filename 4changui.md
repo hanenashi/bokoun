@@ -409,6 +409,11 @@ Test:
 - route failure/native fallback;
 - composer state preservation.
 
+Implementation status: completed in Bokoun `0.8.2` with a one-shot,
+session-scoped direction intent and a lightweight route-container animation.
+The transition is independently disableable, honors reduced motion, cancels on
+rapid replacement and adds no route prefetching.
+
 ### Phase 3: gesture navigation
 
 Add edge-swipe Back first. It is the most natural and lowest-risk gesture.
