@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.3
+// @version      0.8.4
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1667,7 +1667,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.3";
+  var VERSION = "0.8.4";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1830,7 +1830,11 @@
     pendingNavigationIntent: null,
     routeTransitionAnimation: null,
     historyTraversalPending: false,
-    navigationEntryTransitionConsumed: false
+    navigationEntryTransitionConsumed: false,
+    fullscreenOwned: false,
+    fullscreenRequestPending: false,
+    fullscreenSuppressed: false,
+    fullscreenChangeHandler: null
   };
   var gmGet = typeof GM_getValue === "function" ? GM_getValue : (key, fallback) => {
     const raw = localStorage.getItem(`bokoun.gm.${key}`);
@@ -1971,6 +1975,76 @@
         observer.observe(document.documentElement, { childList: true, subtree: true });
       });
     }
+    function fullscreenEnabled() {
+      return currentDisplaySettings().fullscreenMode !== false;
+    }
+    function fullscreenGestureAllowed(event) {
+      if (!event?.isTrusted || !state2.active || state2.nativeMode) return false;
+      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='full']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-setting='fullscreen-mode']")));
+    }
+    async function requestBokounFullscreen({ force = false } = {}) {
+      if (!fullscreenEnabled() || !state2.active || state2.nativeMode || state2.fullscreenRequestPending) return false;
+      if (document.fullscreenElement) return true;
+      if (force) state2.fullscreenSuppressed = false;
+      if (state2.fullscreenSuppressed) return false;
+      const request = document.documentElement?.requestFullscreen;
+      if (typeof request !== "function") {
+        state2.fullscreenSuppressed = true;
+        return false;
+      }
+      state2.fullscreenRequestPending = true;
+      try {
+        await request.call(document.documentElement);
+        state2.fullscreenOwned = document.fullscreenElement === document.documentElement;
+        if (state2.fullscreenOwned && (!state2.active || state2.nativeMode || !fullscreenEnabled())) {
+          await exitBokounFullscreen();
+          return false;
+        }
+        state2.fullscreenSuppressed = !state2.fullscreenOwned;
+        return state2.fullscreenOwned;
+      } catch {
+        state2.fullscreenOwned = false;
+        state2.fullscreenSuppressed = true;
+        return false;
+      } finally {
+        state2.fullscreenRequestPending = false;
+      }
+    }
+    async function exitBokounFullscreen({ suppress = true } = {}) {
+      if (suppress) state2.fullscreenSuppressed = true;
+      if (!state2.fullscreenOwned || !document.fullscreenElement) {
+        state2.fullscreenOwned = false;
+        return false;
+      }
+      state2.fullscreenOwned = false;
+      try {
+        await document.exitFullscreen();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    function handleFullscreenChange() {
+      const active = Boolean(document.fullscreenElement);
+      if (state2.scroller) state2.scroller.dataset.fullscreen = active ? "active" : "inactive";
+      if (!active && state2.fullscreenOwned) {
+        state2.fullscreenOwned = false;
+        state2.fullscreenSuppressed = true;
+      }
+    }
+    function handleFullscreenGesture(event) {
+      if (!fullscreenEnabled() || !fullscreenGestureAllowed(event)) return;
+      void requestBokounFullscreen();
+    }
+    function syncFullscreenMode() {
+      if (!fullscreenEnabled()) {
+        void exitBokounFullscreen();
+        return;
+      }
+      if (state2.scroller) {
+        state2.scroller.dataset.fullscreen = document.fullscreenElement ? "active" : "inactive";
+      }
+    }
     function mountShell() {
       if (state2.host?.isConnected) return;
       document.getElementById(RETURN_HOST_ID2)?.remove();
@@ -1992,6 +2066,11 @@
       state2.shadow = shadow;
       state2.scroller = shadow.querySelector(".app");
       state2.scroller.addEventListener("scroll", handleBokounScroll, { passive: true });
+      shadow.addEventListener("click", handleFullscreenGesture, { capture: true });
+      if (!state2.fullscreenChangeHandler) {
+        state2.fullscreenChangeHandler = handleFullscreenChange;
+        document.addEventListener("fullscreenchange", state2.fullscreenChangeHandler);
+      }
       state2.active = true;
       document.documentElement.dataset.bokounActive = "true";
       delete document.documentElement.dataset.bokounBooting;
@@ -2177,6 +2256,7 @@
     }
     function revealNative({ stop = false } = {}) {
       saveScroll();
+      void exitBokounFullscreen();
       state2.active = false;
       state2.revealPending = false;
       state2.revealRunning = false;
@@ -2374,6 +2454,11 @@
       waitForBody,
       mountShell,
       prefersReducedMotion,
+      requestBokounFullscreen,
+      exitBokounFullscreen,
+      handleFullscreenChange,
+      handleFullscreenGesture,
+      syncFullscreenMode,
       revealNative,
       setLayered,
       setHostReveal,
@@ -4074,6 +4159,7 @@
     colorScheme: "system",
     showClubStrip: true,
     pageTransitions: true,
+    fullscreenMode: true,
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -4176,6 +4262,7 @@
         colorScheme: COLOR_SCHEMES.has(value.colorScheme) ? value.colorScheme : DEFAULT_DISPLAY_SETTINGS.colorScheme,
         showClubStrip: value.showClubStrip !== false,
         pageTransitions: value.pageTransitions !== false,
+        fullscreenMode: value.fullscreenMode !== false,
         showAvatars: value.showAvatars !== false,
         avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
         avatarSize: normalizeAvatarSize(value.avatarSize),
@@ -4451,6 +4538,7 @@
       if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
       else scroller.style.removeProperty("--favorite-font-family");
       ctx2.syncCompareMode?.();
+      ctx2.syncFullscreenMode?.();
     }
     Object.assign(ctx2, {
       fontFamilies: FONT_FAMILIES,
@@ -4525,6 +4613,7 @@
     const openThread = (...args) => ctx2.openThread(...args);
     const closeThread = (...args) => ctx2.closeThread(...args);
     const startBoardVisitFromFavorite = (...args) => ctx2.startBoardVisitFromFavorite(...args);
+    const requestBokounFullscreen = (...args) => ctx2.requestBokounFullscreen(...args);
     function escapeHtml(value) {
       const div = document.createElement("div");
       div.textContent = value ?? "";
@@ -4956,6 +5045,15 @@
           ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
         >
       </label>
+      <label class="settings-switch">
+        <span>Celá obrazovka</span>
+        <input
+          type="checkbox"
+          data-setting="fullscreen-mode"
+          ${display.fullscreenMode ? "checked" : ""}
+        >
+      </label>
+      <p class="settings-note">Prohlížeč povolí celou obrazovku po prvním klepnutí v Bokounu.</p>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
     }
@@ -5253,6 +5351,10 @@
       });
       state2.shadow.querySelector("[data-setting='page-transitions']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ pageTransitions: event.currentTarget.checked });
+      });
+      state2.shadow.querySelector("[data-setting='fullscreen-mode']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ fullscreenMode: event.currentTarget.checked });
+        if (event.currentTarget.checked) void requestBokounFullscreen({ force: true });
       });
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });

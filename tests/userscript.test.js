@@ -41,7 +41,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.3/);
+  assert.match(source, /@version\s+0\.8\.4/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -442,6 +442,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     colorScheme: "system",
     showClubStrip: true,
     pageTransitions: true,
+    fullscreenMode: true,
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -468,6 +469,8 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.equal(stored.get("display").showClubStrip, false);
   settings.updateDisplaySettings({ pageTransitions: false });
   assert.equal(stored.get("display").pageTransitions, false);
+  settings.updateDisplaySettings({ fullscreenMode: false });
+  assert.equal(stored.get("display").fullscreenMode, false);
   settings.updateDisplaySettings({
     interfacePreset: "unknown",
     colorScheme: "sepia",
@@ -682,6 +685,18 @@ test("compact reader route transitions are directional, bounded, and optional", 
   assert.match(source, /intentAge >= 0/);
   assert.match(source, /intentAge < 5_000/);
   assert.match(source, /if \(state\.navigationEntryTransitionConsumed\) return ""/);
+});
+
+test("fullscreen mode defaults on, requires a safe gesture, and remains escapable", () => {
+  assert.match(source, /data-setting="fullscreen-mode"/);
+  assert.match(source, /Celá obrazovka/);
+  assert.match(source, /request\.call\(document\.documentElement\)/);
+  assert.match(source, /await document\.exitFullscreen\(\)/);
+  assert.match(source, /event\?\.isTrusted/);
+  assert.match(source, /node\.matches\("\[data-native-href\]"\)/);
+  assert.match(source, /requestBokounFullscreen\(\{ force: true \}\)/);
+  assert.match(source, /void exitBokounFullscreen\(\);\s*state\.active = false/);
+  assert.doesNotMatch(source, /requestFullscreen\(\)[\s\S]*console\.warn/);
 });
 
 test("route transition intent is consumed once and disabling cancels active motion", () => {

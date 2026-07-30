@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.3`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.4`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.3` prototype reads Favorites, boards and older post pages from
+The `0.8.4` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -777,6 +777,15 @@ Version `0.8.3` removes a transition hiccup by settling the destination route's
 saved scroll position before its slide begins. Cross-document navigation stays
 covered until the route content is ready; stale transition callbacks are
 dropped if another route wins first.
+
+Version `0.8.4` adds a default-on **Celá obrazovka** mode. Following the same
+browser-safe principle as Cudloun, Bokoun requests document fullscreen only
+from an eligible user gesture: the first ordinary tap enters without a
+permanent extra button, while navigation links are ignored to avoid a flash
+immediately before a document change. The appearance panels can disable or
+re-enable the mode explicitly. Disabling Bokoun or opening full Kapybara exits
+fullscreen owned by Bokoun; manual browser exit is respected for the rest of
+the current document. Unsupported or denied fullscreen requests fail silently.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

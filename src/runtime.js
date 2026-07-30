@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.8.3";
+export const VERSION = "0.8.4";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";
@@ -166,6 +166,10 @@ export const state = {
   routeTransitionAnimation: null,
   historyTraversalPending: false,
   navigationEntryTransitionConsumed: false,
+  fullscreenOwned: false,
+  fullscreenRequestPending: false,
+  fullscreenSuppressed: false,
+  fullscreenChangeHandler: null,
 };
 
 export const gmGet = typeof GM_getValue === "function"

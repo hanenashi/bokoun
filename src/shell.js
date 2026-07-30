@@ -143,6 +143,103 @@ export function installShell(ctx) {
     });
   }
 
+  function fullscreenEnabled() {
+    return currentDisplaySettings().fullscreenMode !== false;
+  }
+
+  function fullscreenGestureAllowed(event) {
+    if (!event?.isTrusted || !state.active || state.nativeMode) return false;
+    return !event.composedPath().some((node) => (
+      node instanceof Element
+      && (
+        node.matches("a, input, select, textarea")
+        || node.matches("[data-native-href]")
+        || node.matches("[data-action='full']")
+        || node.matches("[data-action='back']")
+        || node.matches("[data-action='thread-back']")
+        || node.matches("[data-action='thread']")
+        || node.matches("[data-setting='fullscreen-mode']")
+      )
+    ));
+  }
+
+  async function requestBokounFullscreen({ force = false } = {}) {
+    if (
+      !fullscreenEnabled()
+      || !state.active
+      || state.nativeMode
+      || state.fullscreenRequestPending
+    ) return false;
+    if (document.fullscreenElement) return true;
+    if (force) state.fullscreenSuppressed = false;
+    if (state.fullscreenSuppressed) return false;
+    const request = document.documentElement?.requestFullscreen;
+    if (typeof request !== "function") {
+      state.fullscreenSuppressed = true;
+      return false;
+    }
+
+    state.fullscreenRequestPending = true;
+    try {
+      await request.call(document.documentElement);
+      state.fullscreenOwned = document.fullscreenElement === document.documentElement;
+      if (
+        state.fullscreenOwned
+        && (!state.active || state.nativeMode || !fullscreenEnabled())
+      ) {
+        await exitBokounFullscreen();
+        return false;
+      }
+      state.fullscreenSuppressed = !state.fullscreenOwned;
+      return state.fullscreenOwned;
+    } catch {
+      state.fullscreenOwned = false;
+      state.fullscreenSuppressed = true;
+      return false;
+    } finally {
+      state.fullscreenRequestPending = false;
+    }
+  }
+
+  async function exitBokounFullscreen({ suppress = true } = {}) {
+    if (suppress) state.fullscreenSuppressed = true;
+    if (!state.fullscreenOwned || !document.fullscreenElement) {
+      state.fullscreenOwned = false;
+      return false;
+    }
+    state.fullscreenOwned = false;
+    try {
+      await document.exitFullscreen();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function handleFullscreenChange() {
+    const active = Boolean(document.fullscreenElement);
+    if (state.scroller) state.scroller.dataset.fullscreen = active ? "active" : "inactive";
+    if (!active && state.fullscreenOwned) {
+      state.fullscreenOwned = false;
+      state.fullscreenSuppressed = true;
+    }
+  }
+
+  function handleFullscreenGesture(event) {
+    if (!fullscreenEnabled() || !fullscreenGestureAllowed(event)) return;
+    void requestBokounFullscreen();
+  }
+
+  function syncFullscreenMode() {
+    if (!fullscreenEnabled()) {
+      void exitBokounFullscreen();
+      return;
+    }
+    if (state.scroller) {
+      state.scroller.dataset.fullscreen = document.fullscreenElement ? "active" : "inactive";
+    }
+  }
+
   function mountShell() {
     if (state.host?.isConnected) return;
 
@@ -166,6 +263,11 @@ export function installShell(ctx) {
     state.shadow = shadow;
     state.scroller = shadow.querySelector(".app");
     state.scroller.addEventListener("scroll", handleBokounScroll, { passive: true });
+    shadow.addEventListener("click", handleFullscreenGesture, { capture: true });
+    if (!state.fullscreenChangeHandler) {
+      state.fullscreenChangeHandler = handleFullscreenChange;
+      document.addEventListener("fullscreenchange", state.fullscreenChangeHandler);
+    }
     state.active = true;
     document.documentElement.dataset.bokounActive = "true";
     delete document.documentElement.dataset.bokounBooting;
@@ -364,6 +466,7 @@ export function installShell(ctx) {
 
   function revealNative({ stop = false } = {}) {
     saveScroll();
+    void exitBokounFullscreen();
     state.active = false;
     state.revealPending = false;
     state.revealRunning = false;
@@ -585,6 +688,11 @@ export function installShell(ctx) {
     waitForBody,
     mountShell,
     prefersReducedMotion,
+    requestBokounFullscreen,
+    exitBokounFullscreen,
+    handleFullscreenChange,
+    handleFullscreenGesture,
+    syncFullscreenMode,
     revealNative,
     setLayered,
     setHostReveal,

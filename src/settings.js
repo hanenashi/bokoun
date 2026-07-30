@@ -3,6 +3,7 @@ const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   colorScheme: "system",
   showClubStrip: true,
   pageTransitions: true,
+  fullscreenMode: true,
   showAvatars: true,
   avatarPosition: "inline",
   avatarSize: 40,
@@ -117,6 +118,7 @@ export function installSettings(ctx) {
         : DEFAULT_DISPLAY_SETTINGS.colorScheme,
       showClubStrip: value.showClubStrip !== false,
       pageTransitions: value.pageTransitions !== false,
+      fullscreenMode: value.fullscreenMode !== false,
       showAvatars: value.showAvatars !== false,
       avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition)
         ? value.avatarPosition
@@ -461,6 +463,7 @@ export function installSettings(ctx) {
     if (favoriteStack) scroller.style.setProperty("--favorite-font-family", favoriteStack);
     else scroller.style.removeProperty("--favorite-font-family");
     ctx.syncCompareMode?.();
+    ctx.syncFullscreenMode?.();
   }
 
   Object.assign(ctx, {

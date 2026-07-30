@@ -35,6 +35,7 @@ export function installUi(ctx) {
   const openThread = (...args) => ctx.openThread(...args);
   const closeThread = (...args) => ctx.closeThread(...args);
   const startBoardVisitFromFavorite = (...args) => ctx.startBoardVisitFromFavorite(...args);
+  const requestBokounFullscreen = (...args) => ctx.requestBokounFullscreen(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -490,6 +491,15 @@ export function installUi(ctx) {
           ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
         >
       </label>
+      <label class="settings-switch">
+        <span>Celá obrazovka</span>
+        <input
+          type="checkbox"
+          data-setting="fullscreen-mode"
+          ${display.fullscreenMode ? "checked" : ""}
+        >
+      </label>
+      <p class="settings-note">Prohlížeč povolí celou obrazovku po prvním klepnutí v Bokounu.</p>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
   }
@@ -829,6 +839,10 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='page-transitions']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ pageTransitions: event.currentTarget.checked });
+    });
+    state.shadow.querySelector("[data-setting='fullscreen-mode']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ fullscreenMode: event.currentTarget.checked });
+      if (event.currentTarget.checked) void requestBokounFullscreen({ force: true });
     });
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });
