@@ -204,10 +204,18 @@ export function installController(ctx) {
     attachUiEvents();
 
     const transitionDirection = consumeNavigationTransition(key);
-    restoreScroll(key, previousKey === key ? previousY : 0);
-    void animateRouteEntry(transitionDirection);
-    if (state.revealPending) {
-      void revealBokoun({ initial: true, instant: Boolean(transitionDirection) });
+    const scrollReady = restoreScroll(key, previousKey === key ? previousY : 0);
+    if (transitionDirection) {
+      void scrollReady.then(() => {
+        if (state.currentRouteKey !== key) return;
+        const animation = animateRouteEntry(transitionDirection);
+        if (state.revealPending) {
+          void revealBokoun({ initial: true, instant: true });
+        }
+        return animation;
+      });
+    } else if (state.revealPending) {
+      void revealBokoun({ initial: true });
     }
   }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.2
+// @version      0.8.3
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1667,7 +1667,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.2";
+  var VERSION = "0.8.3";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -2343,9 +2343,12 @@
     }
     function restoreScroll(key, fallback = 0) {
       const y = storedScroll(key) ?? fallback;
-      requestAnimationFrame(() => {
+      return new Promise((resolve) => {
         requestAnimationFrame(() => {
-          state2.scroller?.scrollTo({ top: y, behavior: "auto" });
+          requestAnimationFrame(() => {
+            state2.scroller?.scrollTo({ top: y, behavior: "auto" });
+            resolve(y);
+          });
         });
       });
     }
@@ -6022,10 +6025,18 @@
       inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
       attachUiEvents();
       const transitionDirection = consumeNavigationTransition(key);
-      restoreScroll(key, previousKey === key ? previousY : 0);
-      void animateRouteEntry(transitionDirection);
-      if (state2.revealPending) {
-        void revealBokoun({ initial: true, instant: Boolean(transitionDirection) });
+      const scrollReady = restoreScroll(key, previousKey === key ? previousY : 0);
+      if (transitionDirection) {
+        void scrollReady.then(() => {
+          if (state2.currentRouteKey !== key) return;
+          const animation = animateRouteEntry(transitionDirection);
+          if (state2.revealPending) {
+            void revealBokoun({ initial: true, instant: true });
+          }
+          return animation;
+        });
+      } else if (state2.revealPending) {
+        void revealBokoun({ initial: true });
       }
     }
     function scheduleRender({ force = false } = {}) {

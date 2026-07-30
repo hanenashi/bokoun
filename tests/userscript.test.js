@@ -41,7 +41,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.2/);
+  assert.match(source, /@version\s+0\.8\.3/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -204,6 +204,20 @@ test("scroll restoration happens after the lite content is rendered", () => {
   assert.ok(renderIndex > -1);
   assert.ok(restoreIndex > renderIndex);
   assert.match(source, /requestAnimationFrame\(\(\) => \{\s*requestAnimationFrame/);
+});
+
+test("route motion waits until restored scroll is settled", () => {
+  const readyIndex = controllerSource.indexOf("const scrollReady = restoreScroll(");
+  const settledIndex = controllerSource.indexOf("scrollReady.then(", readyIndex);
+  const animationIndex = controllerSource.indexOf(
+    "animateRouteEntry(transitionDirection)",
+    settledIndex,
+  );
+  assert.ok(readyIndex > -1);
+  assert.ok(settledIndex > readyIndex);
+  assert.ok(animationIndex > settledIndex);
+  assert.match(source, /resolve\(y\)/);
+  assert.match(controllerSource, /if \(state\.currentRouteKey !== key\) return/);
 });
 
 test("scroll positions ignore the temporary Bokoun mode query", () => {

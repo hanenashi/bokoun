@@ -548,9 +548,12 @@ export function installShell(ctx) {
 
   function restoreScroll(key, fallback = 0) {
     const y = storedScroll(key) ?? fallback;
-    requestAnimationFrame(() => {
+    return new Promise((resolve) => {
       requestAnimationFrame(() => {
-        state.scroller?.scrollTo({ top: y, behavior: "auto" });
+        requestAnimationFrame(() => {
+          state.scroller?.scrollTo({ top: y, behavior: "auto" });
+          resolve(y);
+        });
       });
     });
   }
