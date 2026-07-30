@@ -143,6 +143,8 @@ export function installNavigation(ctx) {
       state.navigationEntryTransitionConsumed = true;
       state.routeTransitionAnimation?.cancel();
       state.routeTransitionAnimation = null;
+      state.routeExitAnimation?.cancel();
+      state.routeExitAnimation = null;
       sessionStorage.removeItem(NAVIGATION_INTENT_KEY);
       return "";
     }
@@ -179,22 +181,26 @@ export function installNavigation(ctx) {
     if (!transitionsEnabled() || prefersReducedMotion()) {
       state.routeTransitionAnimation?.cancel();
       state.routeTransitionAnimation = null;
+      state.routeExitAnimation?.cancel();
+      state.routeExitAnimation = null;
       return Promise.resolve();
     }
     const routeContainer = state.scroller;
     if (!routeContainer || typeof routeContainer.animate !== "function") {
       return Promise.resolve();
     }
+    pinRouteBackground(routeContainer);
+    state.routeExitAnimation?.cancel();
+    state.routeExitAnimation = null;
     state.routeTransitionAnimation?.cancel();
-    const offset = direction === "back" ? "-10%" : "10%";
     const animation = routeContainer.animate(
       [
-        { transform: `translate3d(${offset}, 0, 0)`, opacity: 0.82 },
-        { transform: "translate3d(0, 0, 0)", opacity: 1 },
+        { filter: "blur(12px)", opacity: 0.34 },
+        { filter: "blur(0)", opacity: 1 },
       ],
       {
-        duration: 210,
-        easing: "cubic-bezier(.2,.75,.25,1)",
+        duration: 190,
+        easing: "cubic-bezier(.2,.72,.25,1)",
       },
     );
     state.routeTransitionAnimation = animation;
@@ -203,6 +209,38 @@ export function installNavigation(ctx) {
         state.routeTransitionAnimation = null;
       }
     });
+  }
+
+  function animateRouteExit() {
+    if (!transitionsEnabled() || prefersReducedMotion()) return Promise.resolve();
+    const routeContainer = state.scroller;
+    if (!routeContainer || typeof routeContainer.animate !== "function") {
+      return Promise.resolve();
+    }
+    pinRouteBackground(routeContainer);
+    state.routeTransitionAnimation?.cancel();
+    state.routeTransitionAnimation = null;
+    state.routeExitAnimation?.cancel();
+    const animation = routeContainer.animate(
+      [
+        { filter: "blur(0)", opacity: 1 },
+        { filter: "blur(10px)", opacity: 0.34 },
+      ],
+      {
+        duration: 130,
+        easing: "cubic-bezier(.4,0,.8,.25)",
+        fill: "forwards",
+      },
+    );
+    state.routeExitAnimation = animation;
+    return animation.finished.catch(() => undefined);
+  }
+
+  function pinRouteBackground(routeContainer) {
+    const background = getComputedStyle(routeContainer).backgroundColor;
+    if (state.host && background && background !== "rgba(0, 0, 0, 0)") {
+      state.host.style.backgroundColor = background;
+    }
   }
 
   function navigateNative(href, { direction = "" } = {}) {
@@ -225,16 +263,21 @@ export function installNavigation(ctx) {
         }
       });
 
-    const previous = location.href;
-    if (!nativeLink) {
-      location.assign(target.href);
-      return;
-    }
+    const commitSequence = ++state.navigationCommitSequence;
+    const performNavigation = () => {
+      if (commitSequence !== state.navigationCommitSequence) return;
+      const previous = location.href;
+      if (!nativeLink) {
+        location.assign(target.href);
+        return;
+      }
 
-    nativeLink.click();
-    window.setTimeout(() => {
-      if (location.href === previous) location.assign(target.href);
-    }, 1_200);
+      nativeLink.click();
+      window.setTimeout(() => {
+        if (location.href === previous) location.assign(target.href);
+      }, 1_200);
+    };
+    void animateRouteExit().then(performNavigation);
   }
 
   function goBack() {
@@ -419,6 +462,7 @@ export function installNavigation(ctx) {
     prepareNavigationTransition,
     consumeNavigationTransition,
     animateRouteEntry,
+    animateRouteExit,
     goBack,
     openThread,
     closeThread,

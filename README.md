@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.4`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.5`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.4` prototype reads Favorites, boards and older post pages from
+The `0.8.5` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -742,12 +742,12 @@ Kapybara's own exposed Lexical editor state, with the browser editing command
 kept as a compatibility fallback. This avoids Chromium collapsing line breaks
 while leaving Kapybara's native validation and submit transport in control.
 
-Version `0.7.0` adds a controlled live comparison layer. Bokoun wipes in from
-left to right and out toward the left when switching to full Kapybara. The
+Version `0.7.0` adds a controlled live comparison layer. Bokoun transitions in
+and out when switching to full Kapybara. The
 opt-in **Porovnávací madlo** in the display panel exposes the live native page
 under Bokoun without duplicating it as an image; the vertical handle supports
 touch, mouse, arrow keys, Home and End. Native controls stay inert during
-comparison, and reduced-motion preferences skip the wipe animation.
+comparison, and reduced-motion preferences skip the handoff animation.
 
 Version `0.8.0` starts the optional **Kompaktní čtečka** interface preset.
 It keeps Bokoun's existing routes, read state, drafts and traffic behavior, but
@@ -786,6 +786,13 @@ immediately before a document change. The appearance panels can disable or
 re-enable the mode explicitly. Disabling Bokoun or opening full Kapybara exits
 fullscreen owned by Bokoun; manual browser exit is respected for the rest of
 the current document. Unsupported or denied fullscreen requests fail silently.
+
+Version `0.8.5` replaces the lateral wipe/slide language with a softer
+blur-and-fade transition. Existing content blurs out briefly before navigation;
+the destination waits until it is loaded and its scroll position is restored,
+then blurs into focus. Bokoun's handoff to and from full Kapybara uses the same
+effect, while the comparison handle keeps its direct draggable split. Rapid
+navigation cancels stale motion, and reduced-motion mode remains instantaneous.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

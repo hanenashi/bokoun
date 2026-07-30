@@ -23,6 +23,7 @@ const scriptPath = path.join(dirname, "..", "bokoun.user.js");
 const sourceDir = path.join(dirname, "..", "src");
 const generatedSource = fs.readFileSync(scriptPath, "utf8");
 const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
+const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
 const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
 const source = [
   generatedSource,
@@ -41,7 +42,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.4/);
+  assert.match(source, /@version\s+0\.8\.5/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -625,6 +626,12 @@ test("live comparison uses an opt-in accessible drag handle and layered native v
   assert.match(source, /data-bokoun-layered/);
   assert.match(source, /data-bokoun-aligning/);
   assert.match(source, /restoreNativeAnchor\(state\.compareAnchor\)/);
+  const handoffSource = shellSource.slice(
+    shellSource.indexOf("function animateHostReveal"),
+    shellSource.indexOf("function removeCompareHandle"),
+  );
+  assert.match(handoffSource, /filter: "blur\(16px\)"/);
+  assert.doesNotMatch(handoffSource, /clipPath/);
 });
 
 test("compact reader preset is reversible and has light, dark, and system palettes", () => {
@@ -654,7 +661,7 @@ test("compact reader club strip is optional, bounded, and request-free", () => {
   assert.doesNotMatch(clubStripSource, /\bfetch\(/);
 });
 
-test("compact reader route transitions are directional, bounded, and optional", () => {
+test("compact reader route transitions classify routes and use bounded blur motion", () => {
   assert.equal(
     transitionRouteKey("https://kapybara.okoun.cz/boards/test?bokoun=on"),
     "/boards/test",
@@ -679,7 +686,15 @@ test("compact reader route transitions are directional, bounded, and optional", 
   );
   assert.equal(inferNavigationDirection("/boards/a", "/boards/b"), "lateral");
   assert.match(source, /data-setting="page-transitions"/);
-  assert.match(source, /duration: 210/);
+  assert.match(source, /duration: 190/);
+  assert.match(source, /duration: 130/);
+  assert.match(source, /filter: "blur\(12px\)"/);
+  assert.match(source, /filter: "blur\(10px\)"/);
+  assert.match(source, /function animateRouteExit/);
+  assert.match(source, /function pinRouteBackground/);
+  assert.match(source, /state\.host\.style\.backgroundColor = background/);
+  assert.match(source, /animateRouteExit\(\)\.then\(performNavigation\)/);
+  assert.match(source, /commitSequence !== state\.navigationCommitSequence/);
   assert.match(source, /prefersReducedMotion\(\)/);
   assert.match(source, /routeTransitionAnimation\?\.cancel\(\)/);
   assert.match(source, /intentAge >= 0/);

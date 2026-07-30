@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.4
+// @version      0.8.5
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1667,7 +1667,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.4";
+  var VERSION = "0.8.5";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1829,6 +1829,8 @@
     recentClubs: null,
     pendingNavigationIntent: null,
     routeTransitionAnimation: null,
+    routeExitAnimation: null,
+    navigationCommitSequence: 0,
     historyTraversalPending: false,
     navigationEntryTransitionConsumed: false,
     fullscreenOwned: false,
@@ -2104,17 +2106,21 @@
     function animateHostReveal(from, to) {
       const host = state2.host;
       if (!host) return Promise.resolve();
-      setHostReveal(from);
       if (prefersReducedMotion() || typeof host.animate !== "function") {
         setHostReveal(to);
         return Promise.resolve();
       }
+      const entering = to > from;
+      setHostReveal(100);
       const animation = host.animate(
-        [
-          { clipPath: `inset(0 ${100 - from}% 0 0)` },
-          { clipPath: `inset(0 ${100 - to}% 0 0)` }
+        entering ? [
+          { filter: "blur(16px)", opacity: 0 },
+          { filter: "blur(0)", opacity: 1 }
+        ] : [
+          { filter: "blur(0)", opacity: 1 },
+          { filter: "blur(16px)", opacity: 0 }
         ],
-        { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" }
+        { duration: 220, easing: "cubic-bezier(.22,.7,.25,1)", fill: "forwards" }
       );
       return animation.finished.catch(() => void 0).then(() => {
         animation.cancel();
@@ -5689,6 +5695,8 @@
         state2.navigationEntryTransitionConsumed = true;
         state2.routeTransitionAnimation?.cancel();
         state2.routeTransitionAnimation = null;
+        state2.routeExitAnimation?.cancel();
+        state2.routeExitAnimation = null;
         sessionStorage.removeItem(NAVIGATION_INTENT_KEY2);
         return "";
       }
@@ -5718,22 +5726,26 @@
       if (!transitionsEnabled() || prefersReducedMotion()) {
         state2.routeTransitionAnimation?.cancel();
         state2.routeTransitionAnimation = null;
+        state2.routeExitAnimation?.cancel();
+        state2.routeExitAnimation = null;
         return Promise.resolve();
       }
       const routeContainer = state2.scroller;
       if (!routeContainer || typeof routeContainer.animate !== "function") {
         return Promise.resolve();
       }
+      pinRouteBackground(routeContainer);
+      state2.routeExitAnimation?.cancel();
+      state2.routeExitAnimation = null;
       state2.routeTransitionAnimation?.cancel();
-      const offset = direction === "back" ? "-10%" : "10%";
       const animation = routeContainer.animate(
         [
-          { transform: `translate3d(${offset}, 0, 0)`, opacity: 0.82 },
-          { transform: "translate3d(0, 0, 0)", opacity: 1 }
+          { filter: "blur(12px)", opacity: 0.34 },
+          { filter: "blur(0)", opacity: 1 }
         ],
         {
-          duration: 210,
-          easing: "cubic-bezier(.2,.75,.25,1)"
+          duration: 190,
+          easing: "cubic-bezier(.2,.72,.25,1)"
         }
       );
       state2.routeTransitionAnimation = animation;
@@ -5742,6 +5754,36 @@
           state2.routeTransitionAnimation = null;
         }
       });
+    }
+    function animateRouteExit() {
+      if (!transitionsEnabled() || prefersReducedMotion()) return Promise.resolve();
+      const routeContainer = state2.scroller;
+      if (!routeContainer || typeof routeContainer.animate !== "function") {
+        return Promise.resolve();
+      }
+      pinRouteBackground(routeContainer);
+      state2.routeTransitionAnimation?.cancel();
+      state2.routeTransitionAnimation = null;
+      state2.routeExitAnimation?.cancel();
+      const animation = routeContainer.animate(
+        [
+          { filter: "blur(0)", opacity: 1 },
+          { filter: "blur(10px)", opacity: 0.34 }
+        ],
+        {
+          duration: 130,
+          easing: "cubic-bezier(.4,0,.8,.25)",
+          fill: "forwards"
+        }
+      );
+      state2.routeExitAnimation = animation;
+      return animation.finished.catch(() => void 0);
+    }
+    function pinRouteBackground(routeContainer) {
+      const background = getComputedStyle(routeContainer).backgroundColor;
+      if (state2.host && background && background !== "rgba(0, 0, 0, 0)") {
+        state2.host.style.backgroundColor = background;
+      }
     }
     function navigateNative(href, { direction = "" } = {}) {
       if (!href) return;
@@ -5759,15 +5801,20 @@
           return false;
         }
       });
-      const previous = location.href;
-      if (!nativeLink) {
-        location.assign(target.href);
-        return;
-      }
-      nativeLink.click();
-      window.setTimeout(() => {
-        if (location.href === previous) location.assign(target.href);
-      }, 1200);
+      const commitSequence = ++state2.navigationCommitSequence;
+      const performNavigation = () => {
+        if (commitSequence !== state2.navigationCommitSequence) return;
+        const previous = location.href;
+        if (!nativeLink) {
+          location.assign(target.href);
+          return;
+        }
+        nativeLink.click();
+        window.setTimeout(() => {
+          if (location.href === previous) location.assign(target.href);
+        }, 1200);
+      };
+      void animateRouteExit().then(performNavigation);
     }
     function goBack() {
       saveScroll();
@@ -5926,6 +5973,7 @@
       prepareNavigationTransition,
       consumeNavigationTransition,
       animateRouteEntry,
+      animateRouteExit,
       goBack,
       openThread,
       closeThread,

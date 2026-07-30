@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.8.4";
+export const VERSION = "0.8.5";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";
@@ -164,6 +164,8 @@ export const state = {
   recentClubs: null,
   pendingNavigationIntent: null,
   routeTransitionAnimation: null,
+  routeExitAnimation: null,
+  navigationCommitSequence: 0,
   historyTraversalPending: false,
   navigationEntryTransitionConsumed: false,
   fullscreenOwned: false,

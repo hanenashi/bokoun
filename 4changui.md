@@ -409,10 +409,11 @@ Test:
 - route failure/native fallback;
 - composer state preservation.
 
-Implementation status: completed in Bokoun `0.8.2` with a one-shot,
-session-scoped direction intent and a lightweight route-container animation.
-The transition is independently disableable, honors reduced motion, cancels on
-rapid replacement and adds no route prefetching.
+Implementation status: completed in Bokoun `0.8.2` and refined in `0.8.5` with
+a one-shot, session-scoped route intent and lightweight blur-out/blur-in
+container animation. The transition is independently disableable, waits for
+loaded content and restored scroll, honors reduced motion, cancels on rapid
+replacement and adds no route prefetching.
 
 ### Phase 3: gesture navigation
 
