@@ -305,23 +305,17 @@ export function installShell(ctx) {
   function animateHostReveal(from, to) {
     const host = state.host;
     if (!host) return Promise.resolve();
+    setHostReveal(from);
     if (prefersReducedMotion() || typeof host.animate !== "function") {
       setHostReveal(to);
       return Promise.resolve();
     }
-    const entering = to > from;
-    setHostReveal(100);
     const animation = host.animate(
-      entering
-        ? [
-            { filter: "blur(16px)", opacity: 0 },
-            { filter: "blur(0)", opacity: 1 },
-          ]
-        : [
-            { filter: "blur(0)", opacity: 1 },
-            { filter: "blur(16px)", opacity: 0 },
-          ],
-      { duration: 220, easing: "cubic-bezier(.22,.7,.25,1)", fill: "forwards" },
+      [
+        { clipPath: `inset(0 ${100 - from}% 0 0)` },
+        { clipPath: `inset(0 ${100 - to}% 0 0)` },
+      ],
+      { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" },
     );
     return animation.finished.catch(() => undefined).then(() => {
       animation.cancel();

@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.8.5";
+export const VERSION = "0.8.6";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";
@@ -11,6 +11,7 @@ export const POST_CONFIRM_TIMEOUT_MS = 15_000;
 export const WRITE_FEEDBACK_MS = 8_000;
 export const STRUCTURED_REFRESH_MS = 30_000;
 export const STRUCTURED_RESUME_MS = 2 * 60_000;
+export const FAVORITES_REFRESH_MS = 60_000;
 export const ROUTE_FALLBACK_POLL_MS = 10_000;
 export const ROUTE_DATA_FALLBACK_MS = 2_000;
 export const DRAFT_SAVE_DELAY_MS = 350;
@@ -100,6 +101,7 @@ export const state = {
   routeTimer: 0,
   routeEventTimer: 0,
   routeFallbackTimer: 0,
+  favoritesRefreshTimer: 0,
   saveTimer: 0,
   draftSaveTimer: 0,
   feedbackTimer: 0,

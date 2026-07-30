@@ -42,7 +42,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.5/);
+  assert.match(source, /@version\s+0\.8\.6/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -545,6 +545,10 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
     fontSize: 17,
     spacing: 12,
   });
+  assert.deepEqual(
+    settings.sortFavorites(clubs).map((club) => club.unread),
+    [15, 5, 2],
+  );
 
   settings.updateFavoritesSettings({ sort: "alphabetical" });
   assert.deepEqual(
@@ -604,6 +608,8 @@ test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering
   assert.match(source, /favorite-row--heat-few/);
   assert.match(source, /favorite-row--heat-more/);
   assert.match(source, /favorite-row--heat-most/);
+  assert.match(source, /favorite-row--unread/);
+  assert.match(source, /Aktivita \+ nové/);
   assert.match(source, /data-unread-count=/);
   assert.match(source, /data-setting="favorite-font-family"/);
   assert.match(source, /Svislé odsazení oblíbených posuvníkem/);
@@ -630,8 +636,8 @@ test("live comparison uses an opt-in accessible drag handle and layered native v
     shellSource.indexOf("function animateHostReveal"),
     shellSource.indexOf("function removeCompareHandle"),
   );
-  assert.match(handoffSource, /filter: "blur\(16px\)"/);
-  assert.doesNotMatch(handoffSource, /clipPath/);
+  assert.match(handoffSource, /clipPath/);
+  assert.doesNotMatch(handoffSource, /filter: "blur/);
 });
 
 test("compact reader preset is reversible and has light, dark, and system palettes", () => {
@@ -1286,19 +1292,26 @@ test("structured refresh is explicit, visibility-aware, and instrumented", async
     await Promise.resolve();
     assert.equal(requests, 1, "idle time alone must not trigger another request");
 
+    await adapters.ensureStructuredModel("favorites", "/fav/activity", {
+      reason: "favorites-poll",
+      minimumAge: 60_000,
+    });
+    assert.equal(requests, 2);
+    assert.equal(adapters.trafficSnapshot().byReason["favorites-poll"], 1);
+
     visibilityState = "hidden";
     await adapters.ensureStructuredModel("favorites", "/fav/activity", {
       reason: "manual-refresh",
       force: true,
     });
-    assert.equal(requests, 1, "hidden documents must not refresh");
+    assert.equal(requests, 2, "hidden documents must not refresh");
 
     visibilityState = "visible";
     clock += 120_000;
     await adapters.ensureStructuredModel("favorites", "/fav/activity", {
       reason: "visibility-resume",
     });
-    assert.equal(requests, 2);
+    assert.equal(requests, 3);
     assert.equal(adapters.trafficSnapshot().byReason["visibility-resume"], 1);
   } finally {
     for (const [key, descriptor] of originals) {
@@ -1327,4 +1340,17 @@ test("ordinary rerenders are network-quiet and board entry has no preflight", ()
   assert.match(source, /reason: "successful-post"/);
   assert.match(source, /document\.visibilityState === "hidden"/);
   assert.match(source, /state\.boardLoadAbort\?\.abort\(\)/);
+});
+
+test("Favorites polling is visible-route only, one-minute, and self-rescheduling", () => {
+  const polling = controllerSource.slice(
+    controllerSource.indexOf("function stopFavoritesRefresh"),
+    controllerSource.indexOf("function exposeDebugTools"),
+  );
+  assert.match(source, /FAVORITES_REFRESH_MS = 60_000/);
+  assert.match(polling, /routeType\(\) !== "favorites"/);
+  assert.match(polling, /document\.visibilityState === "hidden"/);
+  assert.match(polling, /requestStructuredRefresh\("favorites-poll"/);
+  assert.match(polling, /finally \{\s*scheduleFavoritesRefresh\(\)/);
+  assert.match(source, /stopFavoritesRefresh\(\);\s*state\.observer\?\.disconnect/);
 });

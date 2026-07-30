@@ -14,6 +14,7 @@ export function installAdapters(ctx) {
     "initial-route",
     "route-transition",
     "visibility-resume",
+    "favorites-poll",
     "successful-post",
     "manual-refresh",
     "pagination",

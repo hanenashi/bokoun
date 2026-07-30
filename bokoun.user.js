@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.5
+// @version      0.8.6
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -33,6 +33,7 @@
     DRAFT_LIMIT: () => DRAFT_LIMIT,
     DRAFT_SAVE_DELAY_MS: () => DRAFT_SAVE_DELAY_MS,
     FAVORITES_ORDER_KEY: () => FAVORITES_ORDER_KEY,
+    FAVORITES_REFRESH_MS: () => FAVORITES_REFRESH_MS,
     FAVORITES_SETTINGS_KEY: () => FAVORITES_SETTINGS_KEY,
     FONT_SETTINGS_KEY: () => FONT_SETTINGS_KEY,
     HOST_ID: () => HOST_ID,
@@ -232,6 +233,10 @@
     padding-left: 12px;
     background: #fff0ef;
     box-shadow: inset 3px 0 #c65353;
+  }
+
+  .favorite-row--unread .favorite-name {
+    color: var(--accent);
   }
 
   .favorite-item--editing .favorite-row {
@@ -1667,7 +1672,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.5";
+  var VERSION = "0.8.6";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1678,6 +1683,7 @@
   var WRITE_FEEDBACK_MS = 8e3;
   var STRUCTURED_REFRESH_MS = 3e4;
   var STRUCTURED_RESUME_MS = 2 * 6e4;
+  var FAVORITES_REFRESH_MS = 6e4;
   var ROUTE_FALLBACK_POLL_MS = 1e4;
   var ROUTE_DATA_FALLBACK_MS = 2e3;
   var DRAFT_SAVE_DELAY_MS = 350;
@@ -1765,6 +1771,7 @@
     routeTimer: 0,
     routeEventTimer: 0,
     routeFallbackTimer: 0,
+    favoritesRefreshTimer: 0,
     saveTimer: 0,
     draftSaveTimer: 0,
     feedbackTimer: 0,
@@ -2106,21 +2113,17 @@
     function animateHostReveal(from, to) {
       const host = state2.host;
       if (!host) return Promise.resolve();
+      setHostReveal(from);
       if (prefersReducedMotion() || typeof host.animate !== "function") {
         setHostReveal(to);
         return Promise.resolve();
       }
-      const entering = to > from;
-      setHostReveal(100);
       const animation = host.animate(
-        entering ? [
-          { filter: "blur(16px)", opacity: 0 },
-          { filter: "blur(0)", opacity: 1 }
-        ] : [
-          { filter: "blur(0)", opacity: 1 },
-          { filter: "blur(16px)", opacity: 0 }
+        [
+          { clipPath: `inset(0 ${100 - from}% 0 0)` },
+          { clipPath: `inset(0 ${100 - to}% 0 0)` }
         ],
-        { duration: 220, easing: "cubic-bezier(.22,.7,.25,1)", fill: "forwards" }
+        { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" }
       );
       return animation.finished.catch(() => void 0).then(() => {
         animation.cancel();
@@ -2505,6 +2508,7 @@
       "initial-route",
       "route-transition",
       "visibility-resume",
+      "favorites-poll",
       "successful-post",
       "manual-refresh",
       "pagination"
@@ -4433,7 +4437,7 @@
         const positions = new Map(normalized.map((href, index) => [href, index]));
         return source.sort((left, right) => (positions.get(left.href) ?? Number.MAX_SAFE_INTEGER) - (positions.get(right.href) ?? Number.MAX_SAFE_INTEGER));
       }
-      return source;
+      return source.sort((left, right) => right.unread - left.unread);
     }
     function unreadHeat(unread) {
       const count = Math.max(0, Number(unread) || 0);
@@ -4713,6 +4717,7 @@
       const showHeat = ["heat", "both"].includes(favorites.unreadMode);
       const rows = clubs.length ? clubs.map((club) => {
         const heat = showHeat ? unreadHeat(club.unread) : "";
+        const unreadClass = club.unread ? " favorite-row--unread" : "";
         const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
         const unreadLabel = club.unread ? `${club.unread} nových příspěvků` : "bez nových příspěvků";
         return `
@@ -4721,7 +4726,7 @@
             data-favorite-href="${escapeHtml(club.href)}"
           >
             <a
-              class="favorite-row${heatClass}"
+              class="favorite-row${unreadClass}${heatClass}"
               href="${escapeHtml(club.href)}"
               data-native-href="${escapeHtml(club.href)}"
               data-board-id="${escapeHtml(club.id)}"
@@ -4791,7 +4796,7 @@
         <label class="settings-field">
           <span>Řazení</span>
           <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
-            <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Výchozí</option>
+            <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Aktivita + nové</option>
             <option value="alphabetical" ${favorites.sort === "alphabetical" ? "selected" : ""}>Abecedně</option>
             <option value="unread" ${favorites.sort === "unread" ? "selected" : ""}>Podle nových</option>
             <option value="manual" ${favorites.sort === "manual" ? "selected" : ""}>Ručně</option>
@@ -5995,6 +6000,7 @@
       ROUTE_FALLBACK_POLL_MS: ROUTE_FALLBACK_POLL_MS2,
       ROUTE_DATA_FALLBACK_MS: ROUTE_DATA_FALLBACK_MS2,
       STRUCTURED_RESUME_MS: STRUCTURED_RESUME_MS2,
+      FAVORITES_REFRESH_MS: FAVORITES_REFRESH_MS2 = 6e4,
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       SELECTORS: SELECTORS2,
       state: state2
@@ -6049,6 +6055,23 @@
       const key = routeKey();
       if (type === "unsupported") return Promise.resolve(null);
       return ensureStructuredModel(type, key, { reason, force });
+    }
+    function stopFavoritesRefresh() {
+      clearTimeout(state2.favoritesRefreshTimer);
+      state2.favoritesRefreshTimer = 0;
+    }
+    function scheduleFavoritesRefresh() {
+      stopFavoritesRefresh();
+      if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || routeType() !== "favorites") return;
+      state2.favoritesRefreshTimer = window.setTimeout(async () => {
+        state2.favoritesRefreshTimer = 0;
+        if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || routeType() !== "favorites") return;
+        try {
+          await requestStructuredRefresh("favorites-poll");
+        } finally {
+          scheduleFavoritesRefresh();
+        }
+      }, FAVORITES_REFRESH_MS2);
     }
     function exposeDebugTools() {
       if (typeof window === "undefined") return;
@@ -6124,6 +6147,7 @@
       finalizeBoardVisitTransition(previousKey, key);
       const type = routeType();
       if (type === "unsupported" || !isMobileEligible()) {
+        stopFavoritesRefresh();
         revealNative();
         return;
       }
@@ -6212,12 +6236,14 @@
       state2.editingFavoriteOrder = false;
       clearTimeout(state2.routeFallbackTimer);
       if (routeType() === "unsupported" || !isMobileEligible()) {
+        stopFavoritesRefresh();
         state2.currentRouteKey = key;
         revealNative();
         return;
       }
       state2.currentRouteKey = key;
       const type = routeType();
+      scheduleFavoritesRefresh();
       abortStructuredRequests();
       invalidateStructuredModel(type, key);
       if (!state2.host?.isConnected) mountShell();
@@ -6275,6 +6301,7 @@
     function suspendNativeObservation() {
       clearInterval(state2.routeTimer);
       state2.routeTimer = 0;
+      stopFavoritesRefresh();
       state2.observer?.disconnect();
       state2.observedNativeRoot = null;
     }
@@ -6282,6 +6309,7 @@
       if (!state2.observing || state2.disabled || state2.nativeMode) return;
       connectNativeObserver();
       startRouteFallback();
+      scheduleFavoritesRefresh();
     }
     function queueRouteCheck() {
       clearTimeout(state2.routeEventTimer);
@@ -6413,6 +6441,8 @@
       restoreHistoryNavigation,
       handlePageHide,
       requestStructuredRefresh,
+      stopFavoritesRefresh,
+      scheduleFavoritesRefresh,
       exposeDebugTools,
       measureRenderScale,
       observeNative,

@@ -163,6 +163,10 @@ export const STYLES = `
     box-shadow: inset 3px 0 #c65353;
   }
 
+  .favorite-row--unread .favorite-name {
+    color: var(--accent);
+  }
+
   .favorite-item--editing .favorite-row {
     padding-right: 52px;
     cursor: default;

@@ -5,6 +5,7 @@ export function installController(ctx) {
     ROUTE_FALLBACK_POLL_MS,
     ROUTE_DATA_FALLBACK_MS,
     STRUCTURED_RESUME_MS,
+    FAVORITES_REFRESH_MS = 60_000,
     SESSION_DISABLED_KEY,
     SELECTORS,
     state,
@@ -60,6 +61,35 @@ export function installController(ctx) {
     const key = routeKey();
     if (type === "unsupported") return Promise.resolve(null);
     return ensureStructuredModel(type, key, { reason, force });
+  }
+
+  function stopFavoritesRefresh() {
+    clearTimeout(state.favoritesRefreshTimer);
+    state.favoritesRefreshTimer = 0;
+  }
+
+  function scheduleFavoritesRefresh() {
+    stopFavoritesRefresh();
+    if (
+      state.disabled
+      || state.nativeMode
+      || document.visibilityState === "hidden"
+      || routeType() !== "favorites"
+    ) return;
+    state.favoritesRefreshTimer = window.setTimeout(async () => {
+      state.favoritesRefreshTimer = 0;
+      if (
+        state.disabled
+        || state.nativeMode
+        || document.visibilityState === "hidden"
+        || routeType() !== "favorites"
+      ) return;
+      try {
+        await requestStructuredRefresh("favorites-poll");
+      } finally {
+        scheduleFavoritesRefresh();
+      }
+    }, FAVORITES_REFRESH_MS);
   }
 
   function exposeDebugTools() {
@@ -146,6 +176,7 @@ export function installController(ctx) {
     const type = routeType();
 
     if (type === "unsupported" || !isMobileEligible()) {
+      stopFavoritesRefresh();
       revealNative();
       return;
     }
@@ -246,6 +277,7 @@ export function installController(ctx) {
     clearTimeout(state.routeFallbackTimer);
 
     if (routeType() === "unsupported" || !isMobileEligible()) {
+      stopFavoritesRefresh();
       state.currentRouteKey = key;
       revealNative();
       return;
@@ -253,6 +285,7 @@ export function installController(ctx) {
 
     state.currentRouteKey = key;
     const type = routeType();
+    scheduleFavoritesRefresh();
     abortStructuredRequests();
     invalidateStructuredModel(type, key);
     if (!state.host?.isConnected) mountShell();
@@ -324,6 +357,7 @@ export function installController(ctx) {
   function suspendNativeObservation() {
     clearInterval(state.routeTimer);
     state.routeTimer = 0;
+    stopFavoritesRefresh();
     state.observer?.disconnect();
     state.observedNativeRoot = null;
   }
@@ -332,6 +366,7 @@ export function installController(ctx) {
     if (!state.observing || state.disabled || state.nativeMode) return;
     connectNativeObserver();
     startRouteFallback();
+    scheduleFavoritesRefresh();
   }
 
   function queueRouteCheck() {
@@ -477,6 +512,8 @@ export function installController(ctx) {
     restoreHistoryNavigation,
     handlePageHide,
     requestStructuredRefresh,
+    stopFavoritesRefresh,
+    scheduleFavoritesRefresh,
     exposeDebugTools,
     measureRenderScale,
     observeNative,

@@ -333,7 +333,7 @@ export function installSettings(ctx) {
         - (positions.get(right.href) ?? Number.MAX_SAFE_INTEGER)
       ));
     }
-    return source;
+    return source.sort((left, right) => right.unread - left.unread);
   }
 
   function unreadHeat(unread) {

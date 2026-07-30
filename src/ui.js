@@ -139,6 +139,7 @@ export function installUi(ctx) {
     const rows = clubs.length
       ? clubs.map((club) => {
         const heat = showHeat ? unreadHeat(club.unread) : "";
+        const unreadClass = club.unread ? " favorite-row--unread" : "";
         const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
         const unreadLabel = club.unread
           ? `${club.unread} nových příspěvků`
@@ -149,7 +150,7 @@ export function installUi(ctx) {
             data-favorite-href="${escapeHtml(club.href)}"
           >
             <a
-              class="favorite-row${heatClass}"
+              class="favorite-row${unreadClass}${heatClass}"
               href="${escapeHtml(club.href)}"
               data-native-href="${escapeHtml(club.href)}"
               data-board-id="${escapeHtml(club.id)}"
@@ -223,7 +224,7 @@ export function installUi(ctx) {
         <label class="settings-field">
           <span>Řazení</span>
           <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
-            <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Výchozí</option>
+            <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Aktivita + nové</option>
             <option value="alphabetical" ${favorites.sort === "alphabetical" ? "selected" : ""}>Abecedně</option>
             <option value="unread" ${favorites.sort === "unread" ? "selected" : ""}>Podle nových</option>
             <option value="manual" ${favorites.sort === "manual" ? "selected" : ""}>Ručně</option>

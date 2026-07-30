@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.5`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.6`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.5` prototype reads Favorites, boards and older post pages from
+The `0.8.6` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -790,9 +790,16 @@ the current document. Unsupported or denied fullscreen requests fail silently.
 Version `0.8.5` replaces the lateral wipe/slide language with a softer
 blur-and-fade transition. Existing content blurs out briefly before navigation;
 the destination waits until it is loaded and its scroll position is restored,
-then blurs into focus. Bokoun's handoff to and from full Kapybara uses the same
-effect, while the comparison handle keeps its direct draggable split. Rapid
-navigation cancels stale motion, and reduced-motion mode remains instantaneous.
+then blurs into focus. Rapid navigation cancels stale motion, and reduced-motion
+mode remains instantaneous.
+
+Version `0.8.6` keeps that blur only for navigation inside Bokoun and restores
+the directional wipe between Bokoun and full Kapybara, including the direct
+draggable comparison split. While visible on Favorites, Bokoun now checks its
+same-origin structured feed once a minute. The **Aktivita + nové** order promotes
+clubs by unread count while preserving Kapybara's order for ties, and unread
+club names use the theme accent colour. Polling pauses off Favorites and while
+the document is hidden.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,
