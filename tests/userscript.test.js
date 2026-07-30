@@ -34,7 +34,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.7\.0/);
+  assert.match(source, /@version\s+0\.8\.0/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -415,6 +415,8 @@ test("post display settings persist avatar layout and safe font controls", () =>
   installSettings(settings);
 
   assert.deepEqual(settings.currentDisplaySettings(), {
+    interfacePreset: "default",
+    colorScheme: "system",
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -431,6 +433,18 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.equal(stored.get("display").avatarShape, "rounded");
   settings.updateDisplaySettings({ compareHandle: true });
   assert.equal(stored.get("display").compareHandle, true);
+  settings.updateDisplaySettings({
+    interfacePreset: "compact-reader",
+    colorScheme: "dark",
+  });
+  assert.equal(stored.get("display").interfacePreset, "compact-reader");
+  assert.equal(stored.get("display").colorScheme, "dark");
+  settings.updateDisplaySettings({
+    interfacePreset: "unknown",
+    colorScheme: "sepia",
+  });
+  assert.equal(stored.get("display").interfacePreset, "default");
+  assert.equal(stored.get("display").colorScheme, "system");
   assert.equal(settings.normalizeFontSize("18.26"), 18.5);
   assert.equal(settings.normalizeFontSize(100), 72);
   assert.equal(
@@ -562,6 +576,19 @@ test("live comparison uses an opt-in accessible drag handle and layered native v
   assert.match(source, /data-bokoun-layered/);
   assert.match(source, /data-bokoun-aligning/);
   assert.match(source, /restoreNativeAnchor\(state\.compareAnchor\)/);
+});
+
+test("compact reader preset is reversible and has light, dark, and system palettes", () => {
+  assert.match(source, /data-setting="interface-preset"/);
+  assert.match(source, /value="compact-reader"/);
+  assert.match(source, /data-setting="color-scheme"/);
+  assert.match(source, /value="system"/);
+  assert.match(source, /value="light"/);
+  assert.match(source, /value="dark"/);
+  assert.match(source, /data-interface-preset="compact-reader"/);
+  assert.match(source, /data-color-scheme="dark"/);
+  assert.match(source, /prefers-color-scheme: dark/);
+  assert.match(source, /Kompaktní čtečka mění pouze vzhled/);
 });
 
 test("reply metadata follows the body and reply moved into the popout menu", () => {

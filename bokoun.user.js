@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.7.0
+// @version      0.8.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -706,6 +706,10 @@
     font-weight: 650;
   }
 
+  .settings-field--wide-label {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
   .settings-field[hidden] {
     display: none;
   }
@@ -1212,6 +1216,389 @@
     }
   }
 
+  /*
+   * Compact reader preset
+   *
+   * This is deliberately a skin over the existing route and post model.
+   * It does not add navigation, fetches, media handling or duplicate content.
+   */
+  .app[data-interface-preset="compact-reader"] {
+    --bg: #eceae5;
+    --surface: #f8f7f3;
+    --surface-raised: #ffffff;
+    --text: #202225;
+    --muted: #686b70;
+    --border: #c8c5bd;
+    --accent: #c75b35;
+    --accent-soft: #f4ded5;
+    --link: #4e6e8d;
+    --post-read: #efede8;
+    --post-new: #faf9f6;
+    --post-reply: #f3eee6;
+    --post-thread: #e8eef2;
+    --code-bg: #e4e2dc;
+    --success-bg: #e5f1e8;
+    --success-text: #2d6840;
+    --error-text: #9b3e35;
+    --heat-few-bg: #e5f0e7;
+    --heat-more-bg: #ece6f3;
+    --heat-most-bg: #f3e3e0;
+    --header-bg: rgba(248, 247, 243, 0.96);
+    --drag-bg: rgba(255, 255, 255, 0.9);
+    --header-height: 46px;
+    --compact-avatar-size: min(var(--post-avatar-size, 40px), 32px);
+    color-scheme: light;
+    background: var(--bg);
+  }
+
+  .app[data-interface-preset="compact-reader"][data-color-scheme="dark"] {
+    --bg: #0e0f10;
+    --surface: #17191b;
+    --surface-raised: #202326;
+    --text: #e7e4de;
+    --muted: #9a9da2;
+    --border: #34383b;
+    --accent: #ef805a;
+    --accent-soft: #3b261f;
+    --link: #91aec7;
+    --post-read: #181b1d;
+    --post-new: #23272a;
+    --post-reply: #211f1c;
+    --post-thread: #1d252b;
+    --code-bg: #101214;
+    --success-bg: #183024;
+    --success-text: #98d3aa;
+    --error-text: #ef9b91;
+    --heat-few-bg: #1a2b21;
+    --heat-more-bg: #292333;
+    --heat-most-bg: #34211f;
+    --header-bg: rgba(23, 25, 27, 0.96);
+    --drag-bg: rgba(32, 35, 38, 0.92);
+    color-scheme: dark;
+  }
+
+  .app[data-interface-preset="compact-reader"] .app-inner {
+    background: var(--surface);
+  }
+
+  .app[data-interface-preset="compact-reader"] .topbar {
+    min-height: var(--header-height);
+    padding-top: env(safe-area-inset-top);
+    border-color: var(--border);
+    background: var(--header-bg);
+  }
+
+  .app[data-interface-preset="compact-reader"] .topbar--board {
+    grid-template-columns: 40px minmax(0, 1fr) 34px 40px auto;
+    padding-left: 2px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .topbar--favorites {
+    grid-template-columns: minmax(0, 1fr) 40px auto;
+    padding-left: 12px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"] .title--brand {
+    font-size: 20px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .full-link,
+  .app[data-interface-preset="compact-reader"] .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .full-link {
+    padding-left: 4px;
+    font-size: 13px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .icon-button svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorites {
+    padding: 0 0 max(16px, env(safe-area-inset-bottom));
+    background: var(--surface);
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-row {
+    gap: 10px;
+    min-height: 38px;
+    padding: min(var(--favorite-row-padding, 12px), 8px) 12px;
+    border-color: var(--border);
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-name {
+    font-weight: 650;
+    line-height: 1.18;
+    letter-spacing: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-time {
+    margin-top: 2px;
+    font-size: max(10px, calc(var(--favorite-font-size, 17px) - 4px));
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-unread {
+    min-width: 28px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-row--heat-few {
+    padding-left: 12px;
+    background: var(--heat-few-bg);
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-row--heat-more {
+    padding-left: 12px;
+    background: var(--heat-more-bg);
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-row--heat-most {
+    padding-left: 12px;
+    background: var(--heat-most-bg);
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorite-drag-handle {
+    top: 0;
+    right: 4px;
+    bottom: 0;
+    width: 42px;
+    border-radius: 0;
+    background: var(--drag-bg);
+  }
+
+  .app[data-interface-preset="compact-reader"] .posts {
+    background: var(--surface);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post {
+    padding: 9px 12px 11px;
+    border-color: var(--border);
+    background: var(--post-read);
+    scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 42px);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--visit-new {
+    background: var(--post-new);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--just-sent {
+    background: var(--post-reply);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--reply-context {
+    background: var(--post-reply);
+    box-shadow: inset 2px 0 var(--accent);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--thread-root {
+    background: var(--post-new);
+    box-shadow: inset 3px 0 var(--accent);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--thread-reply {
+    background: var(--post-thread);
+    box-shadow: inset 3px 0 var(--link);
+  }
+
+  .app[data-interface-preset="compact-reader"] .thread-banner {
+    min-height: 30px;
+    padding: 6px 12px;
+    border-color: var(--border);
+    background: var(--post-thread);
+    color: var(--link);
+    font-size: 12px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-header {
+    gap: 6px 9px;
+    margin-bottom: 7px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-author {
+    gap: 7px;
+    font-size: 16px;
+    font-weight: 720;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-date {
+    font-size: 11px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-body {
+    line-height: 1.45;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-body p,
+  .app[data-interface-preset="compact-reader"] .post-body ul,
+  .app[data-interface-preset="compact-reader"] .post-body ol,
+  .app[data-interface-preset="compact-reader"] .post-body blockquote,
+  .app[data-interface-preset="compact-reader"] .post-body pre {
+    margin-bottom: 0.65em;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-body blockquote {
+    color: var(--muted);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-body a,
+  .app[data-interface-preset="compact-reader"] button.reply-reference {
+    color: var(--link);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-body pre {
+    padding: 9px;
+    background: var(--code-bg);
+  }
+
+  .app[data-interface-preset="compact-reader"] .reply-reference {
+    min-height: 24px;
+    margin-top: 6px;
+    padding-top: 2px;
+    font-size: 11px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-avatar-trigger,
+  .app[data-interface-preset="compact-reader"] .post-avatar--inline,
+  .app[data-interface-preset="compact-reader"] .post-avatar--left {
+    width: var(--compact-avatar-size);
+    height: var(--compact-avatar-size);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-avatar--inline,
+  .app[data-interface-preset="compact-reader"] .post-avatar--left {
+    flex-basis: var(--compact-avatar-size);
+    font-size: 12px;
+    line-height: var(--compact-avatar-size);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--avatar-left .post-layout {
+    grid-template-columns: var(--compact-avatar-size) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .font-toggle {
+    border-radius: 3px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .favorites-settings-toggle[aria-expanded="true"],
+  .app[data-interface-preset="compact-reader"] .font-toggle:hover,
+  .app[data-interface-preset="compact-reader"] .font-toggle[aria-expanded="true"] {
+    border-radius: 3px;
+    background: var(--accent-soft);
+  }
+
+  .app[data-interface-preset="compact-reader"] .header-panel,
+  .app[data-interface-preset="compact-reader"] .post-menu {
+    border-radius: 4px;
+    background: var(--surface-raised);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  }
+
+  .app[data-interface-preset="compact-reader"] .settings-field select,
+  .app[data-interface-preset="compact-reader"] .settings-field input[type="text"],
+  .app[data-interface-preset="compact-reader"] .settings-field input[type="number"],
+  .app[data-interface-preset="compact-reader"] .composer-textarea {
+    border-radius: 3px;
+    background: var(--surface);
+  }
+
+  .app[data-interface-preset="compact-reader"] .settings-field--wide-label {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .app[data-interface-preset="compact-reader"] .panel-actions button,
+  .app[data-interface-preset="compact-reader"] .composer-action,
+  .app[data-interface-preset="compact-reader"] .tail-action {
+    border-radius: 3px;
+    background: var(--surface);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post-menu button:hover,
+  .app[data-interface-preset="compact-reader"] .post-menu button:focus-visible {
+    background: var(--accent-soft);
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-panel {
+    padding: 12px;
+    border-radius: 0;
+    background: var(--surface-raised);
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-panel--new {
+    margin: 0;
+    border-width: 0 0 1px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-panel--reply {
+    margin-top: 9px;
+    background: var(--surface-raised);
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-textarea {
+    min-height: 130px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-action--send {
+    background: var(--accent);
+  }
+
+  .app[data-interface-preset="compact-reader"] .write-feedback {
+    min-height: 40px;
+    padding: 6px 12px;
+    border-color: var(--border);
+    background: var(--success-bg);
+    color: var(--success-text);
+    font-size: 13px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-error,
+  .app[data-interface-preset="compact-reader"] .tail-error {
+    color: var(--error-text);
+  }
+
+  .app[data-interface-preset="compact-reader"] .board-tail {
+    min-height: 68px;
+    padding: 12px 12px max(20px, env(safe-area-inset-bottom));
+    background: var(--surface);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .app[data-interface-preset="compact-reader"][data-color-scheme="system"] {
+      --bg: #0e0f10;
+      --surface: #17191b;
+      --surface-raised: #202326;
+      --text: #e7e4de;
+      --muted: #9a9da2;
+      --border: #34383b;
+      --accent: #ef805a;
+      --accent-soft: #3b261f;
+      --link: #91aec7;
+      --post-read: #181b1d;
+      --post-new: #23272a;
+      --post-reply: #211f1c;
+      --post-thread: #1d252b;
+      --code-bg: #101214;
+      --success-bg: #183024;
+      --success-text: #98d3aa;
+      --error-text: #ef9b91;
+      --heat-few-bg: #1a2b21;
+      --heat-more-bg: #292333;
+      --heat-most-bg: #34211f;
+      --header-bg: rgba(23, 25, 27, 0.96);
+      --drag-bg: rgba(32, 35, 38, 0.92);
+      color-scheme: dark;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .loading::after {
       animation-duration: 1.8s;
@@ -1220,7 +1607,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.7.0";
+  var VERSION = "0.8.0";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -3611,6 +3998,8 @@
 
   // src/settings.js
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
+    interfacePreset: "default",
+    colorScheme: "system",
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -3657,6 +4046,8 @@
   var AVATAR_POSITIONS = /* @__PURE__ */ new Set(["inline", "left"]);
   var AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
+  var INTERFACE_PRESETS = /* @__PURE__ */ new Set(["default", "compact-reader"]);
+  var COLOR_SCHEMES = /* @__PURE__ */ new Set(["system", "light", "dark"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -3702,6 +4093,8 @@
     }
     function normalizeDisplaySettings(value = {}) {
       return {
+        interfacePreset: INTERFACE_PRESETS.has(value.interfacePreset) ? value.interfacePreset : DEFAULT_DISPLAY_SETTINGS.interfacePreset,
+        colorScheme: COLOR_SCHEMES.has(value.colorScheme) ? value.colorScheme : DEFAULT_DISPLAY_SETTINGS.colorScheme,
         showAvatars: value.showAvatars !== false,
         avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
         avatarSize: normalizeAvatarSize(value.avatarSize),
@@ -3916,6 +4309,8 @@
       const stack = fontStack(font.family, font.customFamily);
       const favoriteStack = fontStack(favorites.fontFamily, favorites.customFontFamily);
       scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
+      scroller.dataset.interfacePreset = display.interfacePreset;
+      scroller.dataset.colorScheme = display.colorScheme;
       scroller.dataset.avatarPosition = display.avatarPosition;
       scroller.dataset.avatarShape = display.avatarShape;
       scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
@@ -4120,6 +4515,7 @@
     }
     function favoritesPanelMarkup() {
       const favorites = currentFavoritesSettings();
+      const display = currentDisplaySettings();
       const manual = favorites.sort === "manual";
       const customFont = favorites.fontFamily === "custom";
       const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
@@ -4130,6 +4526,8 @@
           <strong>Oblíbené</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
+        ${interfacePresetMarkup(display)}
+        <div class="panel-section-title">Oblíbené</div>
         <label class="settings-field">
           <span>Řazení</span>
           <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
@@ -4298,6 +4696,8 @@
           <strong>Zobrazení příspěvků</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
+        ${interfacePresetMarkup(display)}
+        <div class="panel-section-title">Příspěvky</div>
         <label class="settings-switch">
           <span>Zobrazovat avatary</span>
           <input
@@ -4354,6 +4754,26 @@
           <button type="button" data-action="font-panel">← Písmo</button>
         </div>
       </section>
+    `;
+    }
+    function interfacePresetMarkup(display) {
+      return `
+      <label class="settings-field settings-field--wide-label">
+        <span>Rozhraní</span>
+        <select data-setting="interface-preset" aria-label="Vzhled rozhraní">
+          <option value="default" ${display.interfacePreset === "default" ? "selected" : ""}>Výchozí Bokoun</option>
+          <option value="compact-reader" ${display.interfacePreset === "compact-reader" ? "selected" : ""}>Kompaktní čtečka</option>
+        </select>
+      </label>
+      <label class="settings-field settings-field--wide-label">
+        <span>Barvy</span>
+        <select data-setting="color-scheme" aria-label="Barevný režim">
+          <option value="system" ${display.colorScheme === "system" ? "selected" : ""}>Podle systému</option>
+          <option value="light" ${display.colorScheme === "light" ? "selected" : ""}>Světlý</option>
+          <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
+        </select>
+      </label>
+      <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
     }
     function avatarImageMarkup(post, className = "") {
@@ -4637,6 +5057,12 @@
       });
       state2.shadow.querySelector("[data-setting='show-avatars']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ showAvatars: event.currentTarget.checked });
+      });
+      state2.shadow.querySelector("[data-setting='interface-preset']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ interfacePreset: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[data-setting='color-scheme']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ colorScheme: event.currentTarget.value });
       });
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });

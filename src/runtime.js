@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.7.0";
+export const VERSION = "0.8.0";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";

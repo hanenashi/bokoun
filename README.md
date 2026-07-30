@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, and live Kapybara comparison pre-alpha (`0.7.0`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.0`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.7.0` prototype reads Favorites, boards and older post pages from
+The `0.8.0` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -748,6 +748,15 @@ opt-in **Porovnávací madlo** in the display panel exposes the live native page
 under Bokoun without duplicating it as an image; the vertical handle supports
 touch, mouse, arrow keys, Home and End. Native controls stay inert during
 comparison, and reduced-motion preferences skip the wipe animation.
+
+Version `0.8.0` starts the optional **Kompaktní čtečka** interface preset.
+It keeps Bokoun's existing routes, read state, drafts and traffic behavior, but
+restyles Favorites and clubs as a denser continuous reader with compact
+headers, flatter controls and thin separators. Its colour mode can follow the
+system or be forced to light or dark. The preset and colour choice are
+available from both the Favorites gear and the post display panel; switching
+back to **Výchozí Bokoun** leaves existing font, avatar, Favorites and
+comparison preferences intact.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

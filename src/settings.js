@@ -1,4 +1,6 @@
 const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
+  interfacePreset: "default",
+  colorScheme: "system",
   showAvatars: true,
   avatarPosition: "inline",
   avatarSize: 40,
@@ -49,6 +51,8 @@ const FONT_FAMILIES = Object.freeze([
 const AVATAR_POSITIONS = new Set(["inline", "left"]);
 const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
 const REPLY_META_MODES = new Set(["full", "compact", "hidden"]);
+const INTERFACE_PRESETS = new Set(["default", "compact-reader"]);
+const COLOR_SCHEMES = new Set(["system", "light", "dark"]);
 const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
 const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -98,6 +102,12 @@ export function installSettings(ctx) {
 
   function normalizeDisplaySettings(value = {}) {
     return {
+      interfacePreset: INTERFACE_PRESETS.has(value.interfacePreset)
+        ? value.interfacePreset
+        : DEFAULT_DISPLAY_SETTINGS.interfacePreset,
+      colorScheme: COLOR_SCHEMES.has(value.colorScheme)
+        ? value.colorScheme
+        : DEFAULT_DISPLAY_SETTINGS.colorScheme,
       showAvatars: value.showAvatars !== false,
       avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition)
         ? value.avatarPosition
@@ -366,6 +376,8 @@ export function installSettings(ctx) {
     const favoriteStack = fontStack(favorites.fontFamily, favorites.customFontFamily);
 
     scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
+    scroller.dataset.interfacePreset = display.interfacePreset;
+    scroller.dataset.colorScheme = display.colorScheme;
     scroller.dataset.avatarPosition = display.avatarPosition;
     scroller.dataset.avatarShape = display.avatarShape;
     scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);

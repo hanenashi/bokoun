@@ -169,6 +169,7 @@ export function installUi(ctx) {
 
   function favoritesPanelMarkup() {
     const favorites = currentFavoritesSettings();
+    const display = currentDisplaySettings();
     const manual = favorites.sort === "manual";
     const customFont = favorites.fontFamily === "custom";
     const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
@@ -179,6 +180,8 @@ export function installUi(ctx) {
           <strong>Oblíbené</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
+        ${interfacePresetMarkup(display)}
+        <div class="panel-section-title">Oblíbené</div>
         <label class="settings-field">
           <span>Řazení</span>
           <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
@@ -354,6 +357,8 @@ export function installUi(ctx) {
           <strong>Zobrazení příspěvků</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
+        ${interfacePresetMarkup(display)}
+        <div class="panel-section-title">Příspěvky</div>
         <label class="settings-switch">
           <span>Zobrazovat avatary</span>
           <input
@@ -410,6 +415,27 @@ export function installUi(ctx) {
           <button type="button" data-action="font-panel">← Písmo</button>
         </div>
       </section>
+    `;
+  }
+
+  function interfacePresetMarkup(display) {
+    return `
+      <label class="settings-field settings-field--wide-label">
+        <span>Rozhraní</span>
+        <select data-setting="interface-preset" aria-label="Vzhled rozhraní">
+          <option value="default" ${display.interfacePreset === "default" ? "selected" : ""}>Výchozí Bokoun</option>
+          <option value="compact-reader" ${display.interfacePreset === "compact-reader" ? "selected" : ""}>Kompaktní čtečka</option>
+        </select>
+      </label>
+      <label class="settings-field settings-field--wide-label">
+        <span>Barvy</span>
+        <select data-setting="color-scheme" aria-label="Barevný režim">
+          <option value="system" ${display.colorScheme === "system" ? "selected" : ""}>Podle systému</option>
+          <option value="light" ${display.colorScheme === "light" ? "selected" : ""}>Světlý</option>
+          <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
+        </select>
+      </label>
+      <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
   }
 
@@ -735,6 +761,12 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='show-avatars']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ showAvatars: event.currentTarget.checked });
+    });
+    state.shadow.querySelector("[data-setting='interface-preset']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ interfacePreset: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-setting='color-scheme']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ colorScheme: event.currentTarget.value });
     });
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });
