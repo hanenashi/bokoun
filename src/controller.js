@@ -50,6 +50,7 @@ export function installController(ctx) {
   const revealBokoun = (...args) => ctx.revealBokoun(...args);
   const setLayered = (...args) => ctx.setLayered(...args);
   const setHostReveal = (...args) => ctx.setHostReveal(...args);
+  const rememberRecentClub = (...args) => ctx.rememberRecentClub(...args);
 
   function requestStructuredRefresh(reason, { force = false } = {}) {
     const type = routeType();
@@ -187,6 +188,7 @@ export function installController(ctx) {
       }
       restoreActiveComposer();
       model = boardViewModel();
+      rememberRecentClub(location.pathname, model.title);
     }
     const signature = signatureFor(type, model);
     if (!force && signature === state.currentSignature) return;

@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.0`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable Favorites and posts, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.1`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.0` prototype reads Favorites, boards and older post pages from
+The `0.8.1` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -757,6 +757,13 @@ system or be forced to light or dark. The preset and colour choice are
 available from both the Favorites gear and the post display panel; switching
 back to **Výchozí Bokoun** leaves existing font, avatar, Favorites and
 comparison preferences intact.
+
+Version `0.8.1` adds an optional horizontal club strip to **Kompaktní čtečka**.
+It keeps **Oblíbené** and up to six recently visited clubs within one tap,
+marks the current destination and uses the existing Bokoun navigation and read
+state. The locally stored history is bounded to eight clubs, causes no extra
+network requests, and can be switched off independently in either appearance
+panel.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

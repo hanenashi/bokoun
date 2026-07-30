@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.8.0";
+export const VERSION = "0.8.1";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";
@@ -36,6 +36,7 @@ export const DISPLAY_SETTINGS_KEY = "bokoun.display.v1";
 export const FONT_SETTINGS_KEY = "bokoun.fonts.v1";
 export const FAVORITES_SETTINGS_KEY = "bokoun.favorites.v1";
 export const FAVORITES_ORDER_KEY = "bokoun.favorites-order.v1";
+export const RECENT_CLUBS_KEY = "bokoun.recent-clubs.v1";
 
 export const SELECTORS = Object.freeze({
   favoritesPage: ".favorites-page",
@@ -159,6 +160,7 @@ export const state = {
   favoriteSourceClubs: [],
   favoriteViewClubs: [],
   editingFavoriteOrder: false,
+  recentClubs: null,
 };
 
 export const gmGet = typeof GM_getValue === "function"

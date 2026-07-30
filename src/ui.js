@@ -4,6 +4,7 @@ export function installUi(ctx) {
     state,
   } = ctx;
   const routeKey = (...args) => ctx.routeKey(...args);
+  const routeType = (...args) => ctx.routeType(...args);
   const openFullKapybara = (...args) => ctx.openFullKapybara(...args);
   const currentBoardId = (...args) => ctx.currentBoardId(...args);
   const openComposer = (...args) => ctx.openComposer(...args);
@@ -24,6 +25,8 @@ export function installUi(ctx) {
   const displayFontSize = (...args) => ctx.displayFontSize(...args);
   const normalizeCustomFamily = (...args) => ctx.normalizeCustomFamily(...args);
   const currentFavoritesSettings = (...args) => ctx.currentFavoritesSettings(...args);
+  const currentRecentClubs = (...args) => ctx.currentRecentClubs(...args);
+  const normalizeClubRoute = (...args) => ctx.normalizeClubRoute(...args);
   const updateFavoritesSettings = (...args) => ctx.updateFavoritesSettings(...args);
   const resetFavoritesAppearance = (...args) => ctx.resetFavoritesAppearance(...args);
   const saveFavoriteOrder = (...args) => ctx.saveFavoriteOrder(...args);
@@ -43,7 +46,9 @@ export function installUi(ctx) {
     if (type === "favorites") {
       return [
         routeKey(),
+        JSON.stringify(currentDisplaySettings()),
         JSON.stringify(currentFavoritesSettings()),
+        JSON.stringify(currentRecentClubs()),
         state.openHeaderPanel,
         state.editingFavoriteOrder,
         model.length,
@@ -64,6 +69,7 @@ export function installUi(ctx) {
       state.openPostMenuId,
       JSON.stringify(currentDisplaySettings()),
       JSON.stringify(currentFontSettings()),
+      JSON.stringify(currentRecentClubs()),
       state.composer
         ? [
             state.composer.kind,
@@ -91,6 +97,36 @@ export function installUi(ctx) {
         <span class="full-label--long">Plná verze</span>
         <span class="full-label--short" aria-hidden="true">Plná</span>
       </button>
+    `;
+  }
+
+  function clubStripMarkup() {
+    const display = currentDisplaySettings();
+    if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
+    const activeClub = normalizeClubRoute(location.pathname);
+    const favoritesActive = routeType() === "favorites";
+    const links = [
+      {
+        href: "/fav/activity",
+        name: "Oblíbené",
+        active: favoritesActive,
+      },
+      ...currentRecentClubs().slice(0, 6).map((club) => ({
+        ...club,
+        active: !favoritesActive && club.href === activeClub,
+      })),
+    ];
+    return `
+      <nav class="club-strip" aria-label="Rychlé přepínání klubů">
+        ${links.map((link) => `
+          <a
+            class="club-strip-link${link.active ? " club-strip-link--active" : ""}"
+            href="${escapeHtml(link.href)}"
+            data-native-href="${escapeHtml(link.href)}"
+            ${link.active ? 'aria-current="page"' : ""}
+          >${escapeHtml(link.name)}</a>
+        `).join("")}
+      </nav>
     `;
   }
 
@@ -147,6 +183,7 @@ export function installUi(ctx) {
         ${favoritesControlMarkup()}
         ${fullButton()}
       </header>
+      ${clubStripMarkup()}
       <ul class="favorites">${rows}</ul>
     `;
   }
@@ -435,6 +472,15 @@ export function installUi(ctx) {
           <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
         </select>
       </label>
+      <label class="settings-switch">
+        <span>Lišta klubů</span>
+        <input
+          type="checkbox"
+          data-setting="show-club-strip"
+          ${display.showClubStrip ? "checked" : ""}
+          ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
+        >
+      </label>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
   }
@@ -609,6 +655,7 @@ export function installUi(ctx) {
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
         ${fullButton()}
       </header>
+      ${clubStripMarkup()}
       ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
       ${feedbackMarkup}
       ${newComposer}
@@ -768,6 +815,9 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-setting='color-scheme']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ colorScheme: event.currentTarget.value });
     });
+    state.shadow.querySelector("[data-setting='show-club-strip']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ showClubStrip: event.currentTarget.checked });
+    });
     state.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarPosition: event.currentTarget.value });
     });
@@ -879,12 +929,25 @@ export function installUi(ctx) {
         event.preventDefault();
         if (state.editingFavoriteOrder && link.closest(".favorite-item")) return;
         const href = link.getAttribute("data-native-href");
+        if (link.matches("[aria-current='page']")) return;
         if (link.closest(".favorite-item")) {
           startBoardVisitFromFavorite(
             href,
             link.dataset.unreadCount,
             link.dataset.boardId,
           );
+        } else if (link.closest(".club-strip")) {
+          const normalizedHref = normalizeClubRoute(href);
+          const favorite = normalizedHref && state.favoriteSourceClubs.find(
+            (club) => normalizeClubRoute(club.href) === normalizedHref,
+          );
+          if (favorite) {
+            startBoardVisitFromFavorite(
+              favorite.href,
+              favorite.unread,
+              favorite.id,
+            );
+          }
         }
         navigateNative(href);
       });

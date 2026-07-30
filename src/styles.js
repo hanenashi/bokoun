@@ -1177,6 +1177,7 @@ export const STYLES = `
     --header-bg: rgba(248, 247, 243, 0.96);
     --drag-bg: rgba(255, 255, 255, 0.9);
     --header-height: 46px;
+    --club-strip-height: 34px;
     --compact-avatar-size: min(var(--post-avatar-size, 40px), 32px);
     color-scheme: light;
     background: var(--bg);
@@ -1227,6 +1228,63 @@ export const STYLES = `
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
     grid-template-columns: minmax(0, 1fr) 40px auto;
     padding-left: 12px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip {
+    position: sticky;
+    top: calc(var(--header-height) + env(safe-area-inset-top));
+    z-index: 9;
+    display: flex;
+    height: var(--club-strip-height);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-bottom: 1px solid var(--border);
+    background: var(--header-bg);
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip-link {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    max-width: min(44vw, 180px);
+    padding: 0 10px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: var(--club-strip-height);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip-link--active {
+    color: var(--accent);
+    box-shadow: inset 0 -2px var(--accent);
+  }
+
+  .app[data-interface-preset="compact-reader"][data-club-strip="visible"] .thread-banner,
+  .app[data-interface-preset="compact-reader"][data-club-strip="visible"] .write-feedback {
+    top: calc(
+      var(--header-height)
+      + env(safe-area-inset-top)
+      + var(--club-strip-height)
+    );
+  }
+
+  .app[data-interface-preset="compact-reader"][data-club-strip="visible"] .post {
+    scroll-margin-top: calc(
+      var(--header-height)
+      + env(safe-area-inset-top)
+      + var(--club-strip-height)
+      + 42px
+    );
   }
 
   .app[data-interface-preset="compact-reader"] .title {

@@ -1,6 +1,7 @@
 const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   interfacePreset: "default",
   colorScheme: "system",
+  showClubStrip: true,
   showAvatars: true,
   avatarPosition: "inline",
   avatarSize: 40,
@@ -58,6 +59,7 @@ const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 72;
+const MAX_RECENT_CLUBS = 8;
 
 export function installSettings(ctx) {
   const {
@@ -65,6 +67,7 @@ export function installSettings(ctx) {
     FAVORITES_ORDER_KEY,
     FAVORITES_SETTINGS_KEY,
     FONT_SETTINGS_KEY,
+    RECENT_CLUBS_KEY = "bokoun.recent-clubs.v1",
     gmGet,
     gmSet,
     state,
@@ -89,6 +92,9 @@ export function installSettings(ctx) {
         gmGet(FAVORITES_ORDER_KEY, []),
       );
     }
+    if (!state.recentClubs) {
+      state.recentClubs = normalizeRecentClubs(gmGet(RECENT_CLUBS_KEY, []));
+    }
     return {
       display: state.displaySettings,
       favorites: state.favoritesSettings,
@@ -108,6 +114,7 @@ export function installSettings(ctx) {
       colorScheme: COLOR_SCHEMES.has(value.colorScheme)
         ? value.colorScheme
         : DEFAULT_DISPLAY_SETTINGS.colorScheme,
+      showClubStrip: value.showClubStrip !== false,
       showAvatars: value.showAvatars !== false,
       avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition)
         ? value.avatarPosition
@@ -166,6 +173,59 @@ export function installSettings(ctx) {
   function currentFavoriteOrder() {
     loadSettings();
     return [...state.favoriteManualOrder];
+  }
+
+  function normalizeRecentClubs(value) {
+    if (!Array.isArray(value)) return [];
+    const normalized = [];
+    const seen = new Set();
+    for (const entry of value) {
+      const href = normalizeClubRoute(entry?.href);
+      const name = String(entry?.name || "").replace(/\s+/g, " ").trim().slice(0, 100);
+      if (!href || !name || seen.has(href)) continue;
+      seen.add(href);
+      normalized.push({ href, name });
+      if (normalized.length >= MAX_RECENT_CLUBS) break;
+    }
+    return normalized;
+  }
+
+  function normalizeClubRoute(value) {
+    try {
+      const base = typeof location !== "undefined"
+        ? location.origin
+        : "https://kapybara.okoun.cz";
+      const url = new URL(value, base);
+      if (url.origin !== base || !/^\/boards\/[^/]+\/?$/.test(url.pathname)) return "";
+      return url.pathname.replace(/\/$/, "");
+    } catch {
+      return "";
+    }
+  }
+
+  function currentRecentClubs() {
+    loadSettings();
+    return state.recentClubs.map((club) => ({ ...club }));
+  }
+
+  function rememberRecentClub(href, name) {
+    const candidate = normalizeRecentClubs([{ href, name }])[0];
+    if (!candidate) return currentRecentClubs();
+    const current = currentRecentClubs();
+    const next = [
+      candidate,
+      ...current.filter((club) => club.href !== candidate.href),
+    ].slice(0, MAX_RECENT_CLUBS);
+    if (
+      next.length !== current.length
+      || next.some((club, index) => (
+        club.href !== current[index]?.href || club.name !== current[index]?.name
+      ))
+    ) {
+      state.recentClubs = next;
+      gmSet(RECENT_CLUBS_KEY, next);
+    }
+    return next.map((club) => ({ ...club }));
   }
 
   function updateDisplaySettings(patch, { render = true } = {}) {
@@ -378,6 +438,9 @@ export function installSettings(ctx) {
     scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
     scroller.dataset.interfacePreset = display.interfacePreset;
     scroller.dataset.colorScheme = display.colorScheme;
+    scroller.dataset.clubStrip = (
+      display.interfacePreset === "compact-reader" && display.showClubStrip
+    ) ? "visible" : "hidden";
     scroller.dataset.avatarPosition = display.avatarPosition;
     scroller.dataset.avatarShape = display.avatarShape;
     scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
@@ -402,10 +465,14 @@ export function installSettings(ctx) {
     normalizeFontSettings,
     normalizeFavoritesSettings,
     normalizeFavoriteOrder,
+    normalizeRecentClubs,
+    normalizeClubRoute,
     currentDisplaySettings,
     currentFontSettings,
     currentFavoritesSettings,
     currentFavoriteOrder,
+    currentRecentClubs,
+    rememberRecentClub,
     updateDisplaySettings,
     updateFontSettings,
     updateFavoritesSettings,

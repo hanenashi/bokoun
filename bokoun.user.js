@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.0
+// @version      0.8.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -46,6 +46,7 @@
     READ_SYNC_BACKOFF_MAX_MS: () => READ_SYNC_BACKOFF_MAX_MS,
     READ_SYNC_MIN_INTERVAL_MS: () => READ_SYNC_MIN_INTERVAL_MS,
     READ_SYNC_STATE_KEY: () => READ_SYNC_STATE_KEY,
+    RECENT_CLUBS_KEY: () => RECENT_CLUBS_KEY,
     RETURN_HOST_ID: () => RETURN_HOST_ID,
     ROUTE_DATA_FALLBACK_MS: () => ROUTE_DATA_FALLBACK_MS,
     ROUTE_FALLBACK_POLL_MS: () => ROUTE_FALLBACK_POLL_MS,
@@ -1246,6 +1247,7 @@
     --header-bg: rgba(248, 247, 243, 0.96);
     --drag-bg: rgba(255, 255, 255, 0.9);
     --header-height: 46px;
+    --club-strip-height: 34px;
     --compact-avatar-size: min(var(--post-avatar-size, 40px), 32px);
     color-scheme: light;
     background: var(--bg);
@@ -1296,6 +1298,63 @@
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
     grid-template-columns: minmax(0, 1fr) 40px auto;
     padding-left: 12px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip {
+    position: sticky;
+    top: calc(var(--header-height) + env(safe-area-inset-top));
+    z-index: 9;
+    display: flex;
+    height: var(--club-strip-height);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-bottom: 1px solid var(--border);
+    background: var(--header-bg);
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip-link {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    max-width: min(44vw, 180px);
+    padding: 0 10px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: var(--club-strip-height);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app[data-interface-preset="compact-reader"] .club-strip-link--active {
+    color: var(--accent);
+    box-shadow: inset 0 -2px var(--accent);
+  }
+
+  .app[data-interface-preset="compact-reader"][data-club-strip="visible"] .thread-banner,
+  .app[data-interface-preset="compact-reader"][data-club-strip="visible"] .write-feedback {
+    top: calc(
+      var(--header-height)
+      + env(safe-area-inset-top)
+      + var(--club-strip-height)
+    );
+  }
+
+  .app[data-interface-preset="compact-reader"][data-club-strip="visible"] .post {
+    scroll-margin-top: calc(
+      var(--header-height)
+      + env(safe-area-inset-top)
+      + var(--club-strip-height)
+      + 42px
+    );
   }
 
   .app[data-interface-preset="compact-reader"] .title {
@@ -1607,7 +1666,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.0";
+  var VERSION = "0.8.1";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1643,6 +1702,7 @@
   var FONT_SETTINGS_KEY = "bokoun.fonts.v1";
   var FAVORITES_SETTINGS_KEY = "bokoun.favorites.v1";
   var FAVORITES_ORDER_KEY = "bokoun.favorites-order.v1";
+  var RECENT_CLUBS_KEY = "bokoun.recent-clubs.v1";
   var SELECTORS = Object.freeze({
     favoritesPage: ".favorites-page",
     favoriteRows: ".favorites-page a[href^='/boards/']",
@@ -1763,7 +1823,8 @@
     favoriteManualOrder: null,
     favoriteSourceClubs: [],
     favoriteViewClubs: [],
-    editingFavoriteOrder: false
+    editingFavoriteOrder: false,
+    recentClubs: null
   };
   var gmGet = typeof GM_getValue === "function" ? GM_getValue : (key, fallback) => {
     const raw = localStorage.getItem(`bokoun.gm.${key}`);
@@ -4000,6 +4061,7 @@
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
     interfacePreset: "default",
     colorScheme: "system",
+    showClubStrip: true,
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -4053,12 +4115,14 @@
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
   var MIN_FONT_SIZE = 8;
   var MAX_FONT_SIZE = 72;
+  var MAX_RECENT_CLUBS = 8;
   function installSettings(ctx2) {
     const {
       DISPLAY_SETTINGS_KEY: DISPLAY_SETTINGS_KEY2,
       FAVORITES_ORDER_KEY: FAVORITES_ORDER_KEY2,
       FAVORITES_SETTINGS_KEY: FAVORITES_SETTINGS_KEY2,
       FONT_SETTINGS_KEY: FONT_SETTINGS_KEY2,
+      RECENT_CLUBS_KEY: RECENT_CLUBS_KEY2 = "bokoun.recent-clubs.v1",
       gmGet: gmGet2,
       gmSet: gmSet2,
       state: state2
@@ -4082,6 +4146,9 @@
           gmGet2(FAVORITES_ORDER_KEY2, [])
         );
       }
+      if (!state2.recentClubs) {
+        state2.recentClubs = normalizeRecentClubs(gmGet2(RECENT_CLUBS_KEY2, []));
+      }
       return {
         display: state2.displaySettings,
         favorites: state2.favoritesSettings,
@@ -4095,6 +4162,7 @@
       return {
         interfacePreset: INTERFACE_PRESETS.has(value.interfacePreset) ? value.interfacePreset : DEFAULT_DISPLAY_SETTINGS.interfacePreset,
         colorScheme: COLOR_SCHEMES.has(value.colorScheme) ? value.colorScheme : DEFAULT_DISPLAY_SETTINGS.colorScheme,
+        showClubStrip: value.showClubStrip !== false,
         showAvatars: value.showAvatars !== false,
         avatarPosition: AVATAR_POSITIONS.has(value.avatarPosition) ? value.avatarPosition : DEFAULT_DISPLAY_SETTINGS.avatarPosition,
         avatarSize: normalizeAvatarSize(value.avatarSize),
@@ -4136,6 +4204,48 @@
     function currentFavoriteOrder() {
       loadSettings();
       return [...state2.favoriteManualOrder];
+    }
+    function normalizeRecentClubs(value) {
+      if (!Array.isArray(value)) return [];
+      const normalized = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const entry of value) {
+        const href = normalizeClubRoute(entry?.href);
+        const name = String(entry?.name || "").replace(/\s+/g, " ").trim().slice(0, 100);
+        if (!href || !name || seen.has(href)) continue;
+        seen.add(href);
+        normalized.push({ href, name });
+        if (normalized.length >= MAX_RECENT_CLUBS) break;
+      }
+      return normalized;
+    }
+    function normalizeClubRoute(value) {
+      try {
+        const base = typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz";
+        const url = new URL(value, base);
+        if (url.origin !== base || !/^\/boards\/[^/]+\/?$/.test(url.pathname)) return "";
+        return url.pathname.replace(/\/$/, "");
+      } catch {
+        return "";
+      }
+    }
+    function currentRecentClubs() {
+      loadSettings();
+      return state2.recentClubs.map((club) => ({ ...club }));
+    }
+    function rememberRecentClub(href, name) {
+      const candidate = normalizeRecentClubs([{ href, name }])[0];
+      if (!candidate) return currentRecentClubs();
+      const current = currentRecentClubs();
+      const next = [
+        candidate,
+        ...current.filter((club) => club.href !== candidate.href)
+      ].slice(0, MAX_RECENT_CLUBS);
+      if (next.length !== current.length || next.some((club, index) => club.href !== current[index]?.href || club.name !== current[index]?.name)) {
+        state2.recentClubs = next;
+        gmSet2(RECENT_CLUBS_KEY2, next);
+      }
+      return next.map((club) => ({ ...club }));
     }
     function updateDisplaySettings(patch, { render = true } = {}) {
       state2.displaySettings = normalizeDisplaySettings({
@@ -4311,6 +4421,7 @@
       scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
       scroller.dataset.interfacePreset = display.interfacePreset;
       scroller.dataset.colorScheme = display.colorScheme;
+      scroller.dataset.clubStrip = display.interfacePreset === "compact-reader" && display.showClubStrip ? "visible" : "hidden";
       scroller.dataset.avatarPosition = display.avatarPosition;
       scroller.dataset.avatarShape = display.avatarShape;
       scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
@@ -4334,10 +4445,14 @@
       normalizeFontSettings,
       normalizeFavoritesSettings,
       normalizeFavoriteOrder,
+      normalizeRecentClubs,
+      normalizeClubRoute,
       currentDisplaySettings,
       currentFontSettings,
       currentFavoritesSettings,
       currentFavoriteOrder,
+      currentRecentClubs,
+      rememberRecentClub,
       updateDisplaySettings,
       updateFontSettings,
       updateFavoritesSettings,
@@ -4365,6 +4480,7 @@
       state: state2
     } = ctx2;
     const routeKey = (...args) => ctx2.routeKey(...args);
+    const routeType = (...args) => ctx2.routeType(...args);
     const openFullKapybara = (...args) => ctx2.openFullKapybara(...args);
     const currentBoardId = (...args) => ctx2.currentBoardId(...args);
     const openComposer = (...args) => ctx2.openComposer(...args);
@@ -4385,6 +4501,8 @@
     const displayFontSize = (...args) => ctx2.displayFontSize(...args);
     const normalizeCustomFamily = (...args) => ctx2.normalizeCustomFamily(...args);
     const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
+    const currentRecentClubs = (...args) => ctx2.currentRecentClubs(...args);
+    const normalizeClubRoute = (...args) => ctx2.normalizeClubRoute(...args);
     const updateFavoritesSettings = (...args) => ctx2.updateFavoritesSettings(...args);
     const resetFavoritesAppearance = (...args) => ctx2.resetFavoritesAppearance(...args);
     const saveFavoriteOrder = (...args) => ctx2.saveFavoriteOrder(...args);
@@ -4402,7 +4520,9 @@
       if (type === "favorites") {
         return [
           routeKey(),
+          JSON.stringify(currentDisplaySettings()),
           JSON.stringify(currentFavoritesSettings()),
+          JSON.stringify(currentRecentClubs()),
           state2.openHeaderPanel,
           state2.editingFavoriteOrder,
           model.length,
@@ -4423,6 +4543,7 @@
         state2.openPostMenuId,
         JSON.stringify(currentDisplaySettings()),
         JSON.stringify(currentFontSettings()),
+        JSON.stringify(currentRecentClubs()),
         state2.composer ? [
           state2.composer.kind,
           state2.composer.replyTo,
@@ -4445,6 +4566,35 @@
         <span class="full-label--long">Plná verze</span>
         <span class="full-label--short" aria-hidden="true">Plná</span>
       </button>
+    `;
+    }
+    function clubStripMarkup() {
+      const display = currentDisplaySettings();
+      if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
+      const activeClub = normalizeClubRoute(location.pathname);
+      const favoritesActive = routeType() === "favorites";
+      const links = [
+        {
+          href: "/fav/activity",
+          name: "Oblíbené",
+          active: favoritesActive
+        },
+        ...currentRecentClubs().slice(0, 6).map((club) => ({
+          ...club,
+          active: !favoritesActive && club.href === activeClub
+        }))
+      ];
+      return `
+      <nav class="club-strip" aria-label="Rychlé přepínání klubů">
+        ${links.map((link) => `
+          <a
+            class="club-strip-link${link.active ? " club-strip-link--active" : ""}"
+            href="${escapeHtml(link.href)}"
+            data-native-href="${escapeHtml(link.href)}"
+            ${link.active ? 'aria-current="page"' : ""}
+          >${escapeHtml(link.name)}</a>
+        `).join("")}
+      </nav>
     `;
     }
     function favoritesMarkup(clubs) {
@@ -4495,6 +4645,7 @@
         ${favoritesControlMarkup()}
         ${fullButton()}
       </header>
+      ${clubStripMarkup()}
       <ul class="favorites">${rows}</ul>
     `;
     }
@@ -4773,6 +4924,15 @@
           <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
         </select>
       </label>
+      <label class="settings-switch">
+        <span>Lišta klubů</span>
+        <input
+          type="checkbox"
+          data-setting="show-club-strip"
+          ${display.showClubStrip ? "checked" : ""}
+          ${display.interfacePreset === "compact-reader" ? "" : "disabled"}
+        >
+      </label>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
     `;
     }
@@ -4916,6 +5076,7 @@
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS2.write}</button>
         ${fullButton()}
       </header>
+      ${clubStripMarkup()}
       ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
       ${feedbackMarkup}
       ${newComposer}
@@ -5064,6 +5225,9 @@
       state2.shadow.querySelector("[data-setting='color-scheme']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ colorScheme: event.currentTarget.value });
       });
+      state2.shadow.querySelector("[data-setting='show-club-strip']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ showClubStrip: event.currentTarget.checked });
+      });
       state2.shadow.querySelector("[data-setting='avatar-position']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarPosition: event.currentTarget.value });
       });
@@ -5173,12 +5337,25 @@
           event.preventDefault();
           if (state2.editingFavoriteOrder && link.closest(".favorite-item")) return;
           const href = link.getAttribute("data-native-href");
+          if (link.matches("[aria-current='page']")) return;
           if (link.closest(".favorite-item")) {
             startBoardVisitFromFavorite(
               href,
               link.dataset.unreadCount,
               link.dataset.boardId
             );
+          } else if (link.closest(".club-strip")) {
+            const normalizedHref = normalizeClubRoute(href);
+            const favorite = normalizedHref && state2.favoriteSourceClubs.find(
+              (club) => normalizeClubRoute(club.href) === normalizedHref
+            );
+            if (favorite) {
+              startBoardVisitFromFavorite(
+                favorite.href,
+                favorite.unread,
+                favorite.id
+              );
+            }
           }
           navigateNative(href);
         });
@@ -5558,6 +5735,7 @@
     const revealBokoun = (...args) => ctx2.revealBokoun(...args);
     const setLayered = (...args) => ctx2.setLayered(...args);
     const setHostReveal = (...args) => ctx2.setHostReveal(...args);
+    const rememberRecentClub = (...args) => ctx2.rememberRecentClub(...args);
     function requestStructuredRefresh(reason, { force = false } = {}) {
       const type = routeType();
       const key = routeKey();
@@ -5678,6 +5856,7 @@
         }
         restoreActiveComposer();
         model = boardViewModel();
+        rememberRecentClub(location.pathname, model.title);
       }
       const signature = signatureFor(type, model);
       if (!force && signature === state2.currentSignature) return;

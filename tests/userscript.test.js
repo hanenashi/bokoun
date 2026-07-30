@@ -17,6 +17,7 @@ const scriptPath = path.join(dirname, "..", "bokoun.user.js");
 const sourceDir = path.join(dirname, "..", "src");
 const generatedSource = fs.readFileSync(scriptPath, "utf8");
 const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
+const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
 const source = [
   generatedSource,
   ...fs.readdirSync(sourceDir)
@@ -34,7 +35,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.0/);
+  assert.match(source, /@version\s+0\.8\.1/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -398,6 +399,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     FAVORITES_ORDER_KEY: "favorite-order",
     FAVORITES_SETTINGS_KEY: "favorites",
     FONT_SETTINGS_KEY: "fonts",
+    RECENT_CLUBS_KEY: "recent-clubs",
     gmGet: (key, fallback) => stored.get(key) ?? fallback,
     gmSet: (key, value) => stored.set(key, value),
     state: {
@@ -408,6 +410,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
       favoriteSourceClubs: [],
       favoritesSettings: null,
       fontSettings: null,
+      recentClubs: null,
       scroller: null,
     },
     scheduleRender() {},
@@ -417,6 +420,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.deepEqual(settings.currentDisplaySettings(), {
     interfacePreset: "default",
     colorScheme: "system",
+    showClubStrip: true,
     showAvatars: true,
     avatarPosition: "inline",
     avatarSize: 40,
@@ -439,12 +443,30 @@ test("post display settings persist avatar layout and safe font controls", () =>
   });
   assert.equal(stored.get("display").interfacePreset, "compact-reader");
   assert.equal(stored.get("display").colorScheme, "dark");
+  settings.updateDisplaySettings({ showClubStrip: false });
+  assert.equal(stored.get("display").showClubStrip, false);
   settings.updateDisplaySettings({
     interfacePreset: "unknown",
     colorScheme: "sepia",
   });
   assert.equal(stored.get("display").interfacePreset, "default");
   assert.equal(stored.get("display").colorScheme, "system");
+  for (let index = 0; index < 10; index += 1) {
+    settings.rememberRecentClub(`/boards/club-${index}`, `Club ${index}`);
+  }
+  assert.equal(settings.currentRecentClubs().length, 8);
+  assert.deepEqual(settings.currentRecentClubs()[0], {
+    href: "/boards/club-9",
+    name: "Club 9",
+  });
+  settings.rememberRecentClub("/boards/club-4", "Club four");
+  assert.deepEqual(settings.currentRecentClubs()[0], {
+    href: "/boards/club-4",
+    name: "Club four",
+  });
+  assert.equal(stored.get("recent-clubs").length, 8);
+  settings.rememberRecentClub("https://example.com/boards/nope", "Nope");
+  assert.equal(settings.currentRecentClubs().length, 8);
   assert.equal(settings.normalizeFontSize("18.26"), 18.5);
   assert.equal(settings.normalizeFontSize(100), 72);
   assert.equal(
@@ -475,6 +497,7 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
       favoriteSourceClubs: [],
       favoritesSettings: null,
       fontSettings: null,
+      recentClubs: null,
       scroller: null,
     },
     scheduleRender() {},
@@ -589,6 +612,20 @@ test("compact reader preset is reversible and has light, dark, and system palett
   assert.match(source, /data-color-scheme="dark"/);
   assert.match(source, /prefers-color-scheme: dark/);
   assert.match(source, /Kompaktní čtečka mění pouze vzhled/);
+});
+
+test("compact reader club strip is optional, bounded, and request-free", () => {
+  assert.match(source, /class="club-strip"/);
+  assert.match(source, /aria-label="Rychlé přepínání klubů"/);
+  assert.match(source, /data-setting="show-club-strip"/);
+  assert.match(source, /currentRecentClubs\(\)\.slice\(0, 6\)/);
+  assert.match(source, /const MAX_RECENT_CLUBS = 8/);
+  assert.match(source, /data-club-strip="visible"/);
+  const clubStripSource = uiSource.slice(
+    uiSource.indexOf("function clubStripMarkup()"),
+    uiSource.indexOf("function favoritesMarkup"),
+  );
+  assert.doesNotMatch(clubStripSource, /\bfetch\(/);
 });
 
 test("reply metadata follows the body and reply moved into the popout menu", () => {
