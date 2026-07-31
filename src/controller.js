@@ -24,6 +24,7 @@ export function installController(ctx) {
   const nativeReady = (...args) => ctx.nativeReady(...args);
   const readFavoritesFromDom = (...args) => ctx.readFavoritesFromDom(...args);
   const cachedStructuredModel = (...args) => ctx.cachedStructuredModel(...args);
+  const structuredModelAge = (...args) => ctx.structuredModelAge(...args);
   const ensureStructuredModel = (...args) => ctx.ensureStructuredModel(...args);
   const abortStructuredRequests = (...args) => ctx.abortStructuredRequests(...args);
   const invalidateStructuredModel = (...args) => ctx.invalidateStructuredModel(...args);
@@ -74,7 +75,7 @@ export function installController(ctx) {
       state.disabled
       || state.nativeMode
       || document.visibilityState === "hidden"
-      || routeType() !== "favorites"
+      || !["favorites", "board"].includes(routeType())
     ) return;
     state.favoritesRefreshTimer = window.setTimeout(async () => {
       state.favoritesRefreshTimer = 0;
@@ -82,14 +83,25 @@ export function installController(ctx) {
         state.disabled
         || state.nativeMode
         || document.visibilityState === "hidden"
-        || routeType() !== "favorites"
+        || !["favorites", "board"].includes(routeType())
       ) return;
       try {
-        await requestStructuredRefresh("favorites-poll");
+        await ensureStructuredModel("favorites", favoritesRefreshHref(), {
+          reason: "favorites-poll",
+          render: routeType() === "favorites",
+        });
       } finally {
         scheduleFavoritesRefresh();
       }
     }, FAVORITES_REFRESH_MS);
+  }
+
+  function favoritesRefreshHref() {
+    const url = new URL("/fav/activity", location.origin);
+    if (new URL(location.href).searchParams.get("bokoun") === "on") {
+      url.searchParams.set("bokoun", "on");
+    }
+    return `${url.pathname}${url.search}`;
   }
 
   function exposeDebugTools() {
@@ -286,8 +298,12 @@ export function installController(ctx) {
     state.currentRouteKey = key;
     const type = routeType();
     scheduleFavoritesRefresh();
-    abortStructuredRequests();
-    invalidateStructuredModel(type, key);
+    const reusePolledFavorites = (
+      type === "favorites"
+      && structuredModelAge(type, key) < FAVORITES_REFRESH_MS
+    );
+    abortStructuredRequests(reusePolledFavorites ? type : "", reusePolledFavorites ? key : "");
+    if (!reusePolledFavorites) invalidateStructuredModel(type, key);
     if (!state.host?.isConnected) mountShell();
     state.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
     state.routeFallbackTimer = window.setTimeout(() => {

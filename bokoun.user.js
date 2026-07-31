@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.6
+// @version      0.8.7
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -195,6 +195,10 @@
     padding: 0 16px max(24px, env(safe-area-inset-bottom));
     font-family: var(--favorite-font-family, inherit);
     list-style: none;
+  }
+
+  .route-content {
+    min-width: 0;
   }
 
   .favorite-item {
@@ -1672,7 +1676,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.6";
+  var VERSION = "0.8.7";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -2788,6 +2792,11 @@
       state2.structuredCache.set(cacheKey, entry);
       return entry.model || null;
     }
+    function structuredModelAge(type, pageHref) {
+      const entry = state2.structuredCache.get(structuredCacheKey(type, pageHref));
+      const fetchedAt = Number(entry?.fetchedAt);
+      return Number.isFinite(fetchedAt) ? Math.max(0, now() - fetchedAt) : Number.POSITIVE_INFINITY;
+    }
     function storeStructuredEntry(cacheKey, entry) {
       state2.structuredCache.delete(cacheKey);
       state2.structuredCache.set(cacheKey, entry);
@@ -2802,6 +2811,7 @@
     function ensureStructuredModel(type, pageHref, {
       reason = "initial-route",
       force = false,
+      render = true,
       minimumAge = reason === "visibility-resume" ? STRUCTURED_RESUME_MS2 : STRUCTURED_REFRESH_MS2
     } = {}) {
       if (!STRUCTURED_REASONS.has(reason)) {
@@ -2828,8 +2838,10 @@
       }).then((entry) => {
         storeStructuredEntry(cacheKey, entry);
         state2.structuredFailures.delete(cacheKey);
-        state2.currentSignature = "";
-        scheduleRender({ force: true });
+        if (render) {
+          state2.currentSignature = "";
+          scheduleRender({ force: true });
+        }
       }).catch((error) => {
         if (error?.name === "AbortError") return null;
         state2.structuredFailures.delete(cacheKey);
@@ -3042,6 +3054,7 @@
       structuredCacheKey,
       storeStructuredEntry,
       cachedStructuredModel,
+      structuredModelAge,
       ensureStructuredModel,
       abortStructuredRequests,
       invalidateStructuredModel,
@@ -4760,7 +4773,9 @@
         ${fullButton()}
       </header>
       ${clubStripMarkup()}
-      <ul class="favorites">${rows}</ul>
+      <div class="route-content">
+        <ul class="favorites">${rows}</ul>
+      </div>
     `;
     }
     function favoritesControlMarkup() {
@@ -5209,11 +5224,13 @@
         ${fullButton()}
       </header>
       ${clubStripMarkup()}
-      ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
-      ${feedbackMarkup}
-      ${newComposer}
-      <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
-      <footer class="board-tail">${tailState}${newest}</footer>
+      <div class="route-content">
+        ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
+        ${feedbackMarkup}
+        ${newComposer}
+        <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
+        <footer class="board-tail">${tailState}${newest}</footer>
+      </div>
     `;
     }
     function composerMarkup() {
@@ -5735,11 +5752,11 @@
         state2.routeExitAnimation = null;
         return Promise.resolve();
       }
-      const routeContainer = state2.scroller;
+      const routeContainer = routeAnimationTarget();
       if (!routeContainer || typeof routeContainer.animate !== "function") {
         return Promise.resolve();
       }
-      pinRouteBackground(routeContainer);
+      pinRouteBackground();
       state2.routeExitAnimation?.cancel();
       state2.routeExitAnimation = null;
       state2.routeTransitionAnimation?.cancel();
@@ -5762,11 +5779,11 @@
     }
     function animateRouteExit() {
       if (!transitionsEnabled() || prefersReducedMotion()) return Promise.resolve();
-      const routeContainer = state2.scroller;
+      const routeContainer = routeAnimationTarget();
       if (!routeContainer || typeof routeContainer.animate !== "function") {
         return Promise.resolve();
       }
-      pinRouteBackground(routeContainer);
+      pinRouteBackground();
       state2.routeTransitionAnimation?.cancel();
       state2.routeTransitionAnimation = null;
       state2.routeExitAnimation?.cancel();
@@ -5784,8 +5801,11 @@
       state2.routeExitAnimation = animation;
       return animation.finished.catch(() => void 0);
     }
-    function pinRouteBackground(routeContainer) {
-      const background = getComputedStyle(routeContainer).backgroundColor;
+    function routeAnimationTarget() {
+      return state2.shadow?.querySelector(".route-content") || state2.scroller;
+    }
+    function pinRouteBackground() {
+      const background = state2.scroller ? getComputedStyle(state2.scroller).backgroundColor : "";
       if (state2.host && background && background !== "rgba(0, 0, 0, 0)") {
         state2.host.style.backgroundColor = background;
       }
@@ -5979,6 +5999,7 @@
       consumeNavigationTransition,
       animateRouteEntry,
       animateRouteExit,
+      routeAnimationTarget,
       goBack,
       openThread,
       closeThread,
@@ -6019,6 +6040,7 @@
     const nativeReady = (...args) => ctx2.nativeReady(...args);
     const readFavoritesFromDom = (...args) => ctx2.readFavoritesFromDom(...args);
     const cachedStructuredModel = (...args) => ctx2.cachedStructuredModel(...args);
+    const structuredModelAge = (...args) => ctx2.structuredModelAge(...args);
     const ensureStructuredModel = (...args) => ctx2.ensureStructuredModel(...args);
     const abortStructuredRequests = (...args) => ctx2.abortStructuredRequests(...args);
     const invalidateStructuredModel = (...args) => ctx2.invalidateStructuredModel(...args);
@@ -6062,16 +6084,26 @@
     }
     function scheduleFavoritesRefresh() {
       stopFavoritesRefresh();
-      if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || routeType() !== "favorites") return;
+      if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || !["favorites", "board"].includes(routeType())) return;
       state2.favoritesRefreshTimer = window.setTimeout(async () => {
         state2.favoritesRefreshTimer = 0;
-        if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || routeType() !== "favorites") return;
+        if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || !["favorites", "board"].includes(routeType())) return;
         try {
-          await requestStructuredRefresh("favorites-poll");
+          await ensureStructuredModel("favorites", favoritesRefreshHref(), {
+            reason: "favorites-poll",
+            render: routeType() === "favorites"
+          });
         } finally {
           scheduleFavoritesRefresh();
         }
       }, FAVORITES_REFRESH_MS2);
+    }
+    function favoritesRefreshHref() {
+      const url = new URL("/fav/activity", location.origin);
+      if (new URL(location.href).searchParams.get("bokoun") === "on") {
+        url.searchParams.set("bokoun", "on");
+      }
+      return `${url.pathname}${url.search}`;
     }
     function exposeDebugTools() {
       if (typeof window === "undefined") return;
@@ -6244,8 +6276,9 @@
       state2.currentRouteKey = key;
       const type = routeType();
       scheduleFavoritesRefresh();
-      abortStructuredRequests();
-      invalidateStructuredModel(type, key);
+      const reusePolledFavorites = type === "favorites" && structuredModelAge(type, key) < FAVORITES_REFRESH_MS2;
+      abortStructuredRequests(reusePolledFavorites ? type : "", reusePolledFavorites ? key : "");
+      if (!reusePolledFavorites) invalidateStructuredModel(type, key);
       if (!state2.host?.isConnected) mountShell();
       state2.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
       state2.routeFallbackTimer = window.setTimeout(() => {

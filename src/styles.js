@@ -125,6 +125,10 @@ export const STYLES = `
     list-style: none;
   }
 
+  .route-content {
+    min-width: 0;
+  }
+
   .favorite-item {
     position: relative;
     min-width: 0;

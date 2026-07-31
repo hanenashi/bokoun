@@ -357,6 +357,14 @@ export function installAdapters(ctx) {
     return entry.model || null;
   }
 
+  function structuredModelAge(type, pageHref) {
+    const entry = state.structuredCache.get(structuredCacheKey(type, pageHref));
+    const fetchedAt = Number(entry?.fetchedAt);
+    return Number.isFinite(fetchedAt)
+      ? Math.max(0, now() - fetchedAt)
+      : Number.POSITIVE_INFINITY;
+  }
+
   function storeStructuredEntry(cacheKey, entry) {
     state.structuredCache.delete(cacheKey);
     state.structuredCache.set(cacheKey, entry);
@@ -375,6 +383,7 @@ export function installAdapters(ctx) {
     {
       reason = "initial-route",
       force = false,
+      render = true,
       minimumAge = reason === "visibility-resume"
         ? STRUCTURED_RESUME_MS
         : STRUCTURED_REFRESH_MS,
@@ -407,8 +416,10 @@ export function installAdapters(ctx) {
       .then((entry) => {
         storeStructuredEntry(cacheKey, entry);
         state.structuredFailures.delete(cacheKey);
-        state.currentSignature = "";
-        scheduleRender({ force: true });
+        if (render) {
+          state.currentSignature = "";
+          scheduleRender({ force: true });
+        }
       })
       .catch((error) => {
         if (error?.name === "AbortError") return null;
@@ -614,6 +625,7 @@ export function installAdapters(ctx) {
     structuredCacheKey,
     storeStructuredEntry,
     cachedStructuredModel,
+    structuredModelAge,
     ensureStructuredModel,
     abortStructuredRequests,
     invalidateStructuredModel,

@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.6`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.7`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   return to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.6` prototype reads Favorites, boards and older post pages from
+The `0.8.7` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -800,6 +800,14 @@ same-origin structured feed once a minute. The **Aktivita + nové** order promot
 clubs by unread count while preserving Kapybara's order for ties, and unread
 club names use the theme accent colour. Polling pauses off Favorites and while
 the document is hidden.
+
+Version `0.8.7` keeps the once-a-minute Favorites feed warm while either
+Favorites or a club is visible. A fresh background result survives the return
+navigation, so promoted clubs and counts appear immediately; polling still
+pauses with the document hidden and retains single-flight requests and failure
+backoff. Internal route blur now targets only `.route-content`, leaving the
+sticky header and compact club/activity strip sharp while posts or Favorites
+rows are replaced.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

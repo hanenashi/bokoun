@@ -186,7 +186,9 @@ export function installUi(ctx) {
         ${fullButton()}
       </header>
       ${clubStripMarkup()}
-      <ul class="favorites">${rows}</ul>
+      <div class="route-content">
+        <ul class="favorites">${rows}</ul>
+      </div>
     `;
   }
 
@@ -676,11 +678,13 @@ export function installUi(ctx) {
         ${fullButton()}
       </header>
       ${clubStripMarkup()}
-      ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
-      ${feedbackMarkup}
-      ${newComposer}
-      <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
-      <footer class="board-tail">${tailState}${newest}</footer>
+      <div class="route-content">
+        ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
+        ${feedbackMarkup}
+        ${newComposer}
+        <section class="posts${replyingTo ? " is-replying" : ""}" aria-label="Příspěvky">${posts}</section>
+        <footer class="board-tail">${tailState}${newest}</footer>
+      </div>
     `;
   }
 

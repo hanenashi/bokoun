@@ -185,11 +185,11 @@ export function installNavigation(ctx) {
       state.routeExitAnimation = null;
       return Promise.resolve();
     }
-    const routeContainer = state.scroller;
+    const routeContainer = routeAnimationTarget();
     if (!routeContainer || typeof routeContainer.animate !== "function") {
       return Promise.resolve();
     }
-    pinRouteBackground(routeContainer);
+    pinRouteBackground();
     state.routeExitAnimation?.cancel();
     state.routeExitAnimation = null;
     state.routeTransitionAnimation?.cancel();
@@ -213,11 +213,11 @@ export function installNavigation(ctx) {
 
   function animateRouteExit() {
     if (!transitionsEnabled() || prefersReducedMotion()) return Promise.resolve();
-    const routeContainer = state.scroller;
+    const routeContainer = routeAnimationTarget();
     if (!routeContainer || typeof routeContainer.animate !== "function") {
       return Promise.resolve();
     }
-    pinRouteBackground(routeContainer);
+    pinRouteBackground();
     state.routeTransitionAnimation?.cancel();
     state.routeTransitionAnimation = null;
     state.routeExitAnimation?.cancel();
@@ -236,8 +236,14 @@ export function installNavigation(ctx) {
     return animation.finished.catch(() => undefined);
   }
 
-  function pinRouteBackground(routeContainer) {
-    const background = getComputedStyle(routeContainer).backgroundColor;
+  function routeAnimationTarget() {
+    return state.shadow?.querySelector(".route-content") || state.scroller;
+  }
+
+  function pinRouteBackground() {
+    const background = state.scroller
+      ? getComputedStyle(state.scroller).backgroundColor
+      : "";
     if (state.host && background && background !== "rgba(0, 0, 0, 0)") {
       state.host.style.backgroundColor = background;
     }
@@ -463,6 +469,7 @@ export function installNavigation(ctx) {
     consumeNavigationTransition,
     animateRouteEntry,
     animateRouteExit,
+    routeAnimationTarget,
     goBack,
     openThread,
     closeThread,

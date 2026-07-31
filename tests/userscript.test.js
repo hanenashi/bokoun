@@ -42,7 +42,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.6/);
+  assert.match(source, /@version\s+0\.8\.7/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -696,6 +696,10 @@ test("compact reader route transitions classify routes and use bounded blur moti
   assert.match(source, /duration: 130/);
   assert.match(source, /filter: "blur\(12px\)"/);
   assert.match(source, /filter: "blur\(10px\)"/);
+  assert.match(source, /function routeAnimationTarget/);
+  assert.match(source, /querySelector\("\.route-content"\) \|\| state\.scroller/);
+  assert.match(source, /class="route-content">\s*<ul class="favorites"/);
+  assert.match(source, /class="route-content">[\s\S]*class="posts/);
   assert.match(source, /function animateRouteExit/);
   assert.match(source, /function pinRouteBackground/);
   assert.match(source, /state\.host\.style\.backgroundColor = background/);
@@ -822,18 +826,25 @@ test("Phase 2 navigation and persistence are event-driven and bounded", () => {
 });
 
 test("structured models use a bounded least-recently-used cache", () => {
+  let clock = 10_000;
   const adapters = {
     STRUCTURED_CACHE_LIMIT: 2,
+    now: () => clock,
     state: {
       structuredCache: new Map(),
       structuredFailures: new Map(),
     },
   };
   installAdapters(adapters);
-  adapters.storeStructuredEntry("board:a", { model: { title: "A" } });
-  adapters.storeStructuredEntry("board:b", { model: { title: "B" } });
-  adapters.storeStructuredEntry("board:c", { model: { title: "C" } });
+  adapters.storeStructuredEntry("board:a", { model: { title: "A" }, fetchedAt: clock });
+  adapters.storeStructuredEntry("board:b", { model: { title: "B" }, fetchedAt: clock });
+  adapters.storeStructuredEntry("board:c", { model: { title: "C" }, fetchedAt: clock });
   assert.deepEqual([...adapters.state.structuredCache.keys()], ["board:b", "board:c"]);
+  adapters.storeStructuredEntry("board:", { model: { title: "Age" }, fetchedAt: clock });
+  clock += 12_000;
+  assert.equal(adapters.structuredModelAge("board", "fixture"), 12_000);
+  adapters.state.structuredCache.delete("board:");
+  assert.equal(adapters.structuredModelAge("board", "fixture"), Number.POSITIVE_INFINITY);
   assert.match(source, /state\.structuredCache\.delete\(cacheKey\);\s*state\.structuredCache\.set\(cacheKey, entry\)/);
 });
 
@@ -1239,6 +1250,7 @@ test("structured refresh is explicit, visibility-aware, and instrumented", async
   let visibilityState = "visible";
   let clock = 1_000_000;
   let requests = 0;
+  let renders = 0;
 
   replaceGlobal("document", {
     get visibilityState() {
@@ -1262,7 +1274,9 @@ test("structured refresh is explicit, visibility-aware, and instrumented", async
       STRUCTURED_RESUME_MS: 120_000,
       SELECTORS: {},
       now: () => clock,
-      scheduleRender() {},
+      scheduleRender() {
+        renders += 1;
+      },
       state: {
         structuredCache: new Map(),
         structuredPending: new Map(),
@@ -1295,8 +1309,10 @@ test("structured refresh is explicit, visibility-aware, and instrumented", async
     await adapters.ensureStructuredModel("favorites", "/fav/activity", {
       reason: "favorites-poll",
       minimumAge: 60_000,
+      render: false,
     });
     assert.equal(requests, 2);
+    assert.equal(renders, 1, "a club-side Favorites poll must update cache without rerendering");
     assert.equal(adapters.trafficSnapshot().byReason["favorites-poll"], 1);
 
     visibilityState = "hidden";
@@ -1348,9 +1364,12 @@ test("Favorites polling is visible-route only, one-minute, and self-rescheduling
     controllerSource.indexOf("function exposeDebugTools"),
   );
   assert.match(source, /FAVORITES_REFRESH_MS = 60_000/);
-  assert.match(polling, /routeType\(\) !== "favorites"/);
+  assert.match(polling, /\["favorites", "board"\]\.includes\(routeType\(\)\)/);
   assert.match(polling, /document\.visibilityState === "hidden"/);
-  assert.match(polling, /requestStructuredRefresh\("favorites-poll"/);
+  assert.match(polling, /ensureStructuredModel\("favorites", favoritesRefreshHref\(\)/);
+  assert.match(polling, /render: routeType\(\) === "favorites"/);
   assert.match(polling, /finally \{\s*scheduleFavoritesRefresh\(\)/);
   assert.match(source, /stopFavoritesRefresh\(\);\s*state\.observer\?\.disconnect/);
+  assert.match(source, /structuredModelAge\(type, key\) < FAVORITES_REFRESH_MS/);
+  assert.match(source, /if \(!reusePolledFavorites\) invalidateStructuredModel\(type, key\)/);
 });
