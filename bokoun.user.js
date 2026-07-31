@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.7
+// @version      0.8.8
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -126,12 +126,14 @@
   }
 
   .topbar--board {
-    grid-template-columns: 44px minmax(0, 1fr) 36px 44px auto;
+    grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px;
     padding-left: 4px;
+    padding-right: 4px;
   }
 
   .topbar--favorites {
-    grid-template-columns: minmax(0, 1fr) 44px auto;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    padding-right: 4px;
   }
 
   .title {
@@ -151,26 +153,12 @@
     font-size: 24px;
   }
 
-  .full-link,
   .icon-button {
     min-width: 44px;
     min-height: 44px;
     border: 0;
     background: transparent;
     cursor: pointer;
-  }
-
-  .full-link {
-    padding: 0 0 0 12px;
-    color: var(--accent);
-    font-size: 15px;
-    font-weight: 500;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  .full-label--short {
-    display: none;
   }
 
   .icon-button {
@@ -188,6 +176,27 @@
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 1.8;
+  }
+
+  .mode-switch span {
+    color: var(--accent);
+    font-size: 22px;
+    font-weight: 650;
+    line-height: 1;
+  }
+
+  .overflow-toggle span {
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .mode-switch:hover,
+  .mode-switch:focus-visible,
+  .overflow-toggle:hover,
+  .overflow-toggle:focus-visible,
+  .overflow-toggle[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    outline: none;
   }
 
   .favorites {
@@ -324,10 +333,14 @@
   }
 
   .post {
-    padding: 14px 16px 16px;
+    padding: var(--post-spacing, 14px) 16px calc(var(--post-spacing, 14px) + 2px);
     border-bottom: 1px solid #c7cfdb;
     background: #edf4ff;
     scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 56px);
+  }
+
+  .app[data-post-separators="hidden"] .post {
+    border-bottom-color: transparent;
   }
 
   .post--visit-new {
@@ -624,46 +637,15 @@
   .header-control {
     position: relative;
     display: grid;
-    width: 36px;
+    width: 44px;
     height: 44px;
     place-items: center;
-  }
-
-  .favorites-control {
-    width: 44px;
-  }
-
-  .favorites-settings-toggle[aria-expanded="true"] {
-    border-radius: 50%;
-    background: #fff6e8;
-    color: var(--accent);
-  }
-
-  .font-toggle {
-    display: grid;
-    width: 36px;
-    height: 36px;
-    place-items: center;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--accent);
-    cursor: pointer;
-    font: italic 800 20px/1 Georgia, serif;
-    user-select: none;
-    -webkit-touch-callout: none;
-  }
-
-  .font-toggle:hover,
-  .font-toggle[aria-expanded="true"] {
-    background: #fff6e8;
   }
 
   .header-panel {
     position: absolute;
     top: 44px;
-    right: -44px;
+    right: 0;
     z-index: 15;
     width: min(300px, calc(100vw - 20px));
     max-height: calc(100dvh - 72px);
@@ -678,8 +660,42 @@
   }
 
   .favorites-panel {
-    right: -70px;
     width: min(310px, calc(100vw - 20px));
+  }
+
+  .overflow-menu {
+    display: grid;
+    width: min(280px, calc(100vw - 16px));
+    padding: 4px 0;
+    border-radius: 4px;
+  }
+
+  .overflow-menu button {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .overflow-menu button:last-child {
+    border-bottom: 0;
+  }
+
+  .overflow-menu button:hover,
+  .overflow-menu button:focus-visible {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    outline: none;
+  }
+
+  .overflow-menu .overflow-danger {
+    color: #c04444;
   }
 
   .panel-head {
@@ -1197,7 +1213,7 @@
     }
 
     .topbar--board {
-      grid-template-columns: 40px minmax(0, 1fr) 36px 40px auto;
+      grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
     }
 
     .topbar--board .title {
@@ -1206,20 +1222,6 @@
 
     .topbar--board .icon-button {
       min-width: 40px;
-    }
-
-    .topbar--board .full-link {
-      min-width: 40px;
-      padding-left: 4px;
-      font-size: 14px;
-    }
-
-    .topbar--board .full-label--long {
-      display: none;
-    }
-
-    .topbar--board .full-label--short {
-      display: inline;
     }
 
     .post--avatar-left .post-layout {
@@ -1301,13 +1303,15 @@
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--board {
-    grid-template-columns: 40px minmax(0, 1fr) 34px 40px auto;
+    grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
     padding-left: 2px;
+    padding-right: 2px;
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
-    grid-template-columns: minmax(0, 1fr) 40px auto;
+    grid-template-columns: minmax(0, 1fr) 40px 40px;
     padding-left: 12px;
+    padding-right: 2px;
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip {
@@ -1377,15 +1381,9 @@
     font-size: 20px;
   }
 
-  .app[data-interface-preset="compact-reader"] .full-link,
   .app[data-interface-preset="compact-reader"] .icon-button {
     min-width: 40px;
     min-height: 40px;
-  }
-
-  .app[data-interface-preset="compact-reader"] .full-link {
-    padding-left: 4px;
-    font-size: 13px;
   }
 
   .app[data-interface-preset="compact-reader"] .icon-button svg {
@@ -1449,7 +1447,7 @@
   }
 
   .app[data-interface-preset="compact-reader"] .post {
-    padding: 9px 12px 11px;
+    padding: var(--post-spacing, 9px) 12px calc(var(--post-spacing, 9px) + 2px);
     border-color: var(--border);
     background: var(--post-read);
     scroll-margin-top: calc(var(--header-height) + env(safe-area-inset-top) + 42px);
@@ -1554,13 +1552,11 @@
     gap: 8px;
   }
 
-  .app[data-interface-preset="compact-reader"] .font-toggle {
-    border-radius: 3px;
-  }
-
-  .app[data-interface-preset="compact-reader"] .favorites-settings-toggle[aria-expanded="true"],
-  .app[data-interface-preset="compact-reader"] .font-toggle:hover,
-  .app[data-interface-preset="compact-reader"] .font-toggle[aria-expanded="true"] {
+  .app[data-interface-preset="compact-reader"] .mode-switch:hover,
+  .app[data-interface-preset="compact-reader"] .mode-switch:focus-visible,
+  .app[data-interface-preset="compact-reader"] .overflow-toggle:hover,
+  .app[data-interface-preset="compact-reader"] .overflow-toggle:focus-visible,
+  .app[data-interface-preset="compact-reader"] .overflow-toggle[aria-expanded="true"] {
     border-radius: 3px;
     background: var(--accent-soft);
   }
@@ -1676,7 +1672,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.7";
+  var VERSION = "0.8.8";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1993,7 +1989,7 @@
     }
     function fullscreenGestureAllowed(event) {
       if (!event?.isTrusted || !state2.active || state2.nativeMode) return false;
-      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='full']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-setting='fullscreen-mode']")));
+      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='mode-switch']") || node.matches("[data-action='overflow']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-setting='fullscreen-mode']")));
     }
     async function requestBokounFullscreen({ force = false } = {}) {
       if (!fullscreenEnabled() || !state2.active || state2.nativeMode || state2.fullscreenRequestPending) return false;
@@ -2286,6 +2282,7 @@
       state2.scroller = null;
       state2.currentSignature = "";
       if (stop) {
+        document.getElementById(RETURN_HOST_ID2)?.remove();
         state2.disabled = true;
         clearTimeout(state2.bootTimer);
         clearTimeout(state2.renderTimer);
@@ -2322,36 +2319,52 @@
         :host {
           all: initial;
           position: fixed;
-          right: 12px;
-          bottom: max(72px, calc(env(safe-area-inset-bottom) + 60px));
+          top: env(safe-area-inset-top);
+          right: max(40px, calc((100vw - 720px) / 2 + 40px));
           z-index: 2147483646;
           display: block;
+          width: 44px;
+          height: 46px;
+          pointer-events: none;
         }
 
         button {
           display: grid;
           width: 44px;
-          height: 44px;
+          height: 46px;
           place-items: center;
           padding: 0;
-          border: 1px solid #a85a00;
-          border-radius: 50%;
-          background: #ffffff;
-          color: #a85a00;
-          font: 700 19px/1 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          border: 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 0;
+          background: rgba(20, 22, 24, 0.88);
+          color: #ef805a;
+          font: 500 22px/1 system-ui, sans-serif;
           cursor: pointer;
+          pointer-events: auto;
+          backdrop-filter: blur(8px);
           -webkit-tap-highlight-color: transparent;
         }
 
         button:focus-visible {
-          outline: 2px solid #a85a00;
-          outline-offset: 2px;
+          outline: 2px solid #ef805a;
+          outline-offset: -3px;
         }
       </style>
-      <button type="button" aria-label="Zpět do Bokouna" title="Zpět do Bokouna">B</button>
+      <button
+        type="button"
+        aria-label="Přepnout do Bokouna"
+        title="Přepnout do Bokouna"
+      >◐</button>
     `;
       shadow.querySelector("button").addEventListener("click", returnToBokoun);
       document.body.append(host);
+    }
+    function disableBokoun() {
+      gmSet2(PREF_ENABLED_KEY2, false);
+      sessionStorage.removeItem(SESSION_DISABLED_KEY2);
+      document.getElementById(RETURN_HOST_ID2)?.remove();
+      revealNative({ stop: true });
     }
     function registerMenus() {
       if (sessionStorage.getItem(SESSION_DISABLED_KEY2) === "1") {
@@ -2361,9 +2374,8 @@
       }
       gmMenu2(
         gmGet2(PREF_ENABLED_KEY2, true) ? "Bokoun: vypnout trvale" : "Bokoun: zapnout trvale",
-        () => {
-          const next = !gmGet2(PREF_ENABLED_KEY2, true);
-          gmSet2(PREF_ENABLED_KEY2, next);
+        gmGet2(PREF_ENABLED_KEY2, true) ? disableBokoun : () => {
+          gmSet2(PREF_ENABLED_KEY2, true);
           sessionStorage.removeItem(SESSION_DISABLED_KEY2);
           location.reload();
         }
@@ -2482,6 +2494,7 @@
       revealBokoun,
       openFullKapybara,
       showReturnControl,
+      disableBokoun,
       registerMenus,
       getScrollMap,
       scrollEntryKey,
@@ -4188,6 +4201,8 @@
     avatarSize: 40,
     avatarShape: "circle",
     replyMeta: "full",
+    postSpacing: 9,
+    postSeparators: true,
     compareHandle: false
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
@@ -4201,7 +4216,8 @@
     fontFamily: "default",
     customFontFamily: "",
     fontSize: 17,
-    spacing: 12
+    spacing: 12,
+    unreadOnly: false
   });
   var FONT_FAMILIES = Object.freeze([
     { value: "default", label: "Bokoun default", stack: "" },
@@ -4291,6 +4307,8 @@
         avatarSize: normalizeAvatarSize(value.avatarSize),
         avatarShape: AVATAR_SHAPES.has(value.avatarShape) ? value.avatarShape : DEFAULT_DISPLAY_SETTINGS.avatarShape,
         replyMeta: REPLY_META_MODES.has(value.replyMeta) ? value.replyMeta : DEFAULT_DISPLAY_SETTINGS.replyMeta,
+        postSpacing: normalizePostSpacing(value.postSpacing),
+        postSeparators: value.postSeparators !== false,
         compareHandle: value.compareHandle === true
       };
     }
@@ -4308,7 +4326,8 @@
         fontFamily: validFontFamily(value.fontFamily),
         customFontFamily: String(value.customFontFamily || "").slice(0, MAX_CUSTOM_FAMILY_LENGTH),
         fontSize: normalizeFontSize(value.fontSize),
-        spacing: normalizeFavoriteSpacing(value.spacing)
+        spacing: normalizeFavoriteSpacing(value.spacing),
+        unreadOnly: value.unreadOnly === true
       };
     }
     function normalizeFavoriteOrder(value) {
@@ -4495,6 +4514,11 @@
       if (!Number.isFinite(parsed)) return DEFAULT_FAVORITES_SETTINGS.spacing;
       return Math.round(Math.min(24, Math.max(0, parsed)));
     }
+    function normalizePostSpacing(value) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return DEFAULT_DISPLAY_SETTINGS.postSpacing;
+      return Math.round(Math.min(24, Math.max(4, parsed)));
+    }
     function normalizeCustomFamily(value) {
       const source = String(value || "").trim();
       if (!source || source.length > MAX_CUSTOM_FAMILY_LENGTH) return "";
@@ -4548,12 +4572,14 @@
       scroller.dataset.pageTransitions = display.interfacePreset === "compact-reader" && display.pageTransitions ? "enabled" : "disabled";
       scroller.dataset.avatarPosition = display.avatarPosition;
       scroller.dataset.avatarShape = display.avatarShape;
+      scroller.dataset.postSeparators = display.postSeparators ? "visible" : "hidden";
       scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
       scroller.style.setProperty(
         "--post-avatar-font-size",
         `${Math.max(12, Math.round(display.avatarSize * 0.38))}px`
       );
       scroller.style.setProperty("--post-font-size", `${displayFontSize(font.size)}px`);
+      scroller.style.setProperty("--post-spacing", `${display.postSpacing}px`);
       if (stack) scroller.style.setProperty("--post-font-family", stack);
       else scroller.style.removeProperty("--post-font-family");
       scroller.style.setProperty("--favorite-font-size", `${displayFontSize(favorites.fontSize)}px`);
@@ -4593,6 +4619,7 @@
       displayFontSize,
       normalizeAvatarSize,
       normalizeFavoriteSpacing,
+      normalizePostSpacing,
       normalizeCustomFamily,
       applyVisualSettings
     });
@@ -4637,6 +4664,8 @@
     const closeThread = (...args) => ctx2.closeThread(...args);
     const startBoardVisitFromFavorite = (...args) => ctx2.startBoardVisitFromFavorite(...args);
     const requestBokounFullscreen = (...args) => ctx2.requestBokounFullscreen(...args);
+    const requestStructuredRefresh = (...args) => ctx2.requestStructuredRefresh(...args);
+    const disableBokoun = (...args) => ctx2.disableBokoun(...args);
     function escapeHtml(value) {
       const div = document.createElement("div");
       div.textContent = value ?? "";
@@ -4686,30 +4715,44 @@
         model.threadRootId
       ].join("|");
     }
-    function fullButton() {
+    function modeSwitchButton() {
       return `
-      <button class="full-link" type="button" data-action="full">
-        <span class="full-label--long">Plná verze</span>
-        <span class="full-label--short" aria-hidden="true">Plná</span>
+      <button
+        class="icon-button mode-switch"
+        type="button"
+        data-action="mode-switch"
+        aria-label="Přepnout do plné Kapybary"
+        title="Přepnout do plné Kapybary"
+      >
+        <span aria-hidden="true">◐</span>
       </button>
     `;
     }
-    function clubStripMarkup() {
+    function clubStripMarkup(currentTitle = "") {
       const display = currentDisplaySettings();
       if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
       const activeClub = normalizeClubRoute(location.pathname);
       const favoritesActive = routeType() === "favorites";
-      const links = [
-        {
-          href: "/fav/activity",
-          name: "Oblíbené",
-          active: favoritesActive
-        },
-        ...currentRecentClubs().slice(0, 6).map((club) => ({
-          ...club,
-          active: !favoritesActive && club.href === activeClub
-        }))
-      ];
+      const recent = currentRecentClubs();
+      const candidates = favoritesActive ? [{
+        href: "/fav/activity",
+        name: "Oblíbené",
+        active: true
+      }, ...recent] : [{
+        href: activeClub,
+        name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub",
+        active: true
+      }, ...recent];
+      const seen = /* @__PURE__ */ new Set();
+      const links = candidates.filter((link) => {
+        const href = normalizeClubRoute(link.href) || link.href;
+        if (!href || seen.has(href)) return false;
+        seen.add(href);
+        return true;
+      }).slice(0, favoritesActive ? 7 : 6).map((link) => ({
+        ...link,
+        active: favoritesActive ? link.href === "/fav/activity" : normalizeClubRoute(link.href) === activeClub
+      }));
       return `
       <nav class="club-strip" aria-label="Rychlé přepínání klubů">
         ${links.map((link) => `
@@ -4769,8 +4812,8 @@
       return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
-        ${favoritesControlMarkup()}
-        ${fullButton()}
+        ${modeSwitchButton()}
+        ${overflowControlMarkup("favorites")}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -4778,38 +4821,68 @@
       </div>
     `;
     }
-    function favoritesControlMarkup() {
-      const open = state2.openHeaderPanel === "favorites";
+    function overflowControlMarkup(type) {
+      const open = state2.openHeaderPanel === "overflow";
       return `
-      <div class="header-control favorites-control">
+      <div class="header-control overflow-control">
         <button
-          class="icon-button header-panel-toggle favorites-settings-toggle"
+          class="icon-button header-panel-toggle overflow-toggle"
           type="button"
-          data-action="favorites-panel"
-          aria-label="Nastavení oblíbených"
+          data-action="overflow"
+          aria-label="Další možnosti"
           aria-expanded="${open ? "true" : "false"}"
-        >${ICONS2.settings}</button>
-        ${open ? favoritesPanelMarkup() : ""}
+          title="Další možnosti"
+        ><span aria-hidden="true">⋮</span></button>
+        ${activeHeaderPanelMarkup(type)}
       </div>
     `;
     }
-    function favoritesPanelMarkup() {
-      const favorites = currentFavoritesSettings();
-      const display = currentDisplaySettings();
-      const manual = favorites.sort === "manual";
-      const customFont = favorites.fontFamily === "custom";
-      const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
-      const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
+    function activeHeaderPanelMarkup(type) {
+      if (state2.openHeaderPanel === "overflow") return overflowMenuMarkup(type);
+      if (state2.openHeaderPanel === "favorite-sort") return favoriteSortPanelMarkup();
+      if (state2.openHeaderPanel === "favorites-appearance") return favoritesPanelMarkup();
+      if (state2.openHeaderPanel === "font") return fontPanelMarkup();
+      if (state2.openHeaderPanel === "display") return displayPanelMarkup();
+      if (state2.openHeaderPanel === "settings") return bokounSettingsPanelMarkup();
+      return "";
+    }
+    function overflowMenuMarkup(type) {
+      const favorites = type === "favorites";
+      const unreadOnly = currentFavoritesSettings().unreadOnly;
       return `
-      <section class="header-panel favorites-panel" aria-label="Nastavení oblíbených">
+      <div class="header-panel overflow-menu" role="menu" aria-label="${favorites ? "Možnosti oblíbených" : "Možnosti klubu"}">
+        ${favorites ? `
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="favorite-sort">Řazení…</button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked="${unreadOnly ? "true" : "false"}"
+            data-action="toggle-unread-only"
+          ><span>Pouze nepřečtené</span><span aria-hidden="true">${unreadOnly ? "✓" : ""}</span></button>
+          <button type="button" role="menuitem" data-action="edit-favorite-order">${state2.editingFavoriteOrder ? "Dokončit pořadí" : "Upravit pořadí"}</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="favorites-appearance">Písmo a vzhled…</button>
+        ` : `
+          <button type="button" role="menuitem" data-action="refresh">Obnovit</button>
+          <button type="button" role="menuitem" data-action="header-newest">Přejít na nejnovější</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="font">Písmo a vzhled…</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="display">Zobrazení příspěvků…</button>
+        `}
+        <button type="button" role="menuitem" data-action="full">Plná Kapybara</button>
+        <button type="button" role="menuitem" data-action="open-panel" data-panel="settings">Nastavení Bokouna…</button>
+        <button type="button" role="menuitem" class="overflow-danger" data-action="disable-bokoun">Vypnout Bokouna</button>
+      </div>
+    `;
+    }
+    function favoriteSortPanelMarkup() {
+      const favorites = currentFavoritesSettings();
+      return `
+      <section class="header-panel favorites-panel" aria-label="Řazení oblíbených">
         <header class="panel-head">
-          <strong>Oblíbené</strong>
+          <strong>Řazení</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
-        ${interfacePresetMarkup(display)}
-        <div class="panel-section-title">Oblíbené</div>
         <label class="settings-field">
-          <span>Řazení</span>
+          <span>Pořadí</span>
           <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
             <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Aktivita + nové</option>
             <option value="alphabetical" ${favorites.sort === "alphabetical" ? "selected" : ""}>Abecedně</option>
@@ -4831,7 +4904,31 @@
           <span><i class="heat-swatch heat-swatch--more"></i>5–14</span>
           <span><i class="heat-swatch heat-swatch--most"></i>15+</span>
         </div>
-        <div class="panel-section-title">Vzhled</div>
+        ${favorites.sort === "manual" ? `
+          <div class="panel-actions">
+            <button type="button" data-action="edit-favorite-order">
+              ${state2.editingFavoriteOrder ? "Hotovo" : "Upravit pořadí"}
+            </button>
+            <button type="button" data-action="reset-favorite-order">Obnovit pořadí</button>
+          </div>
+        ` : ""}
+      </section>
+    `;
+    }
+    function favoritesPanelMarkup() {
+      const favorites = currentFavoritesSettings();
+      const display = currentDisplaySettings();
+      const customFont = favorites.fontFamily === "custom";
+      const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
+      const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
+      return `
+      <section class="header-panel favorites-panel" aria-label="Písmo a vzhled oblíbených">
+        <header class="panel-head">
+          <strong>Písmo a vzhled</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
+        ${interfaceAppearanceMarkup(display)}
+        <div class="panel-section-title">Oblíbené</div>
         <label class="settings-field">
           <span>Písmo</span>
           <select data-setting="favorite-font-family" aria-label="Písmo oblíbených">${fontOptionsMarkup(favorites.fontFamily)}</select>
@@ -4866,17 +4963,6 @@
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>
-        ${manual ? `
-          <p class="settings-note">V režimu úprav přetahujte kluby za madlo. Odkazy jsou dočasně vypnuté.</p>
-          <div class="panel-actions">
-            <button type="button" data-action="toggle-favorite-edit">
-              ${state2.editingFavoriteOrder ? "Hotovo" : "Upravit pořadí"}
-            </button>
-            <button type="button" data-action="reset-favorite-order">Obnovit pořadí</button>
-          </div>
-        ` : `
-          <p class="settings-note">Výchozí zachovává pořadí Kapybary pro zvolenou kartu.</p>
-        `}
         <div class="panel-actions">
           <button type="button" data-action="reset-favorites-appearance">Obnovit vzhled</button>
         </div>
@@ -4884,10 +4970,23 @@
     `;
     }
     function setHeaderPanel(panel = "") {
-      state2.openHeaderPanel = state2.openHeaderPanel === panel ? "" : panel;
+      const previous = state2.openHeaderPanel;
+      const next = previous === panel ? "" : panel;
+      if (next && !previous) {
+        const historyState = history.state && typeof history.state === "object" ? history.state : {};
+        history.pushState({ ...historyState, bokounHeaderPanel: true }, "", location.href);
+      } else if (!next && previous && history.state?.bokounHeaderPanel) {
+        history.back();
+      }
+      state2.openHeaderPanel = next;
       state2.openPostMenuId = "";
       state2.currentSignature = "";
       scheduleRender({ force: true });
+      window.setTimeout(() => {
+        if (!state2.shadow) return;
+        const target = state2.openHeaderPanel ? state2.shadow.querySelector(".header-panel button, .header-panel select, .header-panel input") : state2.shadow.querySelector("[data-action='overflow']");
+        target?.focus();
+      }, 60);
     }
     function setPostMenu(postId = "") {
       state2.openPostMenuId = state2.openPostMenuId === String(postId) ? "" : String(postId);
@@ -4895,25 +4994,9 @@
       state2.currentSignature = "";
       scheduleRender({ force: true });
     }
-    function fontControlMarkup() {
-      const open = state2.openHeaderPanel === "font";
-      return `
-      <div class="header-control">
-        <button
-          class="font-toggle"
-          type="button"
-          data-action="font-panel"
-          aria-label="Písmo příspěvků"
-          aria-expanded="${open ? "true" : "false"}"
-          title="Písmo příspěvků"
-        >f</button>
-        ${open ? fontPanelMarkup() : ""}
-        ${state2.openHeaderPanel === "display" ? displayPanelMarkup() : ""}
-      </div>
-    `;
-    }
     function fontPanelMarkup() {
       const font = currentFontSettings();
+      const display = currentDisplaySettings();
       const custom = font.family === "custom";
       const options = fontOptionsMarkup(font.family);
       const normalizedCustom = normalizeCustomFamily(font.customFamily);
@@ -4921,9 +5004,11 @@
       return `
       <section class="header-panel font-panel" aria-label="Nastavení písma">
         <header class="panel-head">
-          <strong>Písmo příspěvků</strong>
+          <strong>Písmo a vzhled</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
+        ${interfaceAppearanceMarkup(display)}
+        <div class="panel-section-title">Příspěvky</div>
         <label class="settings-field">
           <span>Písmo</span>
           <select data-setting="font-family" aria-label="Písmo příspěvků">${options}</select>
@@ -4952,9 +5037,15 @@
             <span>px</span>
           </span>
         </div>
+        <div class="settings-field">
+          <span>Hustota</span>
+          <span class="compact-range-controls">
+            <input type="range" min="4" max="24" step="1" value="${escapeHtml(display.postSpacing)}" aria-label="Svislé odsazení příspěvků">
+            <output>${escapeHtml(display.postSpacing)} px</output>
+          </span>
+        </div>
         <div class="panel-actions">
-          <button type="button" data-action="display-panel">Zobrazení…</button>
-          <button type="button" data-action="reset-font">Obnovit</button>
+          <button type="button" data-action="reset-font">Obnovit písmo</button>
         </div>
       </section>
     `;
@@ -4976,7 +5067,6 @@
           <strong>Zobrazení příspěvků</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
-        ${interfacePresetMarkup(display)}
         <div class="panel-section-title">Příspěvky</div>
         <label class="settings-switch">
           <span>Zobrazovat avatary</span>
@@ -4993,6 +5083,21 @@
             <option value="rounded" ${display.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
             <option value="square" ${display.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
           </select>
+        </label>
+        <div class="settings-field">
+          <span>Odsazení</span>
+          <span class="compact-range-controls">
+            <input type="range" min="4" max="24" step="1" value="${escapeHtml(display.postSpacing)}" aria-label="Svislé odsazení příspěvků">
+            <output>${escapeHtml(display.postSpacing)} px</output>
+          </span>
+        </div>
+        <label class="settings-switch">
+          <span>Oddělovače příspěvků</span>
+          <input
+            type="checkbox"
+            data-setting="post-separators"
+            ${display.postSeparators ? "checked" : ""}
+          >
         </label>
         <div class="settings-field">
           <span>Velikost</span>
@@ -5030,13 +5135,10 @@
         </label>
         <p class="settings-note">Tažením svislé čáry porovnáte Bokouna s živou Kapybarou pod ním.</p>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
-        <div class="panel-actions">
-          <button type="button" data-action="font-panel">← Písmo</button>
-        </div>
       </section>
     `;
     }
-    function interfacePresetMarkup(display) {
+    function interfaceAppearanceMarkup(display) {
       return `
       <label class="settings-field settings-field--wide-label">
         <span>Rozhraní</span>
@@ -5053,6 +5155,16 @@
           <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
         </select>
       </label>
+    `;
+    }
+    function bokounSettingsPanelMarkup() {
+      const display = currentDisplaySettings();
+      return `
+      <section class="header-panel settings-panel" aria-label="Nastavení Bokouna">
+        <header class="panel-head">
+          <strong>Nastavení Bokouna</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
       <label class="settings-switch">
         <span>Lišta klubů</span>
         <input
@@ -5081,6 +5193,7 @@
       </label>
       <p class="settings-note">Prohlížeč povolí celou obrazovku po prvním klepnutí v Bokounu.</p>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
+      </section>
     `;
     }
     function avatarImageMarkup(post, className = "") {
@@ -5219,11 +5332,11 @@
           aria-label="${threadMode ? "Zpět do klubu" : "Zpět do oblíbených"}"
         >${ICONS2.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
-        ${fontControlMarkup()}
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS2.write}</button>
-        ${fullButton()}
+        ${modeSwitchButton()}
+        ${overflowControlMarkup("board")}
       </header>
-      ${clubStripMarkup()}
+      ${clubStripMarkup(board.title)}
       <div class="route-content">
         ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
         ${feedbackMarkup}
@@ -5286,55 +5399,53 @@
     `;
     }
     function attachUiEvents() {
-      state2.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
-      state2.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
-      state2.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", closeThread);
+      state2.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
+      state2.shadow.querySelector("[data-action='full']")?.addEventListener("click", () => {
+        setHeaderPanel("");
+        void openFullKapybara();
+      });
+      state2.shadow.querySelector("[data-action='back']")?.addEventListener("click", () => {
+        if (state2.openHeaderPanel) setHeaderPanel("");
+        else goBack();
+      });
+      state2.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", () => {
+        if (state2.openHeaderPanel) setHeaderPanel("");
+        else closeThread();
+      });
       state2.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
-      state2.shadow.querySelector("[data-action='favorites-panel']")?.addEventListener("click", () => {
-        setHeaderPanel("favorites");
+      state2.shadow.querySelector("[data-action='overflow']")?.addEventListener("click", () => {
+        setHeaderPanel("overflow");
       });
-      const fontToggle = state2.shadow.querySelector(".font-toggle");
-      fontToggle?.addEventListener("click", (event) => {
-        if (Date.now() < state2.suppressFontClickUntil) {
-          event.preventDefault();
-          return;
-        }
-        setHeaderPanel("font");
+      state2.shadow.querySelectorAll("[data-action='open-panel']").forEach((button) => {
+        button.addEventListener("click", () => setHeaderPanel(button.dataset.panel));
       });
-      fontToggle?.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        setHeaderPanel("display");
-      });
-      if (fontToggle) {
-        let longPressTimer = 0;
-        let start = null;
-        const cancelLongPress = () => {
-          window.clearTimeout(longPressTimer);
-          longPressTimer = 0;
-          start = null;
-        };
-        fontToggle.addEventListener("pointerdown", (event) => {
-          if (event.button !== 0 || event.pointerType === "mouse") return;
-          cancelLongPress();
-          start = { x: event.clientX, y: event.clientY };
-          longPressTimer = window.setTimeout(() => {
-            state2.suppressFontClickUntil = Date.now() + 800;
-            setHeaderPanel("display");
-          }, 520);
-        });
-        fontToggle.addEventListener("pointermove", (event) => {
-          if (!start) return;
-          if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelLongPress();
-        });
-        fontToggle.addEventListener("pointerup", cancelLongPress);
-        fontToggle.addEventListener("pointercancel", cancelLongPress);
-      }
-      state2.shadow.querySelectorAll("[data-action='font-panel']").forEach((button) => {
-        if (button === fontToggle) return;
-        button.addEventListener("click", () => setHeaderPanel("font"));
-      });
-      state2.shadow.querySelector("[data-action='display-panel']")?.addEventListener("click", () => setHeaderPanel("display"));
       state2.shadow.querySelector("[data-action='close-header-panel']")?.addEventListener("click", () => setHeaderPanel(""));
+      state2.shadow.querySelector("[data-action='refresh']")?.addEventListener("click", () => {
+        setHeaderPanel("");
+        void requestStructuredRefresh("manual-refresh", { force: true });
+      });
+      state2.shadow.querySelector("[data-action='header-newest']")?.addEventListener("click", () => {
+        setHeaderPanel("");
+        state2.scroller?.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      state2.shadow.querySelector("[data-action='toggle-unread-only']")?.addEventListener("click", () => {
+        updateFavoritesSettings({ unreadOnly: !currentFavoritesSettings().unreadOnly });
+      });
+      state2.shadow.querySelector("[data-action='edit-favorite-order']")?.addEventListener("click", () => {
+        const enteringEditMode = !state2.editingFavoriteOrder;
+        updateFavoritesSettings(
+          { sort: "manual" },
+          { clubs: state2.favoriteSourceClubs, render: false }
+        );
+        state2.editingFavoriteOrder = enteringEditMode;
+        setHeaderPanel("");
+        state2.currentSignature = "";
+        scheduleRender({ force: true });
+      });
+      state2.shadow.querySelector("[data-action='disable-bokoun']")?.addEventListener("click", () => {
+        setHeaderPanel("");
+        disableBokoun();
+      });
       state2.shadow.querySelector("[data-action='reset-font']")?.addEventListener("click", resetFontSettings);
       state2.shadow.querySelector("[data-setting='font-family']")?.addEventListener("change", (event) => {
         updateFontSettings({ family: event.currentTarget.value }, { render: true });
@@ -5389,6 +5500,18 @@
       });
       state2.shadow.querySelector("[data-setting='avatar-shape']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ avatarShape: event.currentTarget.value });
+      });
+      const postSpacingRange = state2.shadow.querySelector("[aria-label='Svislé odsazení příspěvků']");
+      postSpacingRange?.addEventListener("input", (event) => {
+        updateDisplaySettings({ postSpacing: event.currentTarget.value }, { render: false });
+        const output = event.currentTarget.parentElement?.querySelector("output");
+        if (output) output.textContent = `${event.currentTarget.value} px`;
+      });
+      postSpacingRange?.addEventListener("change", (event) => {
+        updateDisplaySettings({ postSpacing: event.currentTarget.value });
+      });
+      state2.shadow.querySelector("[data-setting='post-separators']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ postSeparators: event.currentTarget.checked });
       });
       const postAvatarRange = state2.shadow.querySelector("[aria-label='Velikost avataru příspěvku posuvníkem']");
       postAvatarRange?.addEventListener("input", (event) => {
@@ -5520,12 +5643,22 @@
       const inner = state2.shadow.querySelector(".app-inner");
       inner.onpointerdown = (event) => {
         if (state2.openPostMenuId && !event.target.closest(".post-menu, .post-menu-trigger")) setPostMenu("");
-        if (state2.openHeaderPanel && !event.target.closest(".header-panel, .header-panel-toggle, .font-toggle")) setHeaderPanel("");
+        if (state2.openHeaderPanel && !event.target.closest(".header-panel, .header-panel-toggle")) setHeaderPanel("");
       };
       state2.shadow.onkeydown = (event) => {
-        if (event.key !== "Escape") return;
-        if (state2.openPostMenuId) setPostMenu("");
-        else if (state2.openHeaderPanel) setHeaderPanel("");
+        if (event.key === "Escape") {
+          if (state2.openPostMenuId) setPostMenu("");
+          else if (state2.openHeaderPanel) setHeaderPanel("");
+          return;
+        }
+        const menu = event.target.closest(".overflow-menu");
+        if (!menu || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+        const items = [...menu.querySelectorAll("[role^='menuitem']:not([disabled])")];
+        if (!items.length) return;
+        event.preventDefault();
+        const current = items.indexOf(event.target);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
       };
     }
     function attachFavoriteReordering() {
@@ -5580,16 +5713,18 @@
     Object.assign(ctx2, {
       escapeHtml,
       signatureFor,
-      fullButton,
+      modeSwitchButton,
       favoritesMarkup,
-      favoritesControlMarkup,
+      clubStripMarkup,
+      overflowControlMarkup,
+      overflowMenuMarkup,
+      favoriteSortPanelMarkup,
       favoritesPanelMarkup,
       boardMarkup,
       composerMarkup,
       attachUiEvents,
       setHeaderPanel,
       setPostMenu,
-      fontControlMarkup,
       fontPanelMarkup,
       displayPanelMarkup,
       avatarImageMarkup,
@@ -6059,6 +6194,7 @@
     const attachUiEvents = (...args) => ctx2.attachUiEvents(...args);
     const applyVisualSettings = (...args) => ctx2.applyVisualSettings(...args);
     const sortFavorites = (...args) => ctx2.sortFavorites(...args);
+    const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
     const boardRouteIdentity = (...args) => ctx2.boardRouteIdentity(...args);
     const navigateNative = (...args) => ctx2.navigateNative(...args);
     const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
@@ -6200,6 +6336,9 @@
         else model = readFavoritesFromDom();
         model = reconcileFavoriteReadState(model);
         state2.favoriteSourceClubs = model.map((club) => ({ ...club }));
+        if (currentFavoritesSettings().unreadOnly) {
+          model = model.filter((club) => club.unread > 0);
+        }
         model = sortFavorites(model);
         state2.favoriteViewClubs = model.map((club) => ({ ...club }));
       } else {
@@ -6389,6 +6528,12 @@
         scheduleRender();
       });
       state2.popStateHandler = () => {
+        if (state2.openHeaderPanel && routeKey() === state2.currentRouteKey) {
+          state2.openHeaderPanel = "";
+          state2.currentSignature = "";
+          scheduleRender({ force: true });
+          return;
+        }
         state2.historyTraversalPending = true;
         queueRouteCheck();
       };

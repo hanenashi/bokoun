@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.7`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.8`).
 
 ## Install the first prototype
 
@@ -19,11 +19,11 @@ another userscript manager, then open Kapybara on a phone:
 - supported routes: `/fav/activity`, `/fav/topics` and `/boards/{club}`;
 - Bokoun activates automatically at viewport widths up to 760 px;
 - append `?bokoun=on` to a supported URL to try it on desktop;
-- tap **Plná verze** to show normal Kapybara, then tap the floating **B** to
-  return to Bokoun;
+- tap the permanent **◐** switch to show normal Kapybara; the same **◐** stays
+  aligned near the top-right and returns to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.7` prototype reads Favorites, boards and older post pages from
+The `0.8.8` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -56,6 +56,13 @@ Current prototype boundaries:
   Kapybara's latest read marker;
 - Favorites always use Kapybara's Activity feed; the redundant Activity/Topics
   tab row is removed to recover mobile height;
+- Favorites keep **Oblíbené** as the active first item in the compact club
+  strip; club and thread routes omit that duplicate destination because their
+  Back arrow already returns to Favorites, leaving only the current and recent
+  sibling clubs;
+- route headers are deliberately compact: Favorites show the title, **◐** and
+  **⋮**; clubs add Back and the primary pencil. Sorting, refresh, appearance,
+  display and disable actions live in route-specific **⋮** menus;
 - the pencil in the board header opens a plain Markdown editor above the posts;
 - every displayed post has a small **Odpovědět** action; its editor opens inside
   that post while surrounding posts dim, but the board remains scrollable;
@@ -74,9 +81,13 @@ Current prototype boundaries:
 - tapping `re: author` opens a root-first chronological thread view backed by
   Kapybara's authenticated `rootId` route; Back returns to the normal club and
   its saved reading position;
-- the italic **f** in the board header opens persistent font family, custom
-  stack and font-size controls adapted from Cudloun; **Zobrazení…** opens the
-  avatar settings, while long-press/right-click goes there directly;
+- **Písmo a vzhled…** in the contextual menu opens the persistent font family,
+  custom stack, font-size, density and theme controls adapted from Cudloun;
+  **Zobrazení příspěvků…** contains avatars, reply metadata, post spacing,
+  separators and the comparison handle;
+- the permanent unlabelled **◐** is the fast Bokoun/Kapybara switch in both
+  interfaces. **Plná Kapybara** remains in **⋮** as a discoverable duplicate,
+  while **Vypnout Bokouna** is a separate persistent command;
 - native Kapybara validates and submits; Bokoun never handles auth headers;
 - an ambiguous submission is never retried automatically;
 - automatic userscript updates are intentionally disabled while this repository
@@ -808,6 +819,16 @@ pauses with the document hidden and retains single-flight requests and failure
 backoff. Internal route blur now targets only `.route-content`, leaving the
 sticky header and compact club/activity strip sharp while posts or Favorites
 rows are replaced.
+
+Version `0.8.8` removes duplicated navigation from the compact reader header.
+Favorites retain an active **Oblíbené** strip item, while club and thread strips
+start with the current club and omit the redundant Favorites destination.
+Secondary controls moved into route-specific **⋮** menus, with appearance and
+post-display controls opening flat sheets backed by their existing settings.
+A permanent **◐** beside **⋮** now performs the ordinary Bokoun/Kapybara wipe
+handoff; full Kapybara gets a matching fixed switch at the same practical
+top-right position. The labelled **Plná Kapybara** fallback and the distinct
+persistent **Vypnout Bokouna** action remain available in the menu.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

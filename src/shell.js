@@ -154,7 +154,8 @@ export function installShell(ctx) {
       && (
         node.matches("a, input, select, textarea")
         || node.matches("[data-native-href]")
-        || node.matches("[data-action='full']")
+        || node.matches("[data-action='mode-switch']")
+        || node.matches("[data-action='overflow']")
         || node.matches("[data-action='back']")
         || node.matches("[data-action='thread-back']")
         || node.matches("[data-action='thread']")
@@ -484,6 +485,7 @@ export function installShell(ctx) {
     state.currentSignature = "";
 
     if (stop) {
+      document.getElementById(RETURN_HOST_ID)?.remove();
       state.disabled = true;
       clearTimeout(state.bootTimer);
       clearTimeout(state.renderTimer);
@@ -525,36 +527,53 @@ export function installShell(ctx) {
         :host {
           all: initial;
           position: fixed;
-          right: 12px;
-          bottom: max(72px, calc(env(safe-area-inset-bottom) + 60px));
+          top: env(safe-area-inset-top);
+          right: max(40px, calc((100vw - 720px) / 2 + 40px));
           z-index: 2147483646;
           display: block;
+          width: 44px;
+          height: 46px;
+          pointer-events: none;
         }
 
         button {
           display: grid;
           width: 44px;
-          height: 44px;
+          height: 46px;
           place-items: center;
           padding: 0;
-          border: 1px solid #a85a00;
-          border-radius: 50%;
-          background: #ffffff;
-          color: #a85a00;
-          font: 700 19px/1 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          border: 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 0;
+          background: rgba(20, 22, 24, 0.88);
+          color: #ef805a;
+          font: 500 22px/1 system-ui, sans-serif;
           cursor: pointer;
+          pointer-events: auto;
+          backdrop-filter: blur(8px);
           -webkit-tap-highlight-color: transparent;
         }
 
         button:focus-visible {
-          outline: 2px solid #a85a00;
-          outline-offset: 2px;
+          outline: 2px solid #ef805a;
+          outline-offset: -3px;
         }
       </style>
-      <button type="button" aria-label="Zpět do Bokouna" title="Zpět do Bokouna">B</button>
+      <button
+        type="button"
+        aria-label="Přepnout do Bokouna"
+        title="Přepnout do Bokouna"
+      >◐</button>
     `;
     shadow.querySelector("button").addEventListener("click", returnToBokoun);
     document.body.append(host);
+  }
+
+  function disableBokoun() {
+    gmSet(PREF_ENABLED_KEY, false);
+    sessionStorage.removeItem(SESSION_DISABLED_KEY);
+    document.getElementById(RETURN_HOST_ID)?.remove();
+    revealNative({ stop: true });
   }
 
   function registerMenus() {
@@ -566,12 +585,13 @@ export function installShell(ctx) {
 
     gmMenu(
       gmGet(PREF_ENABLED_KEY, true) ? "Bokoun: vypnout trvale" : "Bokoun: zapnout trvale",
-      () => {
-        const next = !gmGet(PREF_ENABLED_KEY, true);
-        gmSet(PREF_ENABLED_KEY, next);
-        sessionStorage.removeItem(SESSION_DISABLED_KEY);
-        location.reload();
-      },
+      gmGet(PREF_ENABLED_KEY, true)
+        ? disableBokoun
+        : () => {
+            gmSet(PREF_ENABLED_KEY, true);
+            sessionStorage.removeItem(SESSION_DISABLED_KEY);
+            location.reload();
+          },
     );
   }
 
@@ -703,6 +723,7 @@ export function installShell(ctx) {
     revealBokoun,
     openFullKapybara,
     showReturnControl,
+    disableBokoun,
     registerMenus,
     getScrollMap,
     scrollEntryKey,

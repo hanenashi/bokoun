@@ -9,6 +9,8 @@ const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   avatarSize: 40,
   avatarShape: "circle",
   replyMeta: "full",
+  postSpacing: 9,
+  postSeparators: true,
   compareHandle: false,
 });
 
@@ -25,6 +27,7 @@ const DEFAULT_FAVORITES_SETTINGS = Object.freeze({
   customFontFamily: "",
   fontSize: 17,
   spacing: 12,
+  unreadOnly: false,
 });
 
 const FONT_FAMILIES = Object.freeze([
@@ -130,6 +133,8 @@ export function installSettings(ctx) {
       replyMeta: REPLY_META_MODES.has(value.replyMeta)
         ? value.replyMeta
         : DEFAULT_DISPLAY_SETTINGS.replyMeta,
+      postSpacing: normalizePostSpacing(value.postSpacing),
+      postSeparators: value.postSeparators !== false,
       compareHandle: value.compareHandle === true,
     };
   }
@@ -154,6 +159,7 @@ export function installSettings(ctx) {
       customFontFamily: String(value.customFontFamily || "").slice(0, MAX_CUSTOM_FAMILY_LENGTH),
       fontSize: normalizeFontSize(value.fontSize),
       spacing: normalizeFavoriteSpacing(value.spacing),
+      unreadOnly: value.unreadOnly === true,
     };
   }
 
@@ -389,6 +395,12 @@ export function installSettings(ctx) {
     return Math.round(Math.min(24, Math.max(0, parsed)));
   }
 
+  function normalizePostSpacing(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DEFAULT_DISPLAY_SETTINGS.postSpacing;
+    return Math.round(Math.min(24, Math.max(4, parsed)));
+  }
+
   function normalizeCustomFamily(value) {
     const source = String(value || "").trim();
     if (!source || source.length > MAX_CUSTOM_FAMILY_LENGTH) return "";
@@ -450,12 +462,14 @@ export function installSettings(ctx) {
     ) ? "enabled" : "disabled";
     scroller.dataset.avatarPosition = display.avatarPosition;
     scroller.dataset.avatarShape = display.avatarShape;
+    scroller.dataset.postSeparators = display.postSeparators ? "visible" : "hidden";
     scroller.style.setProperty("--post-avatar-size", `${display.avatarSize}px`);
     scroller.style.setProperty(
       "--post-avatar-font-size",
       `${Math.max(12, Math.round(display.avatarSize * 0.38))}px`,
     );
     scroller.style.setProperty("--post-font-size", `${displayFontSize(font.size)}px`);
+    scroller.style.setProperty("--post-spacing", `${display.postSpacing}px`);
     if (stack) scroller.style.setProperty("--post-font-family", stack);
     else scroller.style.removeProperty("--post-font-family");
     scroller.style.setProperty("--favorite-font-size", `${displayFontSize(favorites.fontSize)}px`);
@@ -496,6 +510,7 @@ export function installSettings(ctx) {
     displayFontSize,
     normalizeAvatarSize,
     normalizeFavoriteSpacing,
+    normalizePostSpacing,
     normalizeCustomFamily,
     applyVisualSettings,
   });

@@ -36,6 +36,8 @@ export function installUi(ctx) {
   const closeThread = (...args) => ctx.closeThread(...args);
   const startBoardVisitFromFavorite = (...args) => ctx.startBoardVisitFromFavorite(...args);
   const requestBokounFullscreen = (...args) => ctx.requestBokounFullscreen(...args);
+  const requestStructuredRefresh = (...args) => ctx.requestStructuredRefresh(...args);
+  const disableBokoun = (...args) => ctx.disableBokoun(...args);
 
   function escapeHtml(value) {
     const div = document.createElement("div");
@@ -92,31 +94,52 @@ export function installUi(ctx) {
     ].join("|");
   }
 
-  function fullButton() {
+  function modeSwitchButton() {
     return `
-      <button class="full-link" type="button" data-action="full">
-        <span class="full-label--long">Plná verze</span>
-        <span class="full-label--short" aria-hidden="true">Plná</span>
+      <button
+        class="icon-button mode-switch"
+        type="button"
+        data-action="mode-switch"
+        aria-label="Přepnout do plné Kapybary"
+        title="Přepnout do plné Kapybary"
+      >
+        <span aria-hidden="true">◐</span>
       </button>
     `;
   }
 
-  function clubStripMarkup() {
+  function clubStripMarkup(currentTitle = "") {
     const display = currentDisplaySettings();
     if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
     const activeClub = normalizeClubRoute(location.pathname);
     const favoritesActive = routeType() === "favorites";
-    const links = [
-      {
+    const recent = currentRecentClubs();
+    const candidates = favoritesActive
+      ? [{
         href: "/fav/activity",
         name: "Oblíbené",
-        active: favoritesActive,
-      },
-      ...currentRecentClubs().slice(0, 6).map((club) => ({
-        ...club,
-        active: !favoritesActive && club.href === activeClub,
-      })),
-    ];
+        active: true,
+      }, ...recent]
+      : [{
+        href: activeClub,
+        name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub",
+        active: true,
+      }, ...recent];
+    const seen = new Set();
+    const links = candidates
+      .filter((link) => {
+        const href = normalizeClubRoute(link.href) || link.href;
+        if (!href || seen.has(href)) return false;
+        seen.add(href);
+        return true;
+      })
+      .slice(0, favoritesActive ? 7 : 6)
+      .map((link) => ({
+        ...link,
+        active: favoritesActive
+          ? link.href === "/fav/activity"
+          : normalizeClubRoute(link.href) === activeClub,
+      }));
     return `
       <nav class="club-strip" aria-label="Rychlé přepínání klubů">
         ${links.map((link) => `
@@ -182,8 +205,8 @@ export function installUi(ctx) {
     return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
-        ${favoritesControlMarkup()}
-        ${fullButton()}
+        ${modeSwitchButton()}
+        ${overflowControlMarkup("favorites")}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -192,39 +215,75 @@ export function installUi(ctx) {
     `;
   }
 
-  function favoritesControlMarkup() {
-    const open = state.openHeaderPanel === "favorites";
+  function overflowControlMarkup(type) {
+    const open = state.openHeaderPanel === "overflow";
     return `
-      <div class="header-control favorites-control">
+      <div class="header-control overflow-control">
         <button
-          class="icon-button header-panel-toggle favorites-settings-toggle"
+          class="icon-button header-panel-toggle overflow-toggle"
           type="button"
-          data-action="favorites-panel"
-          aria-label="Nastavení oblíbených"
+          data-action="overflow"
+          aria-label="Další možnosti"
           aria-expanded="${open ? "true" : "false"}"
-        >${ICONS.settings}</button>
-        ${open ? favoritesPanelMarkup() : ""}
+          title="Další možnosti"
+        ><span aria-hidden="true">⋮</span></button>
+        ${activeHeaderPanelMarkup(type)}
       </div>
     `;
   }
 
-  function favoritesPanelMarkup() {
-    const favorites = currentFavoritesSettings();
-    const display = currentDisplaySettings();
-    const manual = favorites.sort === "manual";
-    const customFont = favorites.fontFamily === "custom";
-    const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
-    const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
+  function activeHeaderPanelMarkup(type) {
+    if (state.openHeaderPanel === "overflow") return overflowMenuMarkup(type);
+    if (state.openHeaderPanel === "favorite-sort") return favoriteSortPanelMarkup();
+    if (state.openHeaderPanel === "favorites-appearance") return favoritesPanelMarkup();
+    if (state.openHeaderPanel === "font") return fontPanelMarkup();
+    if (state.openHeaderPanel === "display") return displayPanelMarkup();
+    if (state.openHeaderPanel === "settings") return bokounSettingsPanelMarkup();
+    return "";
+  }
+
+  function overflowMenuMarkup(type) {
+    const favorites = type === "favorites";
+    const unreadOnly = currentFavoritesSettings().unreadOnly;
     return `
-      <section class="header-panel favorites-panel" aria-label="Nastavení oblíbených">
+      <div class="header-panel overflow-menu" role="menu" aria-label="${
+        favorites ? "Možnosti oblíbených" : "Možnosti klubu"
+      }">
+        ${favorites ? `
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="favorite-sort">Řazení…</button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked="${unreadOnly ? "true" : "false"}"
+            data-action="toggle-unread-only"
+          ><span>Pouze nepřečtené</span><span aria-hidden="true">${unreadOnly ? "✓" : ""}</span></button>
+          <button type="button" role="menuitem" data-action="edit-favorite-order">${
+            state.editingFavoriteOrder ? "Dokončit pořadí" : "Upravit pořadí"
+          }</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="favorites-appearance">Písmo a vzhled…</button>
+        ` : `
+          <button type="button" role="menuitem" data-action="refresh">Obnovit</button>
+          <button type="button" role="menuitem" data-action="header-newest">Přejít na nejnovější</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="font">Písmo a vzhled…</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="display">Zobrazení příspěvků…</button>
+        `}
+        <button type="button" role="menuitem" data-action="full">Plná Kapybara</button>
+        <button type="button" role="menuitem" data-action="open-panel" data-panel="settings">Nastavení Bokouna…</button>
+        <button type="button" role="menuitem" class="overflow-danger" data-action="disable-bokoun">Vypnout Bokouna</button>
+      </div>
+    `;
+  }
+
+  function favoriteSortPanelMarkup() {
+    const favorites = currentFavoritesSettings();
+    return `
+      <section class="header-panel favorites-panel" aria-label="Řazení oblíbených">
         <header class="panel-head">
-          <strong>Oblíbené</strong>
+          <strong>Řazení</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
-        ${interfacePresetMarkup(display)}
-        <div class="panel-section-title">Oblíbené</div>
         <label class="settings-field">
-          <span>Řazení</span>
+          <span>Pořadí</span>
           <select data-setting="favorites-sort" aria-label="Řazení oblíbených">
             <option value="activity" ${favorites.sort === "activity" ? "selected" : ""}>Aktivita + nové</option>
             <option value="alphabetical" ${favorites.sort === "alphabetical" ? "selected" : ""}>Abecedně</option>
@@ -246,7 +305,32 @@ export function installUi(ctx) {
           <span><i class="heat-swatch heat-swatch--more"></i>5–14</span>
           <span><i class="heat-swatch heat-swatch--most"></i>15+</span>
         </div>
-        <div class="panel-section-title">Vzhled</div>
+        ${favorites.sort === "manual" ? `
+          <div class="panel-actions">
+            <button type="button" data-action="edit-favorite-order">
+              ${state.editingFavoriteOrder ? "Hotovo" : "Upravit pořadí"}
+            </button>
+            <button type="button" data-action="reset-favorite-order">Obnovit pořadí</button>
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
+  function favoritesPanelMarkup() {
+    const favorites = currentFavoritesSettings();
+    const display = currentDisplaySettings();
+    const customFont = favorites.fontFamily === "custom";
+    const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
+    const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
+    return `
+      <section class="header-panel favorites-panel" aria-label="Písmo a vzhled oblíbených">
+        <header class="panel-head">
+          <strong>Písmo a vzhled</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
+        ${interfaceAppearanceMarkup(display)}
+        <div class="panel-section-title">Oblíbené</div>
         <label class="settings-field">
           <span>Písmo</span>
           <select data-setting="favorite-font-family" aria-label="Písmo oblíbených">${fontOptionsMarkup(favorites.fontFamily)}</select>
@@ -281,17 +365,6 @@ export function installUi(ctx) {
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>
-        ${manual ? `
-          <p class="settings-note">V režimu úprav přetahujte kluby za madlo. Odkazy jsou dočasně vypnuté.</p>
-          <div class="panel-actions">
-            <button type="button" data-action="toggle-favorite-edit">
-              ${state.editingFavoriteOrder ? "Hotovo" : "Upravit pořadí"}
-            </button>
-            <button type="button" data-action="reset-favorite-order">Obnovit pořadí</button>
-          </div>
-        ` : `
-          <p class="settings-note">Výchozí zachovává pořadí Kapybary pro zvolenou kartu.</p>
-        `}
         <div class="panel-actions">
           <button type="button" data-action="reset-favorites-appearance">Obnovit vzhled</button>
         </div>
@@ -300,10 +373,27 @@ export function installUi(ctx) {
   }
 
   function setHeaderPanel(panel = "") {
-    state.openHeaderPanel = state.openHeaderPanel === panel ? "" : panel;
+    const previous = state.openHeaderPanel;
+    const next = previous === panel ? "" : panel;
+    if (next && !previous) {
+      const historyState = history.state && typeof history.state === "object"
+        ? history.state
+        : {};
+      history.pushState({ ...historyState, bokounHeaderPanel: true }, "", location.href);
+    } else if (!next && previous && history.state?.bokounHeaderPanel) {
+      history.back();
+    }
+    state.openHeaderPanel = next;
     state.openPostMenuId = "";
     state.currentSignature = "";
     scheduleRender({ force: true });
+    window.setTimeout(() => {
+      if (!state.shadow) return;
+      const target = state.openHeaderPanel
+        ? state.shadow.querySelector(".header-panel button, .header-panel select, .header-panel input")
+        : state.shadow.querySelector("[data-action='overflow']");
+      target?.focus();
+    }, 60);
   }
 
   function setPostMenu(postId = "") {
@@ -313,26 +403,9 @@ export function installUi(ctx) {
     scheduleRender({ force: true });
   }
 
-  function fontControlMarkup() {
-    const open = state.openHeaderPanel === "font";
-    return `
-      <div class="header-control">
-        <button
-          class="font-toggle"
-          type="button"
-          data-action="font-panel"
-          aria-label="Písmo příspěvků"
-          aria-expanded="${open ? "true" : "false"}"
-          title="Písmo příspěvků"
-        >f</button>
-        ${open ? fontPanelMarkup() : ""}
-        ${state.openHeaderPanel === "display" ? displayPanelMarkup() : ""}
-      </div>
-    `;
-  }
-
   function fontPanelMarkup() {
     const font = currentFontSettings();
+    const display = currentDisplaySettings();
     const custom = font.family === "custom";
     const options = fontOptionsMarkup(font.family);
     const normalizedCustom = normalizeCustomFamily(font.customFamily);
@@ -341,9 +414,11 @@ export function installUi(ctx) {
     return `
       <section class="header-panel font-panel" aria-label="Nastavení písma">
         <header class="panel-head">
-          <strong>Písmo příspěvků</strong>
+          <strong>Písmo a vzhled</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
+        ${interfaceAppearanceMarkup(display)}
+        <div class="panel-section-title">Příspěvky</div>
         <label class="settings-field">
           <span>Písmo</span>
           <select data-setting="font-family" aria-label="Písmo příspěvků">${options}</select>
@@ -372,9 +447,15 @@ export function installUi(ctx) {
             <span>px</span>
           </span>
         </div>
+        <div class="settings-field">
+          <span>Hustota</span>
+          <span class="compact-range-controls">
+            <input type="range" min="4" max="24" step="1" value="${escapeHtml(display.postSpacing)}" aria-label="Svislé odsazení příspěvků">
+            <output>${escapeHtml(display.postSpacing)} px</output>
+          </span>
+        </div>
         <div class="panel-actions">
-          <button type="button" data-action="display-panel">Zobrazení…</button>
-          <button type="button" data-action="reset-font">Obnovit</button>
+          <button type="button" data-action="reset-font">Obnovit písmo</button>
         </div>
       </section>
     `;
@@ -398,7 +479,6 @@ export function installUi(ctx) {
           <strong>Zobrazení příspěvků</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
-        ${interfacePresetMarkup(display)}
         <div class="panel-section-title">Příspěvky</div>
         <label class="settings-switch">
           <span>Zobrazovat avatary</span>
@@ -415,6 +495,21 @@ export function installUi(ctx) {
             <option value="rounded" ${display.avatarShape === "rounded" ? "selected" : ""}>Zaoblený</option>
             <option value="square" ${display.avatarShape === "square" ? "selected" : ""}>Čtverec</option>
           </select>
+        </label>
+        <div class="settings-field">
+          <span>Odsazení</span>
+          <span class="compact-range-controls">
+            <input type="range" min="4" max="24" step="1" value="${escapeHtml(display.postSpacing)}" aria-label="Svislé odsazení příspěvků">
+            <output>${escapeHtml(display.postSpacing)} px</output>
+          </span>
+        </div>
+        <label class="settings-switch">
+          <span>Oddělovače příspěvků</span>
+          <input
+            type="checkbox"
+            data-setting="post-separators"
+            ${display.postSeparators ? "checked" : ""}
+          >
         </label>
         <div class="settings-field">
           <span>Velikost</span>
@@ -452,14 +547,11 @@ export function installUi(ctx) {
         </label>
         <p class="settings-note">Tažením svislé čáry porovnáte Bokouna s živou Kapybarou pod ním.</p>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
-        <div class="panel-actions">
-          <button type="button" data-action="font-panel">← Písmo</button>
-        </div>
       </section>
     `;
   }
 
-  function interfacePresetMarkup(display) {
+  function interfaceAppearanceMarkup(display) {
     return `
       <label class="settings-field settings-field--wide-label">
         <span>Rozhraní</span>
@@ -476,6 +568,17 @@ export function installUi(ctx) {
           <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
         </select>
       </label>
+    `;
+  }
+
+  function bokounSettingsPanelMarkup() {
+    const display = currentDisplaySettings();
+    return `
+      <section class="header-panel settings-panel" aria-label="Nastavení Bokouna">
+        <header class="panel-head">
+          <strong>Nastavení Bokouna</strong>
+          <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
+        </header>
       <label class="settings-switch">
         <span>Lišta klubů</span>
         <input
@@ -504,6 +607,7 @@ export function installUi(ctx) {
       </label>
       <p class="settings-note">Prohlížeč povolí celou obrazovku po prvním klepnutí v Bokounu.</p>
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
+      </section>
     `;
   }
 
@@ -673,11 +777,11 @@ export function installUi(ctx) {
           aria-label="${threadMode ? "Zpět do klubu" : "Zpět do oblíbených"}"
         >${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
-        ${fontControlMarkup()}
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
-        ${fullButton()}
+        ${modeSwitchButton()}
+        ${overflowControlMarkup("board")}
       </header>
-      ${clubStripMarkup()}
+      ${clubStripMarkup(board.title)}
       <div class="route-content">
         ${threadMode ? `<div class="thread-banner" role="status">Vlákno · ${board.threadCount} příspěvků</div>` : ""}
         ${feedbackMarkup}
@@ -749,55 +853,53 @@ export function installUi(ctx) {
   }
 
   function attachUiEvents() {
-    state.shadow.querySelector("[data-action='full']")?.addEventListener("click", openFullKapybara);
-    state.shadow.querySelector("[data-action='back']")?.addEventListener("click", goBack);
-    state.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", closeThread);
+    state.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
+    state.shadow.querySelector("[data-action='full']")?.addEventListener("click", () => {
+      setHeaderPanel("");
+      void openFullKapybara();
+    });
+    state.shadow.querySelector("[data-action='back']")?.addEventListener("click", () => {
+      if (state.openHeaderPanel) setHeaderPanel("");
+      else goBack();
+    });
+    state.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", () => {
+      if (state.openHeaderPanel) setHeaderPanel("");
+      else closeThread();
+    });
     state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
-    state.shadow.querySelector("[data-action='favorites-panel']")?.addEventListener("click", () => {
-      setHeaderPanel("favorites");
+    state.shadow.querySelector("[data-action='overflow']")?.addEventListener("click", () => {
+      setHeaderPanel("overflow");
     });
-    const fontToggle = state.shadow.querySelector(".font-toggle");
-    fontToggle?.addEventListener("click", (event) => {
-      if (Date.now() < state.suppressFontClickUntil) {
-        event.preventDefault();
-        return;
-      }
-      setHeaderPanel("font");
+    state.shadow.querySelectorAll("[data-action='open-panel']").forEach((button) => {
+      button.addEventListener("click", () => setHeaderPanel(button.dataset.panel));
     });
-    fontToggle?.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      setHeaderPanel("display");
-    });
-    if (fontToggle) {
-      let longPressTimer = 0;
-      let start = null;
-      const cancelLongPress = () => {
-        window.clearTimeout(longPressTimer);
-        longPressTimer = 0;
-        start = null;
-      };
-      fontToggle.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || event.pointerType === "mouse") return;
-        cancelLongPress();
-        start = { x: event.clientX, y: event.clientY };
-        longPressTimer = window.setTimeout(() => {
-          state.suppressFontClickUntil = Date.now() + 800;
-          setHeaderPanel("display");
-        }, 520);
-      });
-      fontToggle.addEventListener("pointermove", (event) => {
-        if (!start) return;
-        if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelLongPress();
-      });
-      fontToggle.addEventListener("pointerup", cancelLongPress);
-      fontToggle.addEventListener("pointercancel", cancelLongPress);
-    }
-    state.shadow.querySelectorAll("[data-action='font-panel']").forEach((button) => {
-      if (button === fontToggle) return;
-      button.addEventListener("click", () => setHeaderPanel("font"));
-    });
-    state.shadow.querySelector("[data-action='display-panel']")?.addEventListener("click", () => setHeaderPanel("display"));
     state.shadow.querySelector("[data-action='close-header-panel']")?.addEventListener("click", () => setHeaderPanel(""));
+    state.shadow.querySelector("[data-action='refresh']")?.addEventListener("click", () => {
+      setHeaderPanel("");
+      void requestStructuredRefresh("manual-refresh", { force: true });
+    });
+    state.shadow.querySelector("[data-action='header-newest']")?.addEventListener("click", () => {
+      setHeaderPanel("");
+      state.scroller?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    state.shadow.querySelector("[data-action='toggle-unread-only']")?.addEventListener("click", () => {
+      updateFavoritesSettings({ unreadOnly: !currentFavoritesSettings().unreadOnly });
+    });
+    state.shadow.querySelector("[data-action='edit-favorite-order']")?.addEventListener("click", () => {
+      const enteringEditMode = !state.editingFavoriteOrder;
+      updateFavoritesSettings(
+        { sort: "manual" },
+        { clubs: state.favoriteSourceClubs, render: false },
+      );
+      state.editingFavoriteOrder = enteringEditMode;
+      setHeaderPanel("");
+      state.currentSignature = "";
+      scheduleRender({ force: true });
+    });
+    state.shadow.querySelector("[data-action='disable-bokoun']")?.addEventListener("click", () => {
+      setHeaderPanel("");
+      disableBokoun();
+    });
     state.shadow.querySelector("[data-action='reset-font']")?.addEventListener("click", resetFontSettings);
     state.shadow.querySelector("[data-setting='font-family']")?.addEventListener("change", (event) => {
       updateFontSettings({ family: event.currentTarget.value }, { render: true });
@@ -854,6 +956,18 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='avatar-shape']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ avatarShape: event.currentTarget.value });
+    });
+    const postSpacingRange = state.shadow.querySelector("[aria-label='Svislé odsazení příspěvků']");
+    postSpacingRange?.addEventListener("input", (event) => {
+      updateDisplaySettings({ postSpacing: event.currentTarget.value }, { render: false });
+      const output = event.currentTarget.parentElement?.querySelector("output");
+      if (output) output.textContent = `${event.currentTarget.value} px`;
+    });
+    postSpacingRange?.addEventListener("change", (event) => {
+      updateDisplaySettings({ postSpacing: event.currentTarget.value });
+    });
+    state.shadow.querySelector("[data-setting='post-separators']")?.addEventListener("change", (event) => {
+      updateDisplaySettings({ postSeparators: event.currentTarget.checked });
     });
     const postAvatarRange = state.shadow.querySelector("[aria-label='Velikost avataru příspěvku posuvníkem']");
     postAvatarRange?.addEventListener("input", (event) => {
@@ -992,13 +1106,27 @@ export function installUi(ctx) {
       ) setPostMenu("");
       if (
         state.openHeaderPanel
-        && !event.target.closest(".header-panel, .header-panel-toggle, .font-toggle")
+        && !event.target.closest(".header-panel, .header-panel-toggle")
       ) setHeaderPanel("");
     };
     state.shadow.onkeydown = (event) => {
-      if (event.key !== "Escape") return;
-      if (state.openPostMenuId) setPostMenu("");
-      else if (state.openHeaderPanel) setHeaderPanel("");
+      if (event.key === "Escape") {
+        if (state.openPostMenuId) setPostMenu("");
+        else if (state.openHeaderPanel) setHeaderPanel("");
+        return;
+      }
+      const menu = event.target.closest(".overflow-menu");
+      if (!menu || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      const items = [...menu.querySelectorAll("[role^='menuitem']:not([disabled])")];
+      if (!items.length) return;
+      event.preventDefault();
+      const current = items.indexOf(event.target);
+      const next = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      items[next].focus();
     };
   }
 
@@ -1063,16 +1191,18 @@ export function installUi(ctx) {
   Object.assign(ctx, {
     escapeHtml,
     signatureFor,
-    fullButton,
+    modeSwitchButton,
     favoritesMarkup,
-    favoritesControlMarkup,
+    clubStripMarkup,
+    overflowControlMarkup,
+    overflowMenuMarkup,
+    favoriteSortPanelMarkup,
     favoritesPanelMarkup,
     boardMarkup,
     composerMarkup,
     attachUiEvents,
     setHeaderPanel,
     setPostMenu,
-    fontControlMarkup,
     fontPanelMarkup,
     displayPanelMarkup,
     avatarImageMarkup,

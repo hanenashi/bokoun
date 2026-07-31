@@ -42,7 +42,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.7/);
+  assert.match(source, /@version\s+0\.8\.8/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -77,8 +77,11 @@ test("temporary full mode always provides a visible route back to Bokoun", () =>
   assert.match(source, /const RETURN_HOST_ID = "bokoun-return"/);
   assert.match(source, /function showReturnControl/);
   assert.match(source, /function returnToBokoun/);
-  assert.match(source, /aria-label="Zpět do Bokouna"/);
+  assert.match(source, /aria-label="Přepnout do Bokouna"/);
+  assert.match(source, />◐<\/button>/);
   assert.match(source, /state\.nativeMode = false/);
+  assert.match(shellSource, /if \(!document\.body \|\| document\.getElementById\(RETURN_HOST_ID\)\) return/);
+  assert.match(shellSource, /document\.getElementById\(RETURN_HOST_ID\)\?\.remove\(\)/);
 });
 
 test("endless loading is single-flight, deduplicated, and recoverable", () => {
@@ -449,6 +452,8 @@ test("post display settings persist avatar layout and safe font controls", () =>
     avatarSize: 40,
     avatarShape: "circle",
     replyMeta: "full",
+    postSpacing: 9,
+    postSeparators: true,
     compareHandle: false,
   });
   settings.updateDisplaySettings({ avatarPosition: "left" });
@@ -460,6 +465,9 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.equal(stored.get("display").avatarShape, "rounded");
   settings.updateDisplaySettings({ compareHandle: true });
   assert.equal(stored.get("display").compareHandle, true);
+  settings.updateDisplaySettings({ postSpacing: 200, postSeparators: false });
+  assert.equal(stored.get("display").postSpacing, 24);
+  assert.equal(stored.get("display").postSeparators, false);
   settings.updateDisplaySettings({
     interfacePreset: "compact-reader",
     colorScheme: "dark",
@@ -544,6 +552,7 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
     customFontFamily: "",
     fontSize: 17,
     spacing: 12,
+    unreadOnly: false,
   });
   assert.deepEqual(
     settings.sortFavorites(clubs).map((club) => club.unread),
@@ -561,6 +570,8 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
     [15, 5, 2],
   );
   assert.equal(stored.get("favorites").unreadMode, "both");
+  settings.updateFavoritesSettings({ unreadOnly: true });
+  assert.equal(stored.get("favorites").unreadOnly, true);
 
   settings.saveFavoriteOrder(["/boards/borek", "/boards/abel"]);
   settings.updateFavoritesSettings({ sort: "manual" });
@@ -599,10 +610,11 @@ test("Favorites preferences sort, persist manual order, and map unread heat", ()
 });
 
 test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering", () => {
-  assert.match(source, /data-action="favorites-panel"/);
+  assert.match(source, /data-panel="favorite-sort"/);
+  assert.match(source, /data-action="toggle-unread-only"/);
+  assert.match(source, /data-action="edit-favorite-order"/);
   assert.match(source, /data-setting="favorites-sort"/);
   assert.match(source, /data-setting="unread-mode"/);
-  assert.match(source, /data-action="toggle-favorite-edit"/);
   assert.match(source, /class="favorite-drag-handle"/);
   assert.match(source, /touch-action: none/);
   assert.match(source, /favorite-row--heat-few/);
@@ -657,14 +669,58 @@ test("compact reader club strip is optional, bounded, and request-free", () => {
   assert.match(source, /class="club-strip"/);
   assert.match(source, /aria-label="Rychlé přepínání klubů"/);
   assert.match(source, /data-setting="show-club-strip"/);
-  assert.match(source, /currentRecentClubs\(\)\.slice\(0, 6\)/);
+  assert.match(uiSource, /favoritesActive\s+\?\s+\[\{\s*href: "\/fav\/activity",\s*name: "Oblíbené"/);
+  assert.match(uiSource, /:\s+\[\{\s*href: activeClub,\s*name: currentTitle/);
+  assert.match(uiSource, /\.slice\(0, favoritesActive \? 7 : 6\)/);
   assert.match(source, /const MAX_RECENT_CLUBS = 8/);
   assert.match(source, /data-club-strip="visible"/);
   const clubStripSource = uiSource.slice(
-    uiSource.indexOf("function clubStripMarkup()"),
+    uiSource.indexOf("function clubStripMarkup("),
     uiSource.indexOf("function favoritesMarkup"),
   );
   assert.doesNotMatch(clubStripSource, /\bfetch\(/);
+});
+
+test("compact headers keep the mode switch visible and use contextual overflow menus", () => {
+  assert.match(uiSource, /class="topbar topbar--favorites"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{overflowControlMarkup\("favorites"\)\}/);
+  assert.match(uiSource, /class="topbar topbar--board"[\s\S]*data-action="compose"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{overflowControlMarkup\("board"\)\}/);
+  assert.match(uiSource, /data-action="mode-switch"/);
+  assert.match(uiSource, /aria-label="Přepnout do plné Kapybary"/);
+  assert.doesNotMatch(uiSource, /class="font-toggle"/);
+  assert.doesNotMatch(uiSource, /Plná verze/);
+
+  const menuSource = uiSource.slice(
+    uiSource.indexOf("function overflowMenuMarkup"),
+    uiSource.indexOf("function favoriteSortPanelMarkup"),
+  );
+  for (const item of [
+    "Řazení…",
+    "Pouze nepřečtené",
+    "Upravit pořadí",
+    "Obnovit",
+    "Přejít na nejnovější",
+    "Písmo a vzhled…",
+    "Zobrazení příspěvků…",
+    "Plná Kapybara",
+    "Nastavení Bokouna…",
+    "Vypnout Bokouna",
+  ]) assert.match(menuSource, new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(menuSource, /\bfetch\(|requestStructuredRefresh/);
+  assert.match(uiSource, /state\.openHeaderPanel = ""/);
+  assert.match(uiSource, /event\.key === "Escape"/);
+  assert.match(uiSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
+  assert.match(uiSource, /history\.pushState\(\{ \.\.\.historyState, bokounHeaderPanel: true \}/);
+  assert.match(controllerSource, /state\.openHeaderPanel && routeKey\(\) === state\.currentRouteKey/);
+});
+
+test("mode switching and disabling remain distinct and preserve the handoff anchor", () => {
+  assert.match(uiSource, /\[data-action='mode-switch'\][\s\S]*openFullKapybara/);
+  assert.match(uiSource, /\[data-action='full'\][\s\S]*openFullKapybara/);
+  assert.match(uiSource, /\[data-action='disable-bokoun'\][\s\S]*disableBokoun/);
+  assert.match(shellSource, /function openFullKapybara\(\)[\s\S]*captureBokounAnchor/);
+  assert.match(source, /function returnToBokoun\(\)[\s\S]*captureNativeAnchor/);
+  assert.match(shellSource, /function disableBokoun\(\)[\s\S]*gmSet\(PREF_ENABLED_KEY, false\)/);
+  assert.match(shellSource, /function disableBokoun\(\)[\s\S]*revealNative\(\{ stop: true \}\)/);
 });
 
 test("compact reader route transitions classify routes and use bounded blur motion", () => {
@@ -904,8 +960,9 @@ test("writing UX exposes saved drafts, explicit discard, and success context", (
 
 test("narrow board headers preserve more room for the title", () => {
   assert.match(source, /@media \(max-width: 420px\)/);
-  assert.match(source, /full-label--short/);
-  assert.match(source, /<span class="full-label--short" aria-hidden="true">Plná<\/span>/);
+  assert.match(source, /grid-template-columns: 40px minmax\(0, 1fr\) 40px 40px 40px/);
+  assert.match(source, /\.mode-switch span/);
+  assert.match(source, /font-size: 22px/);
 });
 
 test("decodes a sanitized streamed SvelteKit board contract", () => {
@@ -1036,7 +1093,7 @@ test("club header back arrow always targets Bokoun Favorites", () => {
   assert.match(goBack, /navigateNative\("\/fav\/activity", \{ direction: "back" \}\)/);
   assert.doesNotMatch(goBack, /history\.back/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
-  assert.match(source, /\[data-action='thread-back'\][^\n]*closeThread/);
+  assert.match(source, /\[data-action='thread-back'\][\s\S]*else closeThread\(\)/);
 });
 
 test("native read sync is visit-boundary only, deduplicated, and unload-safe", () => {

@@ -43,6 +43,7 @@ export function installController(ctx) {
   const attachUiEvents = (...args) => ctx.attachUiEvents(...args);
   const applyVisualSettings = (...args) => ctx.applyVisualSettings(...args);
   const sortFavorites = (...args) => ctx.sortFavorites(...args);
+  const currentFavoritesSettings = (...args) => ctx.currentFavoritesSettings(...args);
   const boardRouteIdentity = (...args) => ctx.boardRouteIdentity(...args);
   const navigateNative = (...args) => ctx.navigateNative(...args);
   const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
@@ -211,6 +212,9 @@ export function installController(ctx) {
       else model = readFavoritesFromDom();
       model = reconcileFavoriteReadState(model);
       state.favoriteSourceClubs = model.map((club) => ({ ...club }));
+      if (currentFavoritesSettings().unreadOnly) {
+        model = model.filter((club) => club.unread > 0);
+      }
       model = sortFavorites(model);
       state.favoriteViewClubs = model.map((club) => ({ ...club }));
     } else {
@@ -437,6 +441,12 @@ export function installController(ctx) {
       scheduleRender();
     });
     state.popStateHandler = () => {
+      if (state.openHeaderPanel && routeKey() === state.currentRouteKey) {
+        state.openHeaderPanel = "";
+        state.currentSignature = "";
+        scheduleRender({ force: true });
+        return;
+      }
       state.historyTraversalPending = true;
       queueRouteCheck();
     };
