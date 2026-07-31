@@ -103,6 +103,11 @@ export function installShell(ctx) {
         position: fixed !important;
         inset: 0 !important;
         z-index: 2147483647 !important;
+        opacity: 1 !important;
+        background: #fff;
+        isolation: isolate;
+        contain: layout paint style;
+        backface-visibility: hidden;
       }
       #${COMPARE_HOST_ID} {
         display: block !important;
@@ -270,28 +275,143 @@ export function installShell(ctx) {
       document.addEventListener("fullscreenchange", state.fullscreenChangeHandler);
     }
     state.active = true;
-    document.documentElement.dataset.bokounActive = "true";
-    delete document.documentElement.dataset.bokounBooting;
+    state.visualIntent = "bokoun";
+    commitLayerState("mount-shell");
   }
 
   function prefersReducedMotion() {
     return matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
+  function visualExposureAllowed() {
+    return state.nativeMode
+      || state.layerReasons.has("transition")
+      || state.layerReasons.has("compare");
+  }
+
+  function visualSnapshot(action = "snapshot") {
+    const host = state.host;
+    const connected = Boolean(host?.isConnected);
+    const style = connected ? getComputedStyle(host) : null;
+    const root = document.documentElement;
+    const clip = host?.style.clipPath || style?.clipPath || "";
+    const effectiveReveal = state.active && !visualExposureAllowed()
+      ? 100
+      : state.comparePercent;
+    return Object.freeze({
+      at: Math.round(performance.now() * 10) / 10,
+      route: routeKey(),
+      action,
+      generation: state.visualGeneration,
+      intent: state.visualIntent,
+      hostConnected: connected,
+      hostDisplay: style?.display || "",
+      hostVisibility: style?.visibility || "",
+      hostOpacity: style?.opacity || "",
+      hostClip: clip,
+      revealPercent: effectiveReveal,
+      activeAttribute: root?.dataset.bokounActive === "true",
+      layeredAttribute: root?.dataset.bokounLayered === "true",
+      bootingAttribute: root?.dataset.bokounBooting === "true",
+      nativeMode: state.nativeMode,
+      comparisonMode: state.layerReasons.has("compare"),
+      revealRunning: state.revealRunning,
+    });
+  }
+
+  function visualProblems(snapshot) {
+    if (!state.active || state.nativeMode) return [];
+    const problems = [];
+    if (!snapshot.hostConnected) problems.push("active-host-disconnected");
+    if (snapshot.hostDisplay === "none") problems.push("active-host-display-none");
+    if (snapshot.hostVisibility === "hidden") problems.push("active-host-hidden");
+    if (Number(snapshot.hostOpacity) < 0.99) problems.push("active-host-transparent");
+    if (!snapshot.activeAttribute) problems.push("active-attribute-missing");
+    if (!visualExposureAllowed() && snapshot.revealPercent < 99.9) {
+      problems.push("unexpected-native-exposure");
+    }
+    return problems;
+  }
+
+  function recordVisualState(action, { force = false } = {}) {
+    if (!state.visualWatching && !force) return null;
+    const snapshot = visualSnapshot(action);
+    state.visualLogEntries.push(snapshot);
+    if (state.visualLogEntries.length > 250) state.visualLogEntries.shift();
+    if (state.visualWatching) {
+      const warning = visualProblems(snapshot).join(",");
+      if (warning && warning !== state.visualLastWarning) {
+        console.warn(`[Bokoun ${VERSION}] Invalid visual state: ${warning}.`);
+      }
+      state.visualLastWarning = warning;
+    }
+    return snapshot;
+  }
+
+  function watchVisualState(enabled = true) {
+    state.visualWatching = enabled === true;
+    cancelAnimationFrame(state.visualWatchFrame);
+    state.visualWatchFrame = 0;
+    state.visualLastWarning = "";
+    if (!state.visualWatching) return false;
+    const sample = () => {
+      if (!state.visualWatching) return;
+      recordVisualState("animation-frame");
+      state.visualWatchFrame = requestAnimationFrame(sample);
+    };
+    recordVisualState("watch-start", { force: true });
+    state.visualWatchFrame = requestAnimationFrame(sample);
+    return true;
+  }
+
+  function clearVisualLog() {
+    state.visualLogEntries.length = 0;
+    state.visualLastWarning = "";
+  }
+
+  function visualLog() {
+    return state.visualLogEntries.map((entry) => ({ ...entry }));
+  }
+
+  function commitLayerState(reason = "commit") {
+    const root = document.documentElement;
+    if (root) {
+      if (state.active) {
+        root.dataset.bokounActive = "true";
+        delete root.dataset.bokounBooting;
+      } else {
+        delete root.dataset.bokounActive;
+      }
+      if (state.active && state.layerReasons.size) root.dataset.bokounLayered = "true";
+      else delete root.dataset.bokounLayered;
+    }
+
+    if (state.host?.isConnected) {
+      const reveal = state.active && !visualExposureAllowed()
+        ? 100
+        : Math.min(100, Math.max(0, Number(state.comparePercent) || 0));
+      state.host.style.display = "block";
+      state.host.style.visibility = "visible";
+      state.host.style.opacity = "1";
+      state.host.style.clipPath = `inset(0 ${100 - reveal}% 0 0)`;
+      const background = state.scroller ? getComputedStyle(state.scroller).backgroundColor : "";
+      if (background && background !== "rgba(0, 0, 0, 0)") {
+        state.host.style.backgroundColor = background;
+      }
+    }
+    recordVisualState(reason);
+  }
+
   function setLayered(reason, enabled) {
     if (enabled) state.layerReasons.add(reason);
     else state.layerReasons.delete(reason);
-    if (!document.documentElement) return;
-    if (state.layerReasons.size) document.documentElement.dataset.bokounLayered = "true";
-    else delete document.documentElement.dataset.bokounLayered;
+    commitLayerState(`layer:${reason}:${enabled ? "on" : "off"}`);
   }
 
   function setHostReveal(percent) {
     const normalized = Math.min(100, Math.max(0, Number(percent) || 0));
     state.comparePercent = normalized;
-    if (state.host) {
-      state.host.style.clipPath = `inset(0 ${100 - normalized}% 0 0)`;
-    }
+    commitLayerState(`reveal:${normalized}`);
     const control = state.compareHost?.shadowRoot?.querySelector("[role='slider']");
     if (control) {
       control.style.setProperty("--compare-percent", `${normalized}%`);
@@ -303,13 +423,27 @@ export function installShell(ctx) {
     }
   }
 
-  function animateHostReveal(from, to) {
+  function beginVisualTransition(intent) {
+    state.visualGeneration += 1;
+    state.visualIntent = intent;
+    state.hostRevealAnimation?.cancel();
+    state.hostRevealAnimation = null;
+    recordVisualState(`transition:${intent}:begin`);
+    return state.visualGeneration;
+  }
+
+  function ownsVisualTransition(generation) {
+    return generation === state.visualGeneration;
+  }
+
+  async function animateHostReveal(from, to, generation = state.visualGeneration) {
     const host = state.host;
-    if (!host) return Promise.resolve();
+    if (!host || !ownsVisualTransition(generation)) return false;
     setHostReveal(from);
     if (prefersReducedMotion() || typeof host.animate !== "function") {
+      if (!ownsVisualTransition(generation) || state.host !== host) return false;
       setHostReveal(to);
-      return Promise.resolve();
+      return true;
     }
     const animation = host.animate(
       [
@@ -318,10 +452,13 @@ export function installShell(ctx) {
       ],
       { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" },
     );
-    return animation.finished.catch(() => undefined).then(() => {
-      animation.cancel();
-      setHostReveal(to);
-    });
+    state.hostRevealAnimation = animation;
+    await animation.finished.catch(() => undefined);
+    if (state.hostRevealAnimation === animation) state.hostRevealAnimation = null;
+    if (!ownsVisualTransition(generation) || state.host !== host) return false;
+    animation.cancel();
+    setHostReveal(to);
+    return true;
   }
 
   function removeCompareHandle() {
@@ -451,21 +588,34 @@ export function installShell(ctx) {
   }
 
   async function revealBokoun({ initial = false, instant = false } = {}) {
-    if (!state.host || state.revealRunning) return;
+    if (!state.host) return false;
+    const generation = beginVisualTransition("bokoun");
     state.revealPending = false;
     state.revealRunning = true;
     removeCompareHandle();
     setLayered("transition", true);
     if (instant) setHostReveal(100);
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    if (!instant) await animateHostReveal(0, 100);
-    setLayered("transition", false);
-    state.revealRunning = false;
-    syncCompareMode();
-    if (initial) state.host?.setAttribute("data-initial-reveal-complete", "true");
+    try {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (!ownsVisualTransition(generation)) return false;
+      if (!instant && !await animateHostReveal(0, 100, generation)) return false;
+      if (!ownsVisualTransition(generation)) return false;
+      return true;
+    } finally {
+      if (ownsVisualTransition(generation)) {
+        setLayered("transition", false);
+        state.revealRunning = false;
+        state.visualIntent = "bokoun";
+        commitLayerState("reveal-bokoun:complete");
+        syncCompareMode();
+        if (initial) state.host?.setAttribute("data-initial-reveal-complete", "true");
+      }
+    }
   }
 
-  function revealNative({ stop = false } = {}) {
+  function revealNative({ stop = false, generation = null, reason = "native" } = {}) {
+    const owner = generation ?? beginVisualTransition(reason);
+    if (!ownsVisualTransition(owner)) return false;
     saveScroll();
     void exitBokounFullscreen();
     state.active = false;
@@ -473,11 +623,8 @@ export function installShell(ctx) {
     state.revealRunning = false;
     removeCompareHandle();
     state.layerReasons.clear();
-    if (document.documentElement) {
-      delete document.documentElement.dataset.bokounBooting;
-      delete document.documentElement.dataset.bokounActive;
-      delete document.documentElement.dataset.bokounLayered;
-    }
+    state.visualIntent = "native";
+    commitLayerState(`reveal-native:${reason}`);
     state.host?.remove();
     state.host = null;
     state.shadow = null;
@@ -492,12 +639,19 @@ export function installShell(ctx) {
       clearTimeout(state.routeFallbackTimer);
       stopRouteObservation();
     }
+    recordVisualState(`reveal-native:${reason}:complete`);
+    return true;
   }
 
   async function openFullKapybara() {
+    if (state.nativeMode || state.visualIntent === "native-transition") return false;
+    const generation = beginVisualTransition("native-transition");
     const anchor = captureBokounAnchor();
     sessionStorage.setItem(SESSION_DISABLED_KEY, "1");
     state.nativeMode = true;
+    state.revealRunning = true;
+    removeCompareHandle();
+    setLayered("transition", true);
 
     if (anchor?.pageHref) {
       try {
@@ -506,14 +660,15 @@ export function installShell(ctx) {
         console.warn(`[Bokoun ${VERSION}] Could not align the native page; using the closest loaded position.`, error?.name || "Error");
       }
     }
+    if (!ownsVisualTransition(generation)) return false;
 
-    removeCompareHandle();
-    setLayered("transition", true);
     restoreNativeAnchor(anchor);
     await new Promise((resolve) => window.setTimeout(resolve, 300));
-    await animateHostReveal(100, 0);
-    revealNative();
+    if (!ownsVisualTransition(generation)) return false;
+    if (!await animateHostReveal(100, 0, generation)) return false;
+    if (!revealNative({ generation, reason: "mode-switch" })) return false;
     showReturnControl();
+    return true;
   }
 
   function showReturnControl() {
@@ -713,6 +868,16 @@ export function installShell(ctx) {
     handleFullscreenChange,
     handleFullscreenGesture,
     syncFullscreenMode,
+    visualExposureAllowed,
+    visualSnapshot,
+    visualProblems,
+    recordVisualState,
+    watchVisualState,
+    clearVisualLog,
+    visualLog,
+    commitLayerState,
+    beginVisualTransition,
+    ownsVisualTransition,
     revealNative,
     setLayered,
     setHostReveal,

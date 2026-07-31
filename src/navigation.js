@@ -280,6 +280,7 @@ export function installNavigation(ctx) {
 
       nativeLink.click();
       window.setTimeout(() => {
+        if (commitSequence !== state.navigationCommitSequence) return;
         if (location.href === previous) location.assign(target.href);
       }, 1_200);
     };
@@ -445,13 +446,15 @@ export function installNavigation(ctx) {
   }
 
   async function returnToBokoun() {
+    if (!state.nativeMode || state.visualIntent === "bokoun-transition") return false;
     const anchor = captureNativeAnchor();
     sessionStorage.removeItem(SESSION_DISABLED_KEY);
     document.getElementById(RETURN_HOST_ID)?.remove();
     state.nativeMode = false;
     state.disabled = false;
+    state.visualIntent = "bokoun-transition";
 
-    if (!isMobileEligible() || routeType() === "unsupported") return;
+    if (!isMobileEligible() || routeType() === "unsupported") return false;
     await waitForBody();
     setLayered("transition", true);
     mountShell();
@@ -461,6 +464,7 @@ export function installNavigation(ctx) {
     render({ force: true });
     restoreBokounAnchor(anchor);
     await revealBokoun();
+    return true;
   }
 
   Object.assign(ctx, {

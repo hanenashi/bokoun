@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.9
+// @version      0.9.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1684,7 +1684,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.9";
+  var VERSION = "0.9.0";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1801,6 +1801,13 @@
     layerReasons: /* @__PURE__ */ new Set(),
     revealPending: false,
     revealRunning: false,
+    visualGeneration: 0,
+    visualIntent: "native",
+    hostRevealAnimation: null,
+    visualWatching: false,
+    visualWatchFrame: 0,
+    visualLogEntries: [],
+    visualLastWarning: "",
     compareHost: null,
     comparePercent: 100,
     compareAnchor: null,
@@ -1960,6 +1967,11 @@
         position: fixed !important;
         inset: 0 !important;
         z-index: 2147483647 !important;
+        opacity: 1 !important;
+        background: #fff;
+        isolation: isolate;
+        contain: layout paint style;
+        backface-visibility: hidden;
       }
       #${COMPARE_HOST_ID2} {
         display: block !important;
@@ -2093,25 +2105,125 @@
         document.addEventListener("fullscreenchange", state2.fullscreenChangeHandler);
       }
       state2.active = true;
-      document.documentElement.dataset.bokounActive = "true";
-      delete document.documentElement.dataset.bokounBooting;
+      state2.visualIntent = "bokoun";
+      commitLayerState("mount-shell");
     }
     function prefersReducedMotion() {
       return matchMedia("(prefers-reduced-motion: reduce)").matches;
     }
+    function visualExposureAllowed() {
+      return state2.nativeMode || state2.layerReasons.has("transition") || state2.layerReasons.has("compare");
+    }
+    function visualSnapshot(action = "snapshot") {
+      const host = state2.host;
+      const connected = Boolean(host?.isConnected);
+      const style = connected ? getComputedStyle(host) : null;
+      const root = document.documentElement;
+      const clip = host?.style.clipPath || style?.clipPath || "";
+      const effectiveReveal = state2.active && !visualExposureAllowed() ? 100 : state2.comparePercent;
+      return Object.freeze({
+        at: Math.round(performance.now() * 10) / 10,
+        route: routeKey(),
+        action,
+        generation: state2.visualGeneration,
+        intent: state2.visualIntent,
+        hostConnected: connected,
+        hostDisplay: style?.display || "",
+        hostVisibility: style?.visibility || "",
+        hostOpacity: style?.opacity || "",
+        hostClip: clip,
+        revealPercent: effectiveReveal,
+        activeAttribute: root?.dataset.bokounActive === "true",
+        layeredAttribute: root?.dataset.bokounLayered === "true",
+        bootingAttribute: root?.dataset.bokounBooting === "true",
+        nativeMode: state2.nativeMode,
+        comparisonMode: state2.layerReasons.has("compare"),
+        revealRunning: state2.revealRunning
+      });
+    }
+    function visualProblems(snapshot) {
+      if (!state2.active || state2.nativeMode) return [];
+      const problems = [];
+      if (!snapshot.hostConnected) problems.push("active-host-disconnected");
+      if (snapshot.hostDisplay === "none") problems.push("active-host-display-none");
+      if (snapshot.hostVisibility === "hidden") problems.push("active-host-hidden");
+      if (Number(snapshot.hostOpacity) < 0.99) problems.push("active-host-transparent");
+      if (!snapshot.activeAttribute) problems.push("active-attribute-missing");
+      if (!visualExposureAllowed() && snapshot.revealPercent < 99.9) {
+        problems.push("unexpected-native-exposure");
+      }
+      return problems;
+    }
+    function recordVisualState(action, { force = false } = {}) {
+      if (!state2.visualWatching && !force) return null;
+      const snapshot = visualSnapshot(action);
+      state2.visualLogEntries.push(snapshot);
+      if (state2.visualLogEntries.length > 250) state2.visualLogEntries.shift();
+      if (state2.visualWatching) {
+        const warning = visualProblems(snapshot).join(",");
+        if (warning && warning !== state2.visualLastWarning) {
+          console.warn(`[Bokoun ${VERSION2}] Invalid visual state: ${warning}.`);
+        }
+        state2.visualLastWarning = warning;
+      }
+      return snapshot;
+    }
+    function watchVisualState(enabled = true) {
+      state2.visualWatching = enabled === true;
+      cancelAnimationFrame(state2.visualWatchFrame);
+      state2.visualWatchFrame = 0;
+      state2.visualLastWarning = "";
+      if (!state2.visualWatching) return false;
+      const sample = () => {
+        if (!state2.visualWatching) return;
+        recordVisualState("animation-frame");
+        state2.visualWatchFrame = requestAnimationFrame(sample);
+      };
+      recordVisualState("watch-start", { force: true });
+      state2.visualWatchFrame = requestAnimationFrame(sample);
+      return true;
+    }
+    function clearVisualLog() {
+      state2.visualLogEntries.length = 0;
+      state2.visualLastWarning = "";
+    }
+    function visualLog() {
+      return state2.visualLogEntries.map((entry) => ({ ...entry }));
+    }
+    function commitLayerState(reason = "commit") {
+      const root = document.documentElement;
+      if (root) {
+        if (state2.active) {
+          root.dataset.bokounActive = "true";
+          delete root.dataset.bokounBooting;
+        } else {
+          delete root.dataset.bokounActive;
+        }
+        if (state2.active && state2.layerReasons.size) root.dataset.bokounLayered = "true";
+        else delete root.dataset.bokounLayered;
+      }
+      if (state2.host?.isConnected) {
+        const reveal = state2.active && !visualExposureAllowed() ? 100 : Math.min(100, Math.max(0, Number(state2.comparePercent) || 0));
+        state2.host.style.display = "block";
+        state2.host.style.visibility = "visible";
+        state2.host.style.opacity = "1";
+        state2.host.style.clipPath = `inset(0 ${100 - reveal}% 0 0)`;
+        const background = state2.scroller ? getComputedStyle(state2.scroller).backgroundColor : "";
+        if (background && background !== "rgba(0, 0, 0, 0)") {
+          state2.host.style.backgroundColor = background;
+        }
+      }
+      recordVisualState(reason);
+    }
     function setLayered(reason, enabled) {
       if (enabled) state2.layerReasons.add(reason);
       else state2.layerReasons.delete(reason);
-      if (!document.documentElement) return;
-      if (state2.layerReasons.size) document.documentElement.dataset.bokounLayered = "true";
-      else delete document.documentElement.dataset.bokounLayered;
+      commitLayerState(`layer:${reason}:${enabled ? "on" : "off"}`);
     }
     function setHostReveal(percent) {
       const normalized = Math.min(100, Math.max(0, Number(percent) || 0));
       state2.comparePercent = normalized;
-      if (state2.host) {
-        state2.host.style.clipPath = `inset(0 ${100 - normalized}% 0 0)`;
-      }
+      commitLayerState(`reveal:${normalized}`);
       const control = state2.compareHost?.shadowRoot?.querySelector("[role='slider']");
       if (control) {
         control.style.setProperty("--compare-percent", `${normalized}%`);
@@ -2122,13 +2234,25 @@
         );
       }
     }
-    function animateHostReveal(from, to) {
+    function beginVisualTransition(intent) {
+      state2.visualGeneration += 1;
+      state2.visualIntent = intent;
+      state2.hostRevealAnimation?.cancel();
+      state2.hostRevealAnimation = null;
+      recordVisualState(`transition:${intent}:begin`);
+      return state2.visualGeneration;
+    }
+    function ownsVisualTransition(generation) {
+      return generation === state2.visualGeneration;
+    }
+    async function animateHostReveal(from, to, generation = state2.visualGeneration) {
       const host = state2.host;
-      if (!host) return Promise.resolve();
+      if (!host || !ownsVisualTransition(generation)) return false;
       setHostReveal(from);
       if (prefersReducedMotion() || typeof host.animate !== "function") {
+        if (!ownsVisualTransition(generation) || state2.host !== host) return false;
         setHostReveal(to);
-        return Promise.resolve();
+        return true;
       }
       const animation = host.animate(
         [
@@ -2137,10 +2261,13 @@
         ],
         { duration: 360, easing: "cubic-bezier(.22,.8,.25,1)", fill: "forwards" }
       );
-      return animation.finished.catch(() => void 0).then(() => {
-        animation.cancel();
-        setHostReveal(to);
-      });
+      state2.hostRevealAnimation = animation;
+      await animation.finished.catch(() => void 0);
+      if (state2.hostRevealAnimation === animation) state2.hostRevealAnimation = null;
+      if (!ownsVisualTransition(generation) || state2.host !== host) return false;
+      animation.cancel();
+      setHostReveal(to);
+      return true;
     }
     function removeCompareHandle() {
       state2.compareHost?.remove();
@@ -2262,20 +2389,33 @@
       else removeCompareHandle();
     }
     async function revealBokoun({ initial = false, instant = false } = {}) {
-      if (!state2.host || state2.revealRunning) return;
+      if (!state2.host) return false;
+      const generation = beginVisualTransition("bokoun");
       state2.revealPending = false;
       state2.revealRunning = true;
       removeCompareHandle();
       setLayered("transition", true);
       if (instant) setHostReveal(100);
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      if (!instant) await animateHostReveal(0, 100);
-      setLayered("transition", false);
-      state2.revealRunning = false;
-      syncCompareMode();
-      if (initial) state2.host?.setAttribute("data-initial-reveal-complete", "true");
+      try {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        if (!ownsVisualTransition(generation)) return false;
+        if (!instant && !await animateHostReveal(0, 100, generation)) return false;
+        if (!ownsVisualTransition(generation)) return false;
+        return true;
+      } finally {
+        if (ownsVisualTransition(generation)) {
+          setLayered("transition", false);
+          state2.revealRunning = false;
+          state2.visualIntent = "bokoun";
+          commitLayerState("reveal-bokoun:complete");
+          syncCompareMode();
+          if (initial) state2.host?.setAttribute("data-initial-reveal-complete", "true");
+        }
+      }
     }
-    function revealNative({ stop = false } = {}) {
+    function revealNative({ stop = false, generation = null, reason = "native" } = {}) {
+      const owner = generation ?? beginVisualTransition(reason);
+      if (!ownsVisualTransition(owner)) return false;
       saveScroll();
       void exitBokounFullscreen();
       state2.active = false;
@@ -2283,11 +2423,8 @@
       state2.revealRunning = false;
       removeCompareHandle();
       state2.layerReasons.clear();
-      if (document.documentElement) {
-        delete document.documentElement.dataset.bokounBooting;
-        delete document.documentElement.dataset.bokounActive;
-        delete document.documentElement.dataset.bokounLayered;
-      }
+      state2.visualIntent = "native";
+      commitLayerState(`reveal-native:${reason}`);
       state2.host?.remove();
       state2.host = null;
       state2.shadow = null;
@@ -2301,11 +2438,18 @@
         clearTimeout(state2.routeFallbackTimer);
         stopRouteObservation();
       }
+      recordVisualState(`reveal-native:${reason}:complete`);
+      return true;
     }
     async function openFullKapybara() {
+      if (state2.nativeMode || state2.visualIntent === "native-transition") return false;
+      const generation = beginVisualTransition("native-transition");
       const anchor = captureBokounAnchor();
       sessionStorage.setItem(SESSION_DISABLED_KEY2, "1");
       state2.nativeMode = true;
+      state2.revealRunning = true;
+      removeCompareHandle();
+      setLayered("transition", true);
       if (anchor?.pageHref) {
         try {
           await navigateNativeRoute(anchor.pageHref, anchor.postId);
@@ -2313,13 +2457,14 @@
           console.warn(`[Bokoun ${VERSION2}] Could not align the native page; using the closest loaded position.`, error?.name || "Error");
         }
       }
-      removeCompareHandle();
-      setLayered("transition", true);
+      if (!ownsVisualTransition(generation)) return false;
       restoreNativeAnchor(anchor);
       await new Promise((resolve) => window.setTimeout(resolve, 300));
-      await animateHostReveal(100, 0);
-      revealNative();
+      if (!ownsVisualTransition(generation)) return false;
+      if (!await animateHostReveal(100, 0, generation)) return false;
+      if (!revealNative({ generation, reason: "mode-switch" })) return false;
       showReturnControl();
+      return true;
     }
     function showReturnControl() {
       if (!document.body || document.getElementById(RETURN_HOST_ID2)) return;
@@ -2496,6 +2641,16 @@
       handleFullscreenChange,
       handleFullscreenGesture,
       syncFullscreenMode,
+      visualExposureAllowed,
+      visualSnapshot,
+      visualProblems,
+      recordVisualState,
+      watchVisualState,
+      clearVisualLog,
+      visualLog,
+      commitLayerState,
+      beginVisualTransition,
+      ownsVisualTransition,
       revealNative,
       setLayered,
       setHostReveal,
@@ -5983,6 +6138,7 @@
         }
         nativeLink.click();
         window.setTimeout(() => {
+          if (commitSequence !== state2.navigationCommitSequence) return;
           if (location.href === previous) location.assign(target.href);
         }, 1200);
       };
@@ -6124,12 +6280,14 @@
       throw new Error("Native route timeout");
     }
     async function returnToBokoun() {
+      if (!state2.nativeMode || state2.visualIntent === "bokoun-transition") return false;
       const anchor = captureNativeAnchor();
       sessionStorage.removeItem(SESSION_DISABLED_KEY2);
       document.getElementById(RETURN_HOST_ID2)?.remove();
       state2.nativeMode = false;
       state2.disabled = false;
-      if (!isMobileEligible() || routeType() === "unsupported") return;
+      state2.visualIntent = "bokoun-transition";
+      if (!isMobileEligible() || routeType() === "unsupported") return false;
       await waitForBody();
       setLayered("transition", true);
       mountShell();
@@ -6139,6 +6297,7 @@
       render({ force: true });
       restoreBokounAnchor(anchor);
       await revealBokoun();
+      return true;
     }
     Object.assign(ctx2, {
       navigateNative,
@@ -6220,6 +6379,10 @@
     const prepareNavigationTransition = (...args) => ctx2.prepareNavigationTransition(...args);
     const consumeNavigationTransition = (...args) => ctx2.consumeNavigationTransition(...args);
     const animateRouteEntry = (...args) => ctx2.animateRouteEntry(...args);
+    const visualLog = (...args) => ctx2.visualLog(...args);
+    const clearVisualLog = (...args) => ctx2.clearVisualLog(...args);
+    const watchVisualState = (...args) => ctx2.watchVisualState(...args);
+    const commitLayerState = (...args) => ctx2.commitLayerState(...args);
     function requestStructuredRefresh(reason, { force = false } = {}) {
       const type = routeType();
       const key = routeKey();
@@ -6261,7 +6424,10 @@
           snapshot: () => trafficSnapshot(),
           reset: () => resetTrafficCounters(),
           refresh: () => requestStructuredRefresh("manual-refresh", { force: true }),
-          measure: () => measureRenderScale()
+          measure: () => measureRenderScale(),
+          visualLog: () => visualLog(),
+          clearVisualLog: () => clearVisualLog(),
+          watchVisualState: (enabled) => watchVisualState(enabled)
         })
       });
     }
@@ -6337,6 +6503,7 @@
       }
       if (!state2.host?.isConnected) mountShell();
       applyVisualSettings();
+      commitLayerState("render-settings-applied");
       const structuredRouteModel = cachedStructuredModel(type, key);
       if (!structuredRouteModel && !nativeReady(type)) return;
       const previousY = state2.scroller?.scrollTop || 0;
@@ -6381,6 +6548,7 @@
       const inner = state2.shadow.querySelector(".app-inner");
       inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
       attachUiEvents();
+      commitLayerState("render-committed");
       const transitionDirection = consumeNavigationTransition(key);
       const scrollReady = restoreScroll(key, previousKey === key ? previousY : 0);
       if (transitionDirection) {
@@ -6432,6 +6600,7 @@
       if (!reusePolledFavorites) invalidateStructuredModel(type, key);
       if (!state2.host?.isConnected) mountShell();
       state2.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
+      commitLayerState("route-loading-committed");
       state2.routeFallbackTimer = window.setTimeout(() => {
         if (state2.currentRouteKey === key && !nativeReady(type) && !cachedStructuredModel(type, key)) {
           void requestStructuredRefresh("route-transition");

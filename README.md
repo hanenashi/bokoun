@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.9`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.9.0`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   aligned near the top-right and returns to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.9` prototype reads Favorites, boards and older post pages from
+The `0.9.0` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -834,6 +834,30 @@ Version `0.8.9` swaps the two trailing header controls so the everyday **◐**
 mode switch occupies the top-right corner in both Bokoun and native Kapybara.
 The contextual **⋮** remains immediately to its left and its sheet stays
 anchored to the right screen edge.
+
+Version `0.9.0` hardens Bokoun's visual layer ownership. A single visual-state
+commit keeps the active host connected, opaque, full-viewport and fully
+revealed during ordinary routes. Wipe animations carry a monotonic generation,
+so cancelled or stale completions cannot overwrite a newer clip state or
+remove its host. Rapid navigation also invalidates delayed native-link
+fallbacks, preventing an older 1.2-second callback from reloading a destination
+after the user has already moved elsewhere. The host now supplies its own
+opaque theme background and paint containment; no extra transition overlay or
+network path was added.
+
+Dormant visual diagnostics are available when investigating a device-only
+flash. They do nothing until explicitly enabled:
+
+```js
+window.__bokounDebug.clearVisualLog();
+window.__bokounDebug.watchVisualState(true);
+// reproduce the visual issue
+window.__bokounDebug.watchVisualState(false);
+window.__bokounDebug.visualLog();
+```
+
+The log is capped at 250 entries and records route, generation, host styles,
+clip state and root attributes. Watching is disabled by default.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,

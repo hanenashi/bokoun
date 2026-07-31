@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.8.9";
+export const VERSION = "0.9.0";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";
@@ -119,6 +119,13 @@ export const state = {
   layerReasons: new Set(),
   revealPending: false,
   revealRunning: false,
+  visualGeneration: 0,
+  visualIntent: "native",
+  hostRevealAnimation: null,
+  visualWatching: false,
+  visualWatchFrame: 0,
+  visualLogEntries: [],
+  visualLastWarning: "",
   compareHost: null,
   comparePercent: 100,
   compareAnchor: null,

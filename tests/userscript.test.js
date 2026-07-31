@@ -8,7 +8,7 @@ import { installBoardState } from "../src/board-state.js";
 import { installPagination } from "../src/pagination.js";
 import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
-import { canonicalScrollRoute } from "../src/shell.js";
+import { canonicalScrollRoute, installShell } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
 import {
   inferNavigationDirection,
@@ -25,6 +25,7 @@ const generatedSource = fs.readFileSync(scriptPath, "utf8");
 const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
 const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
+const navigationSource = fs.readFileSync(path.join(sourceDir, "navigation.js"), "utf8");
 const source = [
   generatedSource,
   ...fs.readdirSync(sourceDir)
@@ -42,7 +43,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.8\.9/);
+  assert.match(source, /@version\s+0\.9\.0/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -82,6 +83,139 @@ test("temporary full mode always provides a visible route back to Bokoun", () =>
   assert.match(source, /state\.nativeMode = false/);
   assert.match(shellSource, /if \(!document\.body \|\| document\.getElementById\(RETURN_HOST_ID\)\) return/);
   assert.match(shellSource, /document\.getElementById\(RETURN_HOST_ID\)\?\.remove\(\)/);
+});
+
+test("visual generations prevent stale and cancelled host reveals from reopening a hole", async () => {
+  const originals = new Map();
+  const replaceGlobal = (key, value) => {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  };
+  const deferred = () => {
+    let resolve;
+    let reject;
+    const promise = new Promise((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    return { promise, resolve, reject };
+  };
+  const pending = [];
+  const animations = [];
+  const host = {
+    isConnected: true,
+    style: {},
+    animate() {
+      const completion = deferred();
+      pending.push(completion);
+      const animation = {
+        finished: completion.promise,
+        cancel() {
+          completion.reject(new Error("cancelled"));
+        },
+      };
+      animations.push(animation);
+      return animation;
+    },
+  };
+  const state = {
+    active: true,
+    nativeMode: false,
+    layerReasons: new Set(["transition"]),
+    comparePercent: 100,
+    host,
+    scroller: null,
+    compareHost: null,
+    visualGeneration: 0,
+    visualIntent: "bokoun",
+    hostRevealAnimation: null,
+    visualWatching: false,
+    visualWatchFrame: 0,
+    visualLogEntries: [],
+    visualLastWarning: "",
+  };
+  const shell = {
+    VERSION: "test",
+    state,
+  };
+  replaceGlobal("document", { documentElement: { dataset: {} } });
+  replaceGlobal("matchMedia", () => ({ matches: false }));
+  replaceGlobal("getComputedStyle", () => ({
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    clipPath: host.style.clipPath || "none",
+  }));
+  try {
+    installShell(shell);
+    const staleGeneration = shell.beginVisualTransition("native-transition");
+    const stale = shell.animateHostReveal(100, 0, staleGeneration);
+    const currentGeneration = shell.beginVisualTransition("bokoun");
+    const current = shell.animateHostReveal(0, 100, currentGeneration);
+    pending[1].resolve();
+    assert.equal(await current, true);
+    assert.equal(await stale, false);
+    assert.equal(host.style.clipPath, "inset(0 0% 0 0)");
+
+    const cancelledGeneration = shell.beginVisualTransition("bokoun");
+    const cancelled = shell.animateHostReveal(0, 100, cancelledGeneration);
+    animations[2].cancel();
+    assert.equal(await cancelled, true);
+    assert.equal(host.style.clipPath, "inset(0 0% 0 0)");
+
+    state.layerReasons.clear();
+    state.comparePercent = 0;
+    shell.commitLayerState("ordinary-route");
+    assert.equal(host.style.clipPath, "inset(0 0% 0 0)");
+    assert.equal(document.documentElement.dataset.bokounActive, "true");
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
+test("visual state ownership is centralized, dormant, and bounded", () => {
+  assert.match(shellSource, /function commitLayerState/);
+  assert.match(shellSource, /const reveal = state\.active && !visualExposureAllowed\(\)\s*\? 100/);
+  assert.match(shellSource, /generation === state\.visualGeneration/);
+  assert.match(shellSource, /if \(!ownsVisualTransition\(generation\) \|\| state\.host !== host\) return false/);
+  assert.match(shellSource, /if \(state\.nativeMode \|\| state\.visualIntent === "native-transition"\) return false/);
+  assert.match(shellSource, /if \(!state\.visualWatching && !force\) return null/);
+  assert.match(shellSource, /state\.visualLogEntries\.length > 250/);
+  assert.match(controllerSource, /visualLog: \(\) => visualLog\(\)/);
+  assert.match(controllerSource, /clearVisualLog: \(\) => clearVisualLog\(\)/);
+  assert.match(controllerSource, /watchVisualState: \(enabled\) => watchVisualState\(enabled\)/);
+  assert.match(shellSource, /active-host-disconnected/);
+  assert.match(shellSource, /unexpected-native-exposure/);
+});
+
+test("ordinary route commits preserve the mounted opaque Bokoun shell", () => {
+  const ordinaryRender = controllerSource.slice(
+    controllerSource.indexOf("if (!state.host?.isConnected) mountShell();"),
+    controllerSource.indexOf("const transitionDirection = consumeNavigationTransition"),
+  );
+  assert.match(ordinaryRender, /inner\.innerHTML = type === "favorites"/);
+  assert.match(ordinaryRender, /commitLayerState\("render-committed"\)/);
+  assert.doesNotMatch(ordinaryRender, /revealNative|\.remove\(\)|bokounActive/);
+  assert.doesNotMatch(controllerSource, /state\.host\?\.remove|state\.host\.remove/);
+  assert.match(shellSource, /#\$\{HOST_ID\} \{[\s\S]*background: #fff;[\s\S]*isolation: isolate;[\s\S]*contain: layout paint style;/);
+  assert.match(shellSource, /state\.host\.style\.opacity = "1"/);
+  assert.match(shellSource, /state\.host\.style\.clipPath = `inset\(0 \$\{100 - reveal\}% 0 0\)`/);
+});
+
+test("native exposure remains explicit and unsupported routes retain fail-open behavior", () => {
+  const exposureSource = shellSource.slice(
+    shellSource.indexOf("function visualExposureAllowed"),
+    shellSource.indexOf("function visualSnapshot"),
+  );
+  assert.match(exposureSource, /state\.nativeMode/);
+  assert.match(exposureSource, /state\.layerReasons\.has\("transition"\)/);
+  assert.match(exposureSource, /state\.layerReasons\.has\("compare"\)/);
+  assert.doesNotMatch(exposureSource, /route|render|loading|refresh/);
+  assert.match(controllerSource, /type === "unsupported" \|\| !isMobileEligible\(\)[\s\S]*revealNative\(\)/);
+  assert.match(controllerSource, /Native page was not ready; restored full Kapybara\.[\s\S]*revealNative\(\{ stop: true \}\)/);
 });
 
 test("endless loading is single-flight, deduplicated, and recoverable", () => {
@@ -222,6 +356,22 @@ test("route motion waits until restored scroll is settled", () => {
   assert.ok(animationIndex > settledIndex);
   assert.match(source, /resolve\(y\)/);
   assert.match(controllerSource, /if \(state\.currentRouteKey !== key\) return/);
+});
+
+test("stale native-navigation fallbacks cannot reload an older destination", () => {
+  const navigateSource = navigationSource.slice(
+    navigationSource.indexOf("function navigateNative(href"),
+    navigationSource.indexOf("function goBack()"),
+  );
+  const fallbackIndex = navigateSource.indexOf("window.setTimeout(() => {");
+  const ownershipIndex = navigateSource.indexOf(
+    "commitSequence !== state.navigationCommitSequence",
+    fallbackIndex,
+  );
+  const assignIndex = navigateSource.indexOf("location.assign(target.href)", fallbackIndex);
+  assert.ok(fallbackIndex > -1);
+  assert.ok(ownershipIndex > fallbackIndex);
+  assert.ok(ownershipIndex < assignIndex);
 });
 
 test("scroll positions ignore the temporary Bokoun mode query", () => {

@@ -57,6 +57,10 @@ export function installController(ctx) {
   const prepareNavigationTransition = (...args) => ctx.prepareNavigationTransition(...args);
   const consumeNavigationTransition = (...args) => ctx.consumeNavigationTransition(...args);
   const animateRouteEntry = (...args) => ctx.animateRouteEntry(...args);
+  const visualLog = (...args) => ctx.visualLog(...args);
+  const clearVisualLog = (...args) => ctx.clearVisualLog(...args);
+  const watchVisualState = (...args) => ctx.watchVisualState(...args);
+  const commitLayerState = (...args) => ctx.commitLayerState(...args);
 
   function requestStructuredRefresh(reason, { force = false } = {}) {
     const type = routeType();
@@ -114,6 +118,9 @@ export function installController(ctx) {
         reset: () => resetTrafficCounters(),
         refresh: () => requestStructuredRefresh("manual-refresh", { force: true }),
         measure: () => measureRenderScale(),
+        visualLog: () => visualLog(),
+        clearVisualLog: () => clearVisualLog(),
+        watchVisualState: (enabled) => watchVisualState(enabled),
       }),
     });
   }
@@ -200,6 +207,7 @@ export function installController(ctx) {
 
     if (!state.host?.isConnected) mountShell();
     applyVisualSettings();
+    commitLayerState("render-settings-applied");
 
     const structuredRouteModel = cachedStructuredModel(type, key);
     if (!structuredRouteModel && !nativeReady(type)) return;
@@ -249,6 +257,7 @@ export function installController(ctx) {
     const inner = state.shadow.querySelector(".app-inner");
     inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
     attachUiEvents();
+    commitLayerState("render-committed");
 
     const transitionDirection = consumeNavigationTransition(key);
     const scrollReady = restoreScroll(key, previousKey === key ? previousY : 0);
@@ -310,6 +319,7 @@ export function installController(ctx) {
     if (!reusePolledFavorites) invalidateStructuredModel(type, key);
     if (!state.host?.isConnected) mountShell();
     state.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
+    commitLayerState("route-loading-committed");
     state.routeFallbackTimer = window.setTimeout(() => {
       if (
         state.currentRouteKey === key
