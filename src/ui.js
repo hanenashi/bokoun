@@ -205,8 +205,8 @@ export function installUi(ctx) {
     return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
-        ${modeSwitchButton()}
         ${overflowControlMarkup("favorites")}
+        ${modeSwitchButton()}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -778,8 +778,8 @@ export function installUi(ctx) {
         >${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
-        ${modeSwitchButton()}
         ${overflowControlMarkup("board")}
+        ${modeSwitchButton()}
       </header>
       ${clubStripMarkup(board.title)}
       <div class="route-content">

@@ -528,7 +528,7 @@ export function installShell(ctx) {
           all: initial;
           position: fixed;
           top: env(safe-area-inset-top);
-          right: max(40px, calc((100vw - 720px) / 2 + 40px));
+          right: max(0px, calc((100vw - 720px) / 2));
           z-index: 2147483646;
           display: block;
           width: 44px;

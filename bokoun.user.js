@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.8.8
+// @version      0.8.9
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -128,12 +128,12 @@
   .topbar--board {
     grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px;
     padding-left: 4px;
-    padding-right: 4px;
+    padding-right: 0;
   }
 
   .topbar--favorites {
     grid-template-columns: minmax(0, 1fr) 44px 44px;
-    padding-right: 4px;
+    padding-right: 0;
   }
 
   .title {
@@ -657,6 +657,10 @@
     color: var(--text);
     box-shadow: 0 12px 32px rgba(18, 27, 43, 0.24);
     font: 14px/1.35 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .overflow-control .header-panel {
+    right: -44px;
   }
 
   .favorites-panel {
@@ -1305,13 +1309,21 @@
   .app[data-interface-preset="compact-reader"] .topbar--board {
     grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
     padding-left: 2px;
-    padding-right: 2px;
+    padding-right: 0;
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
     grid-template-columns: minmax(0, 1fr) 40px 40px;
     padding-left: 12px;
-    padding-right: 2px;
+    padding-right: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"] .header-control {
+    width: 40px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .overflow-control .header-panel {
+    right: -40px;
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip {
@@ -1672,7 +1684,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.8.8";
+  var VERSION = "0.8.9";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -2320,7 +2332,7 @@
           all: initial;
           position: fixed;
           top: env(safe-area-inset-top);
-          right: max(40px, calc((100vw - 720px) / 2 + 40px));
+          right: max(0px, calc((100vw - 720px) / 2));
           z-index: 2147483646;
           display: block;
           width: 44px;
@@ -4812,8 +4824,8 @@
       return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
-        ${modeSwitchButton()}
         ${overflowControlMarkup("favorites")}
+        ${modeSwitchButton()}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -5333,8 +5345,8 @@
         >${ICONS2.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS2.write}</button>
-        ${modeSwitchButton()}
         ${overflowControlMarkup("board")}
+        ${modeSwitchButton()}
       </header>
       ${clubStripMarkup(board.title)}
       <div class="route-content">

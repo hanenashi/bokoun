@@ -56,12 +56,12 @@ export const STYLES = `
   .topbar--board {
     grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px;
     padding-left: 4px;
-    padding-right: 4px;
+    padding-right: 0;
   }
 
   .topbar--favorites {
     grid-template-columns: minmax(0, 1fr) 44px 44px;
-    padding-right: 4px;
+    padding-right: 0;
   }
 
   .title {
@@ -585,6 +585,10 @@ export const STYLES = `
     color: var(--text);
     box-shadow: 0 12px 32px rgba(18, 27, 43, 0.24);
     font: 14px/1.35 Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .overflow-control .header-panel {
+    right: -44px;
   }
 
   .favorites-panel {
@@ -1233,13 +1237,21 @@ export const STYLES = `
   .app[data-interface-preset="compact-reader"] .topbar--board {
     grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
     padding-left: 2px;
-    padding-right: 2px;
+    padding-right: 0;
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
     grid-template-columns: minmax(0, 1fr) 40px 40px;
     padding-left: 12px;
-    padding-right: 2px;
+    padding-right: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"] .header-control {
+    width: 40px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .overflow-control .header-panel {
+    right: -40px;
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip {

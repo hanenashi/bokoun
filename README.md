@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.8`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.8.9`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   aligned near the top-right and returns to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.8.8` prototype reads Favorites, boards and older post pages from
+The `0.8.9` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -60,8 +60,8 @@ Current prototype boundaries:
   strip; club and thread routes omit that duplicate destination because their
   Back arrow already returns to Favorites, leaving only the current and recent
   sibling clubs;
-- route headers are deliberately compact: Favorites show the title, **◐** and
-  **⋮**; clubs add Back and the primary pencil. Sorting, refresh, appearance,
+- route headers are deliberately compact: Favorites show the title, **⋮** and
+  a far-right **◐**; clubs add Back and the primary pencil. Sorting, refresh, appearance,
   display and disable actions live in route-specific **⋮** menus;
 - the pencil in the board header opens a plain Markdown editor above the posts;
 - every displayed post has a small **Odpovědět** action; its editor opens inside
@@ -829,6 +829,11 @@ A permanent **◐** beside **⋮** now performs the ordinary Bokoun/Kapybara wip
 handoff; full Kapybara gets a matching fixed switch at the same practical
 top-right position. The labelled **Plná Kapybara** fallback and the distinct
 persistent **Vypnout Bokouna** action remain available in the menu.
+
+Version `0.8.9` swaps the two trailing header controls so the everyday **◐**
+mode switch occupies the top-right corner in both Bokoun and native Kapybara.
+The contextual **⋮** remains immediately to its left and its sheet stays
+anchored to the right screen edge.
 
 Version `0.6.13` completed desktop forced-mode recovery. Once a supported
 desktop route is opened with `?bokoun=on`, Bokoun-owned Favorites, club,
