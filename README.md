@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.9.0`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.9.1`).
 
 ## Install the first prototype
 
@@ -23,7 +23,7 @@ another userscript manager, then open Kapybara on a phone:
   aligned near the top-right and returns to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
 
-The `0.9.0` prototype reads Favorites, boards and older post pages from
+The `0.9.1` prototype reads Favorites, boards and older post pages from
 Kapybara's authenticated SvelteKit data transport, then normalizes them into
 Bokoun's own small view model. It still sends explicit Markdown-only posts and
 replies through Kapybara's hidden native Lexical composer. Bokoun does not call
@@ -844,6 +844,16 @@ fallbacks, preventing an older 1.2-second callback from reloading a destination
 after the user has already moved elsewhere. The host now supplies its own
 opaque theme background and paint containment; no extra transition overlay or
 network path was added.
+
+Version `0.9.1` takes ownership of the very first paint. A tiny root-level,
+opaque light/dark cover is installed at document start and remains above both
+native Kapybara and the mounting shell until real Bokoun route content has an
+opaque host and survived a checked double-frame handoff. Successful startup no
+longer performs a native-to-Bokoun reveal; initialization failure deliberately
+removes the cover and fails open. Internal navigation now keeps the outgoing
+route blurred in place while the destination loads, swaps in the destination
+already blurred, and then brings it into focus. The header and club strip stay
+sharp, and internal routes no longer replace the page with a centered loader.
 
 Dormant visual diagnostics are available when investigating a device-only
 flash. They do nothing until explicitly enabled:

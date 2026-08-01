@@ -66,8 +66,32 @@ export function installShell(ctx) {
     const style = document.createElement("style");
     style.id = "bokoun-global-style";
     style.textContent = `
+      html[data-bokoun-booting="true"] {
+        background: #f4f2ee !important;
+        color-scheme: light dark;
+      }
+      html[data-bokoun-booting="true"]::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        z-index: 2147483647;
+        background: #f4f2ee;
+        pointer-events: auto;
+      }
       html[data-bokoun-booting="true"] body {
         visibility: hidden !important;
+      }
+      html[data-bokoun-booting="true"] #${HOST_ID} {
+        z-index: 2147483646 !important;
+      }
+      @media (prefers-color-scheme: dark) {
+        html[data-bokoun-booting="true"],
+        html[data-bokoun-booting="true"]::before {
+          background: #17191b !important;
+        }
       }
       html[data-bokoun-active="true"] body > :not(#${HOST_ID}):not(#${COMPARE_HOST_ID}) {
         display: none !important;
@@ -119,8 +143,8 @@ export function installShell(ctx) {
 
   function startPaintGuard() {
     if (shouldBoot()) {
-      document.documentElement.dataset.bokounBooting = "true";
       installGlobalStyle();
+      document.documentElement.dataset.bokounBooting = "true";
     }
   }
 
@@ -259,7 +283,7 @@ export function installShell(ctx) {
       <style>${STYLES}</style>
       <main class="app" tabindex="-1">
         <div class="app-inner">
-          <div class="loading" aria-label="Načítám"></div>
+          <div class="startup-shell" role="status" aria-label="Spouštím Bokouna"></div>
         </div>
       </main>
     `;
@@ -378,7 +402,6 @@ export function installShell(ctx) {
     if (root) {
       if (state.active) {
         root.dataset.bokounActive = "true";
-        delete root.dataset.bokounBooting;
       } else {
         delete root.dataset.bokounActive;
       }
@@ -582,7 +605,12 @@ export function installShell(ctx) {
   }
 
   function syncCompareMode() {
-    if (!state.active || state.nativeMode || state.revealRunning) return;
+    if (
+      !state.active
+      || state.nativeMode
+      || state.revealRunning
+      || document.documentElement.dataset.bokounBooting === "true"
+    ) return;
     if (currentDisplaySettings().compareHandle) showCompareHandle();
     else removeCompareHandle();
   }
@@ -613,6 +641,44 @@ export function installShell(ctx) {
     }
   }
 
+  async function completeBootHandoff() {
+    const root = document.documentElement;
+    if (root?.dataset.bokounBooting !== "true") return true;
+    const generation = ++state.bootHandoffGeneration;
+    const visualGeneration = state.visualGeneration;
+    const host = state.host;
+    const routeContent = state.shadow?.querySelector(".route-content");
+    if (
+      !state.active
+      || state.nativeMode
+      || !host?.isConnected
+      || !routeContent
+      || host.getAttribute("data-initial-reveal-complete") !== "true"
+    ) return false;
+
+    commitLayerState("boot-handoff:ready");
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (
+      generation !== state.bootHandoffGeneration
+      || visualGeneration !== state.visualGeneration
+      || !state.active
+      || state.nativeMode
+      || state.host !== host
+      || !host.isConnected
+      || !state.shadow?.querySelector(".route-content")
+    ) return false;
+
+    const background = getComputedStyle(host).backgroundColor;
+    if (!background || background === "rgba(0, 0, 0, 0)") return false;
+    delete root.dataset.bokounBooting;
+    clearTimeout(state.bootTimer);
+    state.bootTimer = 0;
+    syncCompareMode();
+    recordVisualState("boot-handoff:complete");
+    return true;
+  }
+
   function revealNative({ stop = false, generation = null, reason = "native" } = {}) {
     const owner = generation ?? beginVisualTransition(reason);
     if (!ownsVisualTransition(owner)) return false;
@@ -621,9 +687,11 @@ export function installShell(ctx) {
     state.active = false;
     state.revealPending = false;
     state.revealRunning = false;
+    state.bootHandoffGeneration += 1;
     removeCompareHandle();
     state.layerReasons.clear();
     state.visualIntent = "native";
+    delete document.documentElement.dataset.bokounBooting;
     commitLayerState(`reveal-native:${reason}`);
     state.host?.remove();
     state.host = null;
@@ -886,6 +954,7 @@ export function installShell(ctx) {
     removeCompareHandle,
     syncCompareMode,
     revealBokoun,
+    completeBootHandoff,
     openFullKapybara,
     showReturnControl,
     disableBokoun,

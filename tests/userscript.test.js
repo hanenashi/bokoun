@@ -43,7 +43,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.0/);
+  assert.match(source, /@version\s+0\.9\.1/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -72,6 +72,56 @@ test("failure and full-version paths reveal native Kapybara", () => {
   assert.match(source, /function revealNative/);
   assert.match(source, /function openFullKapybara/);
   assert.match(source, /Native page was not ready; restored full Kapybara/);
+});
+
+test("document-start cover owns startup until an opaque first route is paint-ready", () => {
+  const paintGuard = shellSource.slice(
+    shellSource.indexOf("function installGlobalStyle"),
+    shellSource.indexOf("function waitForDocumentElement"),
+  );
+  const handoff = shellSource.slice(
+    shellSource.indexOf("async function completeBootHandoff"),
+    shellSource.indexOf("function revealNative"),
+  );
+  const nativeReveal = shellSource.slice(
+    shellSource.indexOf("function revealNative"),
+    shellSource.indexOf("async function openFullKapybara"),
+  );
+
+  assert.match(paintGuard, /html\[data-bokoun-booting="true"\]::before/);
+  assert.match(paintGuard, /position: fixed;[\s\S]*inset: 0;[\s\S]*background: #f4f2ee/);
+  assert.match(paintGuard, /prefers-color-scheme: dark[\s\S]*background: #17191b/);
+  assert.match(paintGuard, /installGlobalStyle\(\);\s*document\.documentElement\.dataset\.bokounBooting = "true"/);
+  assert.doesNotMatch(paintGuard, /body::before/);
+  assert.doesNotMatch(
+    shellSource.slice(
+      shellSource.indexOf("function commitLayerState"),
+      shellSource.indexOf("function setLayered"),
+    ),
+    /delete root\.dataset\.bokounBooting/,
+  );
+  assert.match(handoff, /querySelector\("\.route-content"\)/);
+  assert.match(handoff, /data-initial-reveal-complete/);
+  assert.match(handoff, /requestAnimationFrame\(resolve\)[\s\S]*requestAnimationFrame\(resolve\)/);
+  assert.match(handoff, /getComputedStyle\(host\)\.backgroundColor/);
+  assert.match(handoff, /delete root\.dataset\.bokounBooting/);
+  assert.match(nativeReveal, /delete document\.documentElement\.dataset\.bokounBooting/);
+  assert.match(controllerSource, /revealBokoun\(\{ initial: true, instant: true \}\)/);
+  assert.doesNotMatch(controllerSource, /revealBokoun\(\{ initial: true \}\)/);
+});
+
+test("internal navigation retains the blurred outgoing route until target swap", () => {
+  const routeChange = controllerSource.slice(
+    controllerSource.indexOf("function handleRouteChange"),
+    controllerSource.indexOf("function handleVisibilityChange"),
+  );
+  assert.match(routeChange, /querySelector\("\.route-content"\)/);
+  assert.match(routeChange, /dataset\.routePending = "true"/);
+  assert.match(routeChange, /outgoingRoute\.inert = true/);
+  assert.doesNotMatch(routeChange, /innerHTML\s*=\s*['"`][\s\S]*class=["']loading/);
+  assert.doesNotMatch(routeChange, /startPaintGuard|bokounBooting/);
+  assert.match(navigationSource, /filter: "blur\(0\)"[\s\S]*filter: "blur\(10px\)"[\s\S]*fill: "forwards"/);
+  assert.match(navigationSource, /filter: "blur\(12px\)"[\s\S]*filter: "blur\(0\)"/);
 });
 
 test("temporary full mode always provides a visible route back to Bokoun", () => {

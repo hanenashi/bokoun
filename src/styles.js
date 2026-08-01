@@ -40,6 +40,10 @@ export const STYLES = `
     scrollbar-gutter: stable;
   }
 
+  .route-content[data-route-pending="true"] {
+    pointer-events: none;
+  }
+
   .topbar {
     position: sticky;
     top: 0;
@@ -1088,22 +1092,9 @@ export const STYLES = `
     text-align: center;
   }
 
-  .loading {
-    display: grid;
-    min-height: 40vh;
-    place-items: center;
-    color: var(--muted);
-    font-size: 15px;
-  }
-
-  .loading::after {
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    content: "";
-    animation: bokoun-spin 0.8s linear infinite;
+  .startup-shell {
+    min-height: 100dvh;
+    background: var(--bg);
   }
 
   .sr-only {
@@ -1604,9 +1595,4 @@ export const STYLES = `
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .loading::after {
-      animation-duration: 1.8s;
-    }
-  }
 `;

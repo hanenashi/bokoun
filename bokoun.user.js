@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.0
+// @version      0.9.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -110,6 +110,10 @@
     background: var(--bg);
     color: var(--text);
     scrollbar-gutter: stable;
+  }
+
+  .route-content[data-route-pending="true"] {
+    pointer-events: none;
   }
 
   .topbar {
@@ -1160,22 +1164,9 @@
     text-align: center;
   }
 
-  .loading {
-    display: grid;
-    min-height: 40vh;
-    place-items: center;
-    color: var(--muted);
-    font-size: 15px;
-  }
-
-  .loading::after {
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    content: "";
-    animation: bokoun-spin 0.8s linear infinite;
+  .startup-shell {
+    min-height: 100dvh;
+    background: var(--bg);
   }
 
   .sr-only {
@@ -1676,15 +1667,10 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .loading::after {
-      animation-duration: 1.8s;
-    }
-  }
 `;
 
   // src/runtime.js
-  var VERSION = "0.9.0";
+  var VERSION = "0.9.1";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1779,6 +1765,7 @@
     currentRouteKey: "",
     currentSignature: "",
     bootTimer: 0,
+    bootHandoffGeneration: 0,
     renderTimer: 0,
     routeTimer: 0,
     routeEventTimer: 0,
@@ -1930,8 +1917,32 @@
       const style = document.createElement("style");
       style.id = "bokoun-global-style";
       style.textContent = `
+      html[data-bokoun-booting="true"] {
+        background: #f4f2ee !important;
+        color-scheme: light dark;
+      }
+      html[data-bokoun-booting="true"]::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        z-index: 2147483647;
+        background: #f4f2ee;
+        pointer-events: auto;
+      }
       html[data-bokoun-booting="true"] body {
         visibility: hidden !important;
+      }
+      html[data-bokoun-booting="true"] #${HOST_ID2} {
+        z-index: 2147483646 !important;
+      }
+      @media (prefers-color-scheme: dark) {
+        html[data-bokoun-booting="true"],
+        html[data-bokoun-booting="true"]::before {
+          background: #17191b !important;
+        }
       }
       html[data-bokoun-active="true"] body > :not(#${HOST_ID2}):not(#${COMPARE_HOST_ID2}) {
         display: none !important;
@@ -1982,8 +1993,8 @@
     }
     function startPaintGuard() {
       if (shouldBoot()) {
-        document.documentElement.dataset.bokounBooting = "true";
         installGlobalStyle();
+        document.documentElement.dataset.bokounBooting = "true";
       }
     }
     function waitForDocumentElement() {
@@ -2090,7 +2101,7 @@
       <style>${STYLES2}</style>
       <main class="app" tabindex="-1">
         <div class="app-inner">
-          <div class="loading" aria-label="Načítám"></div>
+          <div class="startup-shell" role="status" aria-label="Spouštím Bokouna"></div>
         </div>
       </main>
     `;
@@ -2195,7 +2206,6 @@
       if (root) {
         if (state2.active) {
           root.dataset.bokounActive = "true";
-          delete root.dataset.bokounBooting;
         } else {
           delete root.dataset.bokounActive;
         }
@@ -2384,7 +2394,7 @@
       setHostReveal(state2.comparePercent);
     }
     function syncCompareMode() {
-      if (!state2.active || state2.nativeMode || state2.revealRunning) return;
+      if (!state2.active || state2.nativeMode || state2.revealRunning || document.documentElement.dataset.bokounBooting === "true") return;
       if (currentDisplaySettings().compareHandle) showCompareHandle();
       else removeCompareHandle();
     }
@@ -2413,6 +2423,27 @@
         }
       }
     }
+    async function completeBootHandoff() {
+      const root = document.documentElement;
+      if (root?.dataset.bokounBooting !== "true") return true;
+      const generation = ++state2.bootHandoffGeneration;
+      const visualGeneration = state2.visualGeneration;
+      const host = state2.host;
+      const routeContent = state2.shadow?.querySelector(".route-content");
+      if (!state2.active || state2.nativeMode || !host?.isConnected || !routeContent || host.getAttribute("data-initial-reveal-complete") !== "true") return false;
+      commitLayerState("boot-handoff:ready");
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (generation !== state2.bootHandoffGeneration || visualGeneration !== state2.visualGeneration || !state2.active || state2.nativeMode || state2.host !== host || !host.isConnected || !state2.shadow?.querySelector(".route-content")) return false;
+      const background = getComputedStyle(host).backgroundColor;
+      if (!background || background === "rgba(0, 0, 0, 0)") return false;
+      delete root.dataset.bokounBooting;
+      clearTimeout(state2.bootTimer);
+      state2.bootTimer = 0;
+      syncCompareMode();
+      recordVisualState("boot-handoff:complete");
+      return true;
+    }
     function revealNative({ stop = false, generation = null, reason = "native" } = {}) {
       const owner = generation ?? beginVisualTransition(reason);
       if (!ownsVisualTransition(owner)) return false;
@@ -2421,9 +2452,11 @@
       state2.active = false;
       state2.revealPending = false;
       state2.revealRunning = false;
+      state2.bootHandoffGeneration += 1;
       removeCompareHandle();
       state2.layerReasons.clear();
       state2.visualIntent = "native";
+      delete document.documentElement.dataset.bokounBooting;
       commitLayerState(`reveal-native:${reason}`);
       state2.host?.remove();
       state2.host = null;
@@ -2659,6 +2692,7 @@
       removeCompareHandle,
       syncCompareMode,
       revealBokoun,
+      completeBootHandoff,
       openFullKapybara,
       showReturnControl,
       disableBokoun,
@@ -6373,6 +6407,7 @@
     const reconcileFavoriteReadState = (...args) => ctx2.reconcileFavoriteReadState(...args);
     const syncBoardVisitRead = (...args) => ctx2.syncBoardVisitRead(...args);
     const revealBokoun = (...args) => ctx2.revealBokoun(...args);
+    const completeBootHandoff = (...args) => ctx2.completeBootHandoff(...args);
     const setLayered = (...args) => ctx2.setLayered(...args);
     const setHostReveal = (...args) => ctx2.setHostReveal(...args);
     const rememberRecentClub = (...args) => ctx2.rememberRecentClub(...args);
@@ -6556,12 +6591,19 @@
           if (state2.currentRouteKey !== key) return;
           const animation = animateRouteEntry(transitionDirection);
           if (state2.revealPending) {
-            void revealBokoun({ initial: true, instant: true });
+            void Promise.all([
+              animation,
+              revealBokoun({ initial: true, instant: true })
+            ]).then(([, revealed]) => {
+              if (revealed && state2.currentRouteKey === key) void completeBootHandoff();
+            });
           }
           return animation;
         });
       } else if (state2.revealPending) {
-        void revealBokoun({ initial: true });
+        void revealBokoun({ initial: true, instant: true }).then((revealed) => {
+          if (revealed && state2.currentRouteKey === key) void completeBootHandoff();
+        });
       }
     }
     function scheduleRender({ force = false } = {}) {
@@ -6599,8 +6641,13 @@
       abortStructuredRequests(reusePolledFavorites ? type : "", reusePolledFavorites ? key : "");
       if (!reusePolledFavorites) invalidateStructuredModel(type, key);
       if (!state2.host?.isConnected) mountShell();
-      state2.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
-      commitLayerState("route-loading-committed");
+      const outgoingRoute = state2.shadow.querySelector(".route-content");
+      if (outgoingRoute) {
+        outgoingRoute.dataset.routePending = "true";
+        outgoingRoute.setAttribute("aria-busy", "true");
+        outgoingRoute.inert = true;
+      }
+      commitLayerState("route-waiting-committed");
       state2.routeFallbackTimer = window.setTimeout(() => {
         if (state2.currentRouteKey === key && !nativeReady(type) && !cachedStructuredModel(type, key)) {
           void requestStructuredRefresh("route-transition");

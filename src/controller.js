@@ -51,6 +51,7 @@ export function installController(ctx) {
   const reconcileFavoriteReadState = (...args) => ctx.reconcileFavoriteReadState(...args);
   const syncBoardVisitRead = (...args) => ctx.syncBoardVisitRead(...args);
   const revealBokoun = (...args) => ctx.revealBokoun(...args);
+  const completeBootHandoff = (...args) => ctx.completeBootHandoff(...args);
   const setLayered = (...args) => ctx.setLayered(...args);
   const setHostReveal = (...args) => ctx.setHostReveal(...args);
   const rememberRecentClub = (...args) => ctx.rememberRecentClub(...args);
@@ -266,12 +267,19 @@ export function installController(ctx) {
         if (state.currentRouteKey !== key) return;
         const animation = animateRouteEntry(transitionDirection);
         if (state.revealPending) {
-          void revealBokoun({ initial: true, instant: true });
+          void Promise.all([
+            animation,
+            revealBokoun({ initial: true, instant: true }),
+          ]).then(([, revealed]) => {
+            if (revealed && state.currentRouteKey === key) void completeBootHandoff();
+          });
         }
         return animation;
       });
     } else if (state.revealPending) {
-      void revealBokoun({ initial: true });
+      void revealBokoun({ initial: true, instant: true }).then((revealed) => {
+        if (revealed && state.currentRouteKey === key) void completeBootHandoff();
+      });
     }
   }
 
@@ -318,8 +326,13 @@ export function installController(ctx) {
     abortStructuredRequests(reusePolledFavorites ? type : "", reusePolledFavorites ? key : "");
     if (!reusePolledFavorites) invalidateStructuredModel(type, key);
     if (!state.host?.isConnected) mountShell();
-    state.shadow.querySelector(".app-inner").innerHTML = '<div class="loading" aria-label="Načítám"></div>';
-    commitLayerState("route-loading-committed");
+    const outgoingRoute = state.shadow.querySelector(".route-content");
+    if (outgoingRoute) {
+      outgoingRoute.dataset.routePending = "true";
+      outgoingRoute.setAttribute("aria-busy", "true");
+      outgoingRoute.inert = true;
+    }
+    commitLayerState("route-waiting-committed");
     state.routeFallbackTimer = window.setTimeout(() => {
       if (
         state.currentRouteKey === key
