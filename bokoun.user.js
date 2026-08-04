@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.11
+// @version      0.10.12
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1855,7 +1855,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.11";
+  var VERSION = "0.10.12";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -3895,15 +3895,13 @@
         return "";
       }
     }
-    function threadPosts(posts, rootId, focusId = rootId) {
+    function threadPosts(posts, rootId) {
       if (!rootId) return [...posts];
       const members = posts.filter((post) => post.id === rootId || post.rootId === rootId).sort((left, right) => {
         const leftTime = Date.parse(left.datetime) || 0;
         const rightTime = Date.parse(right.datetime) || 0;
         return -1 * (leftTime - rightTime || left.sequence - right.sequence || Number(left.id) - Number(right.id));
       });
-      const focusIndex = members.findIndex((post) => post.id === focusId);
-      if (focusIndex > 0) members.unshift(members.splice(focusIndex, 1)[0]);
       return members;
     }
     function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
@@ -4000,7 +3998,7 @@
     function boardViewModel() {
       const activeRootId = threadRootId();
       const activeFocusId = threadFocusId();
-      const posts = threadPosts(state2.boardPosts, activeRootId, activeFocusId);
+      const posts = threadPosts(state2.boardPosts, activeRootId);
       return {
         title: state2.boardTitle,
         posts,

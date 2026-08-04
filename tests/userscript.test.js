@@ -45,8 +45,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.11/);
-  assert.match(source, /export const VERSION = "0\.10\.11"/);
+  assert.match(source, /@version\s+0\.10\.12/);
+  assert.match(source, /export const VERSION = "0\.10\.12"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -1285,7 +1285,7 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   );
 });
 
-test("thread view pins the clicked post and keeps all other members newest-first", () => {
+test("thread view keeps every member in one newest-first timeline", () => {
   const board = { state: {} };
   installBoardState(board);
   const posts = [
@@ -1296,16 +1296,13 @@ test("thread view pins the clicked post and keeps all other members newest-first
     { id: "102", rootId: "100", datetime: "2026-07-25T10:30:00.000Z", sequence: 2 },
   ];
   assert.deepEqual(
-    board.threadPosts(posts, "100", "102").map((post) => post.id),
-    ["102", "104", "103", "100"],
-  );
-  assert.deepEqual(
-    board.threadPosts(posts, "100", "100").map((post) => post.id),
-    ["100", "104", "103", "102"],
+    board.threadPosts(posts, "100").map((post) => post.id),
+    ["104", "103", "102", "100"],
   );
   assert.doesNotMatch(uiSource, /data-setting="thread-order"/);
   assert.match(navigationSource, /target\.searchParams\.set\("p", normalizedPostId \|\| normalized\)/);
   assert.match(source, /threadMode && post\.id === board\.threadFocusId \? "post--thread-focus"/);
+  assert.doesNotMatch(source, /members\.unshift\(members\.splice/);
 });
 
 test("thread fallback retains the loaded same-club structured model", () => {

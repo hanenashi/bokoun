@@ -225,7 +225,7 @@ export function installBoardState(ctx) {
     }
   }
 
-  function threadPosts(posts, rootId, focusId = rootId) {
+  function threadPosts(posts, rootId) {
     if (!rootId) return [...posts];
     const members = posts
       .filter((post) => post.id === rootId || post.rootId === rootId)
@@ -238,8 +238,6 @@ export function installBoardState(ctx) {
           || Number(left.id) - Number(right.id)
         );
       });
-    const focusIndex = members.findIndex((post) => post.id === focusId);
-    if (focusIndex > 0) members.unshift(members.splice(focusIndex, 1)[0]);
     return members;
   }
 
@@ -351,7 +349,7 @@ export function installBoardState(ctx) {
   function boardViewModel() {
     const activeRootId = threadRootId();
     const activeFocusId = threadFocusId();
-    const posts = threadPosts(state.boardPosts, activeRootId, activeFocusId);
+    const posts = threadPosts(state.boardPosts, activeRootId);
     return {
       title: state.boardTitle,
       posts,
