@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.0
+// @version      0.10.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -3086,7 +3086,14 @@
     function structuredDataUrl(pageHref) {
       const url = new URL(pageHref, location.origin);
       if (url.origin !== location.origin) throw new Error("Unsafe structured data URL");
-      url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
+      const threadRoot = url.searchParams.get("rootId");
+      if (threadRoot && /^\d+$/.test(threadRoot)) {
+        url.pathname = `${url.pathname.replace(/\/$/, "")}/t/${threadRoot}/__data.json`;
+        url.searchParams.delete("rootId");
+        url.searchParams.set("p", threadRoot);
+      } else {
+        url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
+      }
       url.searchParams.delete("bokoun");
       url.hash = "";
       return url;
@@ -6814,7 +6821,8 @@
       applyVisualSettings();
       commitLayerState("render-settings-applied");
       const structuredRouteModel = cachedStructuredModel(type, key);
-      if (!structuredRouteModel && !nativeReady(type)) return;
+      const isThreadRoute = type === "board" && new URL(key, location.origin).searchParams.has("rootId");
+      if (!structuredRouteModel && (!nativeReady(type) || isThreadRoute)) return;
       const previousY = state2.scroller?.scrollTop || 0;
       let model;
       let readSource = "dom";
@@ -6924,7 +6932,8 @@
       }
       commitLayerState("route-waiting-committed");
       state2.routeFallbackTimer = window.setTimeout(() => {
-        if (state2.currentRouteKey === key && !nativeReady(type) && !cachedStructuredModel(type, key)) {
+        const isThreadRoute = type === "board" && new URL(key, location.origin).searchParams.has("rootId");
+        if (state2.currentRouteKey === key && (!nativeReady(type) || isThreadRoute) && !cachedStructuredModel(type, key)) {
           void requestStructuredRefresh("route-transition");
         }
       }, ROUTE_DATA_FALLBACK_MS2);

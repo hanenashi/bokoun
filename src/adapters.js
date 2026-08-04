@@ -316,7 +316,17 @@ export function installAdapters(ctx) {
   function structuredDataUrl(pageHref) {
     const url = new URL(pageHref, location.origin);
     if (url.origin !== location.origin) throw new Error("Unsafe structured data URL");
-    url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
+    const threadRoot = url.searchParams.get("rootId");
+    if (threadRoot && /^\d+$/.test(threadRoot)) {
+      // Kapybara's current thread route is /t/<root>?p=<root>. Keep
+      // Bokoun's simple rootId URL externally, but fetch the thread contract
+      // directly so the native Svelte redirect cannot replace our renderer.
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/t/${threadRoot}/__data.json`;
+      url.searchParams.delete("rootId");
+      url.searchParams.set("p", threadRoot);
+    } else {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
+    }
     url.searchParams.delete("bokoun");
     url.hash = "";
     return url;

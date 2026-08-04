@@ -212,7 +212,9 @@ export function installController(ctx) {
     commitLayerState("render-settings-applied");
 
     const structuredRouteModel = cachedStructuredModel(type, key);
-    if (!structuredRouteModel && !nativeReady(type)) return;
+    const isThreadRoute = type === "board"
+      && new URL(key, location.origin).searchParams.has("rootId");
+    if (!structuredRouteModel && (!nativeReady(type) || isThreadRoute)) return;
     const previousY = state.scroller?.scrollTop || 0;
     let model;
     let readSource = "dom";
@@ -336,9 +338,11 @@ export function installController(ctx) {
     }
     commitLayerState("route-waiting-committed");
     state.routeFallbackTimer = window.setTimeout(() => {
+      const isThreadRoute = type === "board"
+        && new URL(key, location.origin).searchParams.has("rootId");
       if (
         state.currentRouteKey === key
-        && !nativeReady(type)
+        && (!nativeReady(type) || isThreadRoute)
         && !cachedStructuredModel(type, key)
       ) {
         void requestStructuredRefresh("route-transition");

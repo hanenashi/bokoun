@@ -44,7 +44,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.0/);
+  assert.match(source, /@version\s+0\.10\.1/);
+  assert.match(source, /\/t\/\$\{threadRoot\}\/__data\.json/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -1567,8 +1568,8 @@ test("structured reads are primary and retain an explicit DOM fallback", () => {
   assert.match(source, /headers: \{ Accept: "text\/sveltekit-data" \}/);
   assert.match(source, /cache: "no-store"/);
   assert.match(source, /cachedStructuredModel\(type, key\)/);
-  assert.match(source, /if \(!structuredRouteModel && !nativeReady\(type\)\) return/);
-  assert.match(source, /!nativeReady\(type\) && !cachedStructuredModel\(type, routeKey\(\)\)/);
+  assert.match(source, /if \(!structuredRouteModel && \(!nativeReady\(type\) \|\| isThreadRoute\)\) return/);
+  assert.match(source, /\(!nativeReady\(type\) \|\| isThreadRoute\) && !cachedStructuredModel\(type, key\)/);
   assert.match(source, /else model = readFavoritesFromDom\(\)/);
   assert.match(source, /structuredModel \|\| readBoardFromDom\(document, key\)/);
   assert.match(source, /Structured \$\{type\} data unavailable; using DOM fallback/);
