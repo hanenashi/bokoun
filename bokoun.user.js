@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.4
+// @version      0.10.5
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1386,6 +1386,17 @@
     padding-top: env(safe-area-inset-top);
     border-color: var(--border);
     background: var(--header-bg);
+  }
+
+  /* Firefox fullscreen exposes the punch-hole area as usable viewport space.
+     Move only Bokoun's compact header into that edge-to-edge inset. */
+  .app[data-interface-preset="compact-reader"][data-fullscreen="active"] .topbar {
+    margin-top: calc(-1 * env(safe-area-inset-top));
+    padding-top: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"][data-fullscreen="active"] .club-strip {
+    top: var(--header-height);
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--board {

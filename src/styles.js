@@ -1316,6 +1316,17 @@ export const STYLES = `
     background: var(--header-bg);
   }
 
+  /* Firefox fullscreen exposes the punch-hole area as usable viewport space.
+     Move only Bokoun's compact header into that edge-to-edge inset. */
+  .app[data-interface-preset="compact-reader"][data-fullscreen="active"] .topbar {
+    margin-top: calc(-1 * env(safe-area-inset-top));
+    padding-top: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"][data-fullscreen="active"] .club-strip {
+    top: var(--header-height);
+  }
+
   .app[data-interface-preset="compact-reader"] .topbar--board {
     grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px 40px;
     padding-left: 2px;
