@@ -214,7 +214,11 @@ export function installController(ctx) {
     const structuredRouteModel = cachedStructuredModel(type, key);
     const isThreadRoute = type === "board"
       && new URL(key, location.origin).searchParams.has("rootId");
-    if (!structuredRouteModel && (!nativeReady(type) || isThreadRoute)) return;
+    // A thread may arrive through a soft navigation before its structured
+    // payload is ready (or when that payload fails). Keep the mounted shell
+    // renderable so the DOM fallback can filter the loaded posts instead of
+    // leaving the previous full-club view on screen.
+    if (!structuredRouteModel && !nativeReady(type)) return;
     const previousY = state.scroller?.scrollTop || 0;
     let model;
     let readSource = "dom";

@@ -1855,7 +1855,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.9.1";
+  var VERSION = "0.10.7";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -6920,7 +6920,7 @@
       commitLayerState("render-settings-applied");
       const structuredRouteModel = cachedStructuredModel(type, key);
       const isThreadRoute = type === "board" && new URL(key, location.origin).searchParams.has("rootId");
-      if (!structuredRouteModel && (!nativeReady(type) || isThreadRoute)) return;
+      if (!structuredRouteModel && !nativeReady(type)) return;
       const previousY = state2.scroller?.scrollTop || 0;
       let model;
       let readSource = "dom";
