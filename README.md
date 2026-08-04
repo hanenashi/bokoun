@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.10.2`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.10.3`).
 
 ## Install the first prototype
 

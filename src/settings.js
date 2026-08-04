@@ -1,5 +1,5 @@
 const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
-  interfacePreset: "default",
+  interfacePreset: "compact-reader",
   colorScheme: "kapybara",
   showClubStrip: true,
   pageTransitions: true,
@@ -123,9 +123,7 @@ export function installSettings(ctx) {
 
   function normalizeDisplaySettings(value = {}) {
     return {
-      interfacePreset: INTERFACE_PRESETS.has(value.interfacePreset)
-        ? value.interfacePreset
-        : DEFAULT_DISPLAY_SETTINGS.interfacePreset,
+      interfacePreset: DEFAULT_DISPLAY_SETTINGS.interfacePreset,
       colorScheme: COLOR_SCHEMES.has(value.colorScheme)
         ? value.colorScheme
         : DEFAULT_DISPLAY_SETTINGS.colorScheme,

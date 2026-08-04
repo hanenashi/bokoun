@@ -585,13 +585,6 @@ export function installUi(ctx) {
   function interfaceAppearanceMarkup(display) {
     return `
       <label class="settings-field settings-field--wide-label">
-        <span>Rozhraní</span>
-        <select data-setting="interface-preset" aria-label="Vzhled rozhraní">
-          <option value="default" ${display.interfacePreset === "default" ? "selected" : ""}>Výchozí Bokoun</option>
-          <option value="compact-reader" ${display.interfacePreset === "compact-reader" ? "selected" : ""}>Kompaktní čtečka</option>
-        </select>
-      </label>
-      <label class="settings-field settings-field--wide-label">
         <span>Barvy</span>
         <select data-setting="color-scheme" aria-label="Barevný režim">
           <option value="kapybara" ${display.colorScheme === "kapybara" ? "selected" : ""}>Kapybara (automaticky)</option>
@@ -888,7 +881,32 @@ export function installUi(ctx) {
 
   function attachUiEvents() {
     state.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
-    state.shadow.querySelector("[data-action='fullscreen-toggle']")?.addEventListener("click", async () => {
+    const fullscreenToggle = state.shadow.querySelector("[data-action='fullscreen-toggle']");
+    let longPress = false;
+    let longPressTimer = 0;
+    const clearLongPress = () => {
+      clearTimeout(longPressTimer);
+      longPressTimer = 0;
+    };
+    fullscreenToggle?.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      longPress = false;
+      clearLongPress();
+      longPressTimer = window.setTimeout(() => {
+        longPress = true;
+        window.location.reload();
+      }, 700);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+      fullscreenToggle?.addEventListener(type, clearLongPress);
+    });
+    fullscreenToggle?.addEventListener("contextmenu", (event) => event.preventDefault());
+    fullscreenToggle?.addEventListener("click", async (event) => {
+      if (longPress) {
+        event.preventDefault();
+        longPress = false;
+        return;
+      }
       if (document.fullscreenElement) {
         if (state.fullscreenOwned) await ctx.exitBokounFullscreen({ suppress: true });
         else await document.exitFullscreen?.();
@@ -976,9 +994,6 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='show-avatars']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ showAvatars: event.currentTarget.checked });
-    });
-    state.shadow.querySelector("[data-setting='interface-preset']")?.addEventListener("change", (event) => {
-      updateDisplaySettings({ interfacePreset: event.currentTarget.value });
     });
     state.shadow.querySelector("[data-setting='color-scheme']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ colorScheme: event.currentTarget.value });

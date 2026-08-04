@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.2/);
+  assert.match(source, /@version\s+0\.10\.3/);
   assert.match(source, /\/t\/\$\{threadRoot\}\/__data\.json/);
   assert.match(
     source,
@@ -644,7 +644,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
   installSettings(settings);
 
   assert.deepEqual(settings.currentDisplaySettings(), {
-    interfacePreset: "default",
+    interfacePreset: "compact-reader",
     colorScheme: "kapybara",
     showClubStrip: true,
     pageTransitions: true,
@@ -690,7 +690,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     interfacePreset: "unknown",
     colorScheme: "sepia",
   });
-  assert.equal(stored.get("display").interfacePreset, "default");
+  assert.equal(stored.get("display").interfacePreset, "compact-reader");
   assert.equal(stored.get("display").colorScheme, "kapybara");
   for (let index = 0; index < 10; index += 1) {
     settings.rememberRecentClub(`/boards/club-${index}`, `Club ${index}`);
@@ -925,8 +925,8 @@ test("live comparison uses an opt-in accessible drag handle and layered native v
 });
 
 test("compact reader preset is reversible and has light, dark, and system palettes", () => {
-  assert.match(source, /data-setting="interface-preset"/);
-  assert.match(source, /value="compact-reader"/);
+  assert.doesNotMatch(source, /data-setting="interface-preset"/);
+  assert.match(source, /interfacePreset: "compact-reader"/);
   assert.match(source, /data-setting="color-scheme"/);
   assert.match(source, /value="system"/);
   assert.match(source, /value="light"/);
@@ -1049,6 +1049,7 @@ test("fullscreen mode defaults on, requires a safe gesture, and remains escapabl
   assert.match(source, /event\?\.isTrusted/);
   assert.match(source, /node\.matches\("\[data-native-href\]"\)/);
   assert.match(source, /requestBokounFullscreen\(\{ force: true \}\)/);
+  assert.match(source, /window\.location\.reload\(\)/);
   assert.match(source, /void exitBokounFullscreen\(\);\s*state\.active = false/);
   assert.doesNotMatch(source, /requestFullscreen\(\)[\s\S]*console\.warn/);
 });

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.2
+// @version      0.10.3
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -4594,7 +4594,7 @@
 
   // src/settings.js
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
-    interfacePreset: "default",
+    interfacePreset: "compact-reader",
     colorScheme: "kapybara",
     showClubStrip: true,
     pageTransitions: true,
@@ -4650,7 +4650,6 @@
   var AVATAR_POSITIONS = /* @__PURE__ */ new Set(["inline", "left"]);
   var AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
-  var INTERFACE_PRESETS = /* @__PURE__ */ new Set(["default", "compact-reader"]);
   var COLOR_SCHEMES = /* @__PURE__ */ new Set(["kapybara", "traditional", "system", "light", "dark"]);
   var THREAD_ORDERS = /* @__PURE__ */ new Set(["ascending", "descending"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
@@ -4707,7 +4706,7 @@
     }
     function normalizeDisplaySettings(value = {}) {
       return {
-        interfacePreset: INTERFACE_PRESETS.has(value.interfacePreset) ? value.interfacePreset : DEFAULT_DISPLAY_SETTINGS.interfacePreset,
+        interfacePreset: DEFAULT_DISPLAY_SETTINGS.interfacePreset,
         colorScheme: COLOR_SCHEMES.has(value.colorScheme) ? value.colorScheme : DEFAULT_DISPLAY_SETTINGS.colorScheme,
         showClubStrip: value.showClubStrip !== false,
         pageTransitions: value.pageTransitions !== false,
@@ -5599,13 +5598,6 @@
     function interfaceAppearanceMarkup(display) {
       return `
       <label class="settings-field settings-field--wide-label">
-        <span>Rozhraní</span>
-        <select data-setting="interface-preset" aria-label="Vzhled rozhraní">
-          <option value="default" ${display.interfacePreset === "default" ? "selected" : ""}>Výchozí Bokoun</option>
-          <option value="compact-reader" ${display.interfacePreset === "compact-reader" ? "selected" : ""}>Kompaktní čtečka</option>
-        </select>
-      </label>
-      <label class="settings-field settings-field--wide-label">
         <span>Barvy</span>
         <select data-setting="color-scheme" aria-label="Barevný režim">
           <option value="kapybara" ${display.colorScheme === "kapybara" ? "selected" : ""}>Kapybara (automaticky)</option>
@@ -5861,7 +5853,32 @@
     }
     function attachUiEvents() {
       state2.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
-      state2.shadow.querySelector("[data-action='fullscreen-toggle']")?.addEventListener("click", async () => {
+      const fullscreenToggle = state2.shadow.querySelector("[data-action='fullscreen-toggle']");
+      let longPress = false;
+      let longPressTimer = 0;
+      const clearLongPress = () => {
+        clearTimeout(longPressTimer);
+        longPressTimer = 0;
+      };
+      fullscreenToggle?.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        longPress = false;
+        clearLongPress();
+        longPressTimer = window.setTimeout(() => {
+          longPress = true;
+          window.location.reload();
+        }, 700);
+      });
+      ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+        fullscreenToggle?.addEventListener(type, clearLongPress);
+      });
+      fullscreenToggle?.addEventListener("contextmenu", (event) => event.preventDefault());
+      fullscreenToggle?.addEventListener("click", async (event) => {
+        if (longPress) {
+          event.preventDefault();
+          longPress = false;
+          return;
+        }
         if (document.fullscreenElement) {
           if (state2.fullscreenOwned) await ctx2.exitBokounFullscreen({ suppress: true });
           else await document.exitFullscreen?.();
@@ -5947,9 +5964,6 @@
       });
       state2.shadow.querySelector("[data-setting='show-avatars']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ showAvatars: event.currentTarget.checked });
-      });
-      state2.shadow.querySelector("[data-setting='interface-preset']")?.addEventListener("change", (event) => {
-        updateDisplaySettings({ interfacePreset: event.currentTarget.value });
       });
       state2.shadow.querySelector("[data-setting='color-scheme']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ colorScheme: event.currentTarget.value });
