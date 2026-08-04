@@ -864,8 +864,10 @@ export function installUi(ctx) {
               class="draft-discard"
               type="button"
               data-action="discard-draft"
+              aria-label="Zahodit koncept"
+              title="Zahodit koncept"
               ${hasDraft ? "" : "hidden"}
-            >Zahodit koncept</button>
+            >×</button>
           </div>
           <div class="composer-actions">
             ${inspect}

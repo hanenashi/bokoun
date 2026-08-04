@@ -1615,9 +1615,24 @@ export const STYLES = `
   }
 
   .app[data-interface-preset="compact-reader"] .composer-panel {
-    padding: 12px;
+    padding: 8px;
     border-radius: 0;
     background: var(--surface-raised);
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-form {
+    position: relative;
+    padding-bottom: 20px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-heading {
+    display: none;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-target {
+    margin: 0 0 5px;
+    font-size: 11px;
+    line-height: 1.25;
   }
 
   .app[data-interface-preset="compact-reader"] .composer-panel--new {
@@ -1631,7 +1646,55 @@ export const STYLES = `
   }
 
   .app[data-interface-preset="compact-reader"] .composer-textarea {
-    min-height: 130px;
+    min-height: 88px;
+    max-height: 30vh;
+    padding: 8px;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-draft {
+    position: absolute;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    gap: 6px;
+    min-height: 16px;
+    margin: 0;
+  }
+
+  .app[data-interface-preset="compact-reader"] .draft-status {
+    width: 14px;
+    height: 16px;
+    overflow: hidden;
+    color: #4f9f62;
+    font-size: 0;
+    line-height: 16px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .draft-status::before {
+    content: "●";
+    font-size: 12px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .draft-discard {
+    min-width: 16px;
+    min-height: 16px;
+    color: #5f9b69;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 16px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-actions {
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .app[data-interface-preset="compact-reader"] .composer-action {
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
   }
 
   .app[data-interface-preset="compact-reader"] .composer-action--send {
