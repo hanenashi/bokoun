@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.7
+// @version      0.10.8
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1855,7 +1855,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.7";
+  var VERSION = "0.10.8";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";

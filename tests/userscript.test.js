@@ -22,6 +22,7 @@ import {
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const scriptPath = path.join(dirname, "..", "bokoun.user.js");
 const sourceDir = path.join(dirname, "..", "src");
+const packageJson = JSON.parse(fs.readFileSync(path.join(dirname, "..", "package.json"), "utf8"));
 const generatedSource = fs.readFileSync(scriptPath, "utf8");
 const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
@@ -44,8 +45,13 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.7/);
-  assert.match(source, /export const VERSION = "0\.10\.7"/);
+  assert.match(source, /@version\s+0\.10\.8/);
+  assert.match(source, /export const VERSION = "0\.10\.8"/);
+  const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
+  const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
+    .match(/export const VERSION = "([^"]+)"/)?.[1];
+  assert.equal(metadataVersion, packageJson.version);
+  assert.equal(runtimeVersion, packageJson.version);
   assert.match(source, /\/t\/\$\{threadRoot\}\/__data\.json/);
   assert.match(
     source,
