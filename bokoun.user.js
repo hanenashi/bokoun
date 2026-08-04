@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.10
+// @version      0.10.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -3628,6 +3628,7 @@
     const routeKey = (...args) => ctx2.routeKey(...args);
     const normalizeHref = (...args) => ctx2.normalizeHref(...args);
     const syncNativeBoardRead = (...args) => ctx2.syncNativeBoardRead(...args);
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings?.(...args) || { threadOrder: "descending" };
     function boardPath(pageHref = routeKey()) {
       try {
         return new URL(pageHref, location.origin).pathname;
@@ -3794,14 +3795,15 @@
         return "";
       }
     }
-    function threadPosts(posts, rootId) {
+    function threadPosts(posts, rootId, order = "descending") {
       if (!rootId) return [...posts];
       return posts.filter((post) => post.id === rootId || post.rootId === rootId).sort((left, right) => {
         if (left.id === rootId) return -1;
         if (right.id === rootId) return 1;
         const leftTime = Date.parse(left.datetime) || 0;
         const rightTime = Date.parse(right.datetime) || 0;
-        return leftTime - rightTime || left.sequence - right.sequence || Number(left.id) - Number(right.id);
+        const direction = order === "ascending" ? 1 : -1;
+        return direction * (leftTime - rightTime || left.sequence - right.sequence || Number(left.id) - Number(right.id));
       });
     }
     function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
@@ -3897,7 +3899,11 @@
     }
     function boardViewModel() {
       const activeRootId = threadRootId();
-      const posts = threadPosts(state2.boardPosts, activeRootId);
+      const posts = threadPosts(
+        state2.boardPosts,
+        activeRootId,
+        currentDisplaySettings().threadOrder
+      );
       return {
         title: state2.boardTitle,
         posts,
@@ -4594,7 +4600,8 @@
     postSpacing: 9,
     postSeparators: true,
     compareHandle: false,
-    firstUnread: false
+    firstUnread: false,
+    threadOrder: "descending"
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
     family: "default",
@@ -4638,6 +4645,7 @@
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
   var INTERFACE_PRESETS = /* @__PURE__ */ new Set(["default", "compact-reader"]);
   var COLOR_SCHEMES = /* @__PURE__ */ new Set(["kapybara", "traditional", "system", "light", "dark"]);
+  var THREAD_ORDERS = /* @__PURE__ */ new Set(["ascending", "descending"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -4705,7 +4713,8 @@
         postSpacing: normalizePostSpacing(value.postSpacing),
         postSeparators: value.postSeparators !== false,
         compareHandle: value.compareHandle === true,
-        firstUnread: value.firstUnread === true
+        firstUnread: value.firstUnread === true,
+        threadOrder: THREAD_ORDERS.has(value.threadOrder) ? value.threadOrder : DEFAULT_DISPLAY_SETTINGS.threadOrder
       };
     }
     function normalizeFontSettings(value = {}) {
@@ -5504,6 +5513,13 @@
           >
         </label>
         <label class="settings-field">
+          <span>Řazení vláken</span>
+          <select data-setting="thread-order" aria-label="Řazení příspěvků ve vlákně">
+            <option value="descending" ${display.threadOrder === "descending" ? "selected" : ""}>Nejnovější → nejstarší</option>
+            <option value="ascending" ${display.threadOrder === "ascending" ? "selected" : ""}>Nejstarší → nejnovější</option>
+          </select>
+        </label>
+        <label class="settings-field">
           <span>Tvar</span>
           <select data-setting="avatar-shape" aria-label="Tvar avataru" ${display.showAvatars ? "" : "disabled"}>
             <option value="circle" ${display.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
@@ -5978,6 +5994,9 @@
         resetFirstUnread();
         updateDisplaySettings({ firstUnread: event.currentTarget.checked });
       });
+      state2.shadow.querySelector("[data-setting='thread-order']")?.addEventListener("change", (event) => {
+        updateDisplaySettings({ threadOrder: event.currentTarget.value });
+      });
       state2.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
         updateFavoritesSettings(
           { sort: event.currentTarget.value },
@@ -6396,7 +6415,7 @@
         state2.host.style.backgroundColor = background;
       }
     }
-    function navigateNative(href, { direction = "" } = {}) {
+    function navigateNative(href, { direction = "", bokoun = false } = {}) {
       if (!href) return;
       saveScroll();
       const target = preserveForcedBokounMode(href, location.href, location.origin);
@@ -6404,7 +6423,7 @@
       if (routeType() === "board" && target.pathname !== location.pathname) {
         leaveBoardVisit(location.pathname);
       }
-      const nativeLink = target.searchParams.get("bokoun") === "on" ? null : [...document.querySelectorAll("a[href]")].find((link) => {
+      const nativeLink = bokoun || target.searchParams.get("bokoun") === "on" ? null : [...document.querySelectorAll("a[href]")].find((link) => {
         if (link.closest(`#${HOST_ID2}`)) return false;
         try {
           return new URL(link.href, location.origin).href === target.href;
@@ -6416,6 +6435,10 @@
       const performNavigation = () => {
         if (commitSequence !== state2.navigationCommitSequence) return;
         const previous = location.href;
+        if (bokoun) {
+          history.pushState({}, "", target.href);
+          return;
+        }
         if (!nativeLink) {
           location.assign(target.href);
           return;
@@ -6438,14 +6461,14 @@
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.set("rootId", normalized);
-      navigateNative(`${target.pathname}${target.search}`, { direction: "forward" });
+      navigateNative(`${target.pathname}${target.search}`, { direction: "forward", bokoun: true });
     }
     function closeThread() {
       if (routeType() !== "board") return;
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.delete("rootId");
-      navigateNative(`${target.pathname}${target.search}`, { direction: "back" });
+      navigateNative(`${target.pathname}${target.search}`, { direction: "back", bokoun: true });
     }
     function captureBokounAnchor() {
       if (!state2.scroller || !state2.shadow) return null;

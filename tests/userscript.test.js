@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.10/);
+  assert.match(source, /@version\s+0\.10\.0/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -657,6 +657,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     postSeparators: true,
     compareHandle: false,
     firstUnread: false,
+    threadOrder: "descending",
   });
   settings.updateDisplaySettings({ avatarPosition: "left" });
   assert.equal(stored.get("display").avatarPosition, "left");
@@ -1272,7 +1273,7 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   );
 });
 
-test("thread view keeps the root first and orders its replies chronologically", () => {
+test("thread view keeps the root first and defaults to newest-first replies", () => {
   const board = { state: {} };
   installBoardState(board);
   const posts = [
@@ -1283,6 +1284,10 @@ test("thread view keeps the root first and orders its replies chronologically", 
   ];
   assert.deepEqual(
     board.threadPosts(posts, "100").map((post) => post.id),
+    ["100", "103", "102"],
+  );
+  assert.deepEqual(
+    board.threadPosts(posts, "100", "ascending").map((post) => post.id),
     ["100", "102", "103"],
   );
 });

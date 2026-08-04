@@ -249,7 +249,7 @@ export function installNavigation(ctx) {
     }
   }
 
-  function navigateNative(href, { direction = "" } = {}) {
+  function navigateNative(href, { direction = "", bokoun = false } = {}) {
     if (!href) return;
     saveScroll();
     const target = preserveForcedBokounMode(href, location.href, location.origin);
@@ -257,7 +257,7 @@ export function installNavigation(ctx) {
     if (routeType() === "board" && target.pathname !== location.pathname) {
       leaveBoardVisit(location.pathname);
     }
-    const nativeLink = target.searchParams.get("bokoun") === "on"
+    const nativeLink = bokoun || target.searchParams.get("bokoun") === "on"
       ? null
       : [...document.querySelectorAll("a[href]")]
       .find((link) => {
@@ -273,6 +273,10 @@ export function installNavigation(ctx) {
     const performNavigation = () => {
       if (commitSequence !== state.navigationCommitSequence) return;
       const previous = location.href;
+      if (bokoun) {
+        history.pushState({}, "", target.href);
+        return;
+      }
       if (!nativeLink) {
         location.assign(target.href);
         return;
@@ -298,7 +302,7 @@ export function installNavigation(ctx) {
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.set("rootId", normalized);
-    navigateNative(`${target.pathname}${target.search}`, { direction: "forward" });
+    navigateNative(`${target.pathname}${target.search}`, { direction: "forward", bokoun: true });
   }
 
   function closeThread() {
@@ -306,7 +310,7 @@ export function installNavigation(ctx) {
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.delete("rootId");
-    navigateNative(`${target.pathname}${target.search}`, { direction: "back" });
+    navigateNative(`${target.pathname}${target.search}`, { direction: "back", bokoun: true });
   }
 
   function captureBokounAnchor() {

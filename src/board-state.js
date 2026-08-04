@@ -10,6 +10,7 @@ export function installBoardState(ctx) {
   const routeKey = (...args) => ctx.routeKey(...args);
   const normalizeHref = (...args) => ctx.normalizeHref(...args);
   const syncNativeBoardRead = (...args) => ctx.syncNativeBoardRead(...args);
+  const currentDisplaySettings = (...args) => ctx.currentDisplaySettings?.(...args) || { threadOrder: "descending" };
 
   function boardPath(pageHref = routeKey()) {
     try {
@@ -216,7 +217,7 @@ export function installBoardState(ctx) {
     }
   }
 
-  function threadPosts(posts, rootId) {
+  function threadPosts(posts, rootId, order = "descending") {
     if (!rootId) return [...posts];
     return posts
       .filter((post) => post.id === rootId || post.rootId === rootId)
@@ -225,9 +226,12 @@ export function installBoardState(ctx) {
         if (right.id === rootId) return 1;
         const leftTime = Date.parse(left.datetime) || 0;
         const rightTime = Date.parse(right.datetime) || 0;
-        return leftTime - rightTime
+        const direction = order === "ascending" ? 1 : -1;
+        return direction * (
+          leftTime - rightTime
           || left.sequence - right.sequence
-          || Number(left.id) - Number(right.id);
+          || Number(left.id) - Number(right.id)
+        );
       });
   }
 
@@ -338,7 +342,11 @@ export function installBoardState(ctx) {
 
   function boardViewModel() {
     const activeRootId = threadRootId();
-    const posts = threadPosts(state.boardPosts, activeRootId);
+    const posts = threadPosts(
+      state.boardPosts,
+      activeRootId,
+      currentDisplaySettings().threadOrder,
+    );
     return {
       title: state.boardTitle,
       posts,
