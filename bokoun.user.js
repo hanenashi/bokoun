@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.3
+// @version      0.9.4
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -4450,10 +4450,11 @@
       }
       if (state2.disabled || state2.nativeMode || routeType() !== "board" || !currentDisplaySettings().firstUnread || handledRoute === key || cancelledRoute === key) return;
       const url = new URL(key, location.origin);
-      if (url.hash || model.threadRootId || !model.newPostIds?.length) {
+      if (url.hash || model.threadRootId) {
         handledRoute = key;
         return;
       }
+      if (!model.newPostIds?.length) return;
       const token = ++generation;
       Promise.resolve(restorePromise).then(nextPaint).then(() => {
         if (token !== generation || state2.currentRouteKey !== key || state2.disabled || state2.nativeMode || cancelledRoute === key) return;

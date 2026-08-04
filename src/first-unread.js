@@ -84,10 +84,11 @@ export function installFirstUnread(ctx) {
       || cancelledRoute === key
     ) return;
     const url = new URL(key, location.origin);
-    if (url.hash || model.threadRootId || !model.newPostIds?.length) {
+    if (url.hash || model.threadRootId) {
       handledRoute = key;
       return;
     }
+    if (!model.newPostIds?.length) return;
     const token = ++generation;
     Promise.resolve(restorePromise)
       .then(nextPaint)
