@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.9
+// @version      0.10.10
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1855,7 +1855,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.9";
+  var VERSION = "0.10.10";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -3256,6 +3256,7 @@
           state2.currentSignature = "";
           scheduleRender({ force: true });
         }
+        return entry;
       }).catch((error) => {
         if (error?.name === "AbortError") return null;
         state2.structuredFailures.delete(cacheKey);
@@ -5734,7 +5735,8 @@
       return post.avatarUrl ? `<img class="${className}" src="${escapeHtml(post.avatarUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="${className} avatar-fallback" aria-hidden="true">${escapeHtml(post.author.slice(0, 1).toUpperCase())}</span>`;
     }
     function postMenuMarkup(post) {
-      const threadRootId = post.rootId || post.id;
+      const rootMetadataKnown = Boolean(post.rootId) || state2.host?.dataset.readSource === "structured";
+      const threadRootId = post.rootId || (rootMetadataKnown ? post.id : "");
       return `
       <div class="post-menu" role="menu" aria-label="Akce příspěvku">
         <button
@@ -5743,14 +5745,13 @@
           data-action="reply"
           data-post-id="${escapeHtml(post.id)}"
         >Odpovědět</button>
-        ${threadRootId ? `
-          <button
-            type="button"
-            role="menuitem"
-            data-action="thread"
-            data-root-id="${escapeHtml(threadRootId)}"
-          >Vlákno</button>
-        ` : ""}
+        <button
+          type="button"
+          role="menuitem"
+          data-action="thread"
+          data-post-id="${escapeHtml(post.id)}"
+          data-root-id="${escapeHtml(threadRootId)}"
+        >Vlákno</button>
       </div>
     `;
     }
@@ -5764,6 +5765,7 @@
           class="reply-reference"
           type="button"
           data-action="thread"
+          data-post-id="${escapeHtml(post.id)}"
           data-root-id="${escapeHtml(post.rootId)}"
           aria-label="Zobrazit vlákno reakce na ${escapeHtml(author)}"
         >${content}</button>
@@ -6183,7 +6185,22 @@
         });
       }
       for (const button of state2.shadow.querySelectorAll("[data-action='thread']")) {
-        button.addEventListener("click", () => openThread(button.dataset.rootId));
+        button.addEventListener("click", async () => {
+          const originalLabel = button.textContent;
+          const needsResolution = !button.dataset.rootId;
+          if (needsResolution) {
+            button.disabled = true;
+            button.textContent = "Načítám vlákno…";
+          }
+          const opened = await openThread(button.dataset.rootId, button.dataset.postId);
+          if (!opened && button.isConnected) {
+            button.disabled = false;
+            button.textContent = "Vlákno nelze načíst";
+            window.setTimeout(() => {
+              if (button.isConnected) button.textContent = originalLabel;
+            }, 1500);
+          }
+        });
       }
       for (const link of state2.shadow.querySelectorAll("[data-native-href]")) {
         link.addEventListener("click", (event) => {
@@ -6384,6 +6401,8 @@
     const nativeReady = (...args) => ctx2.nativeReady(...args);
     const render = (...args) => ctx2.render(...args);
     const observeNative = (...args) => ctx2.observeNative(...args);
+    const ensureStructuredModel = (...args) => ctx2.ensureStructuredModel(...args);
+    const cachedStructuredModel = (...args) => ctx2.cachedStructuredModel(...args);
     const leaveBoardVisit = (...args) => ctx2.leaveBoardVisit(...args);
     const setLayered = (...args) => ctx2.setLayered(...args);
     const setHostReveal = (...args) => ctx2.setHostReveal(...args);
@@ -6560,13 +6579,27 @@
       saveScroll();
       navigateNative("/fav/activity", { direction: "back" });
     }
-    function openThread(rootId) {
-      const normalized = String(rootId || "");
-      if (!/^\d+$/.test(normalized) || routeType() !== "board") return;
+    async function openThread(rootId, postId = "") {
+      let normalized = String(rootId || "");
+      const normalizedPostId = String(postId || "");
+      if (routeType() !== "board") return false;
+      if (!/^\d+$/.test(normalized)) {
+        if (!/^\d+$/.test(normalizedPostId)) return false;
+        const sourceRoute = routeKey();
+        const entry = await ensureStructuredModel("board", sourceRoute, {
+          reason: "manual-refresh"
+        });
+        if (routeKey() !== sourceRoute || routeType() !== "board") return false;
+        const model = entry?.model || cachedStructuredModel("board", sourceRoute);
+        const post = model?.posts?.find((candidate) => candidate.id === normalizedPostId);
+        normalized = String(post?.rootId || post?.id || "");
+      }
+      if (!/^\d+$/.test(normalized)) return false;
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.set("rootId", normalized);
       navigateNative(`${target.pathname}${target.search}`, { direction: "forward", bokoun: true });
+      return true;
     }
     function closeThread() {
       if (routeType() !== "board") return;

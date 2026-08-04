@@ -430,6 +430,7 @@ export function installAdapters(ctx) {
           state.currentSignature = "";
           scheduleRender({ force: true });
         }
+        return entry;
       })
       .catch((error) => {
         if (error?.name === "AbortError") return null;

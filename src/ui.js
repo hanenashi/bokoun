@@ -644,7 +644,9 @@ export function installUi(ctx) {
   }
 
   function postMenuMarkup(post) {
-    const threadRootId = post.rootId || post.id;
+    const rootMetadataKnown = Boolean(post.rootId)
+      || state.host?.dataset.readSource === "structured";
+    const threadRootId = post.rootId || (rootMetadataKnown ? post.id : "");
     return `
       <div class="post-menu" role="menu" aria-label="Akce příspěvku">
         <button
@@ -653,14 +655,13 @@ export function installUi(ctx) {
           data-action="reply"
           data-post-id="${escapeHtml(post.id)}"
         >Odpovědět</button>
-        ${threadRootId ? `
-          <button
-            type="button"
-            role="menuitem"
-            data-action="thread"
-            data-root-id="${escapeHtml(threadRootId)}"
-          >Vlákno</button>
-        ` : ""}
+        <button
+          type="button"
+          role="menuitem"
+          data-action="thread"
+          data-post-id="${escapeHtml(post.id)}"
+          data-root-id="${escapeHtml(threadRootId)}"
+        >Vlákno</button>
       </div>
     `;
   }
@@ -680,6 +681,7 @@ export function installUi(ctx) {
           class="reply-reference"
           type="button"
           data-action="thread"
+          data-post-id="${escapeHtml(post.id)}"
           data-root-id="${escapeHtml(post.rootId)}"
           aria-label="Zobrazit vlákno reakce na ${escapeHtml(author)}"
         >${content}</button>
@@ -1133,7 +1135,22 @@ export function installUi(ctx) {
       });
     }
     for (const button of state.shadow.querySelectorAll("[data-action='thread']")) {
-      button.addEventListener("click", () => openThread(button.dataset.rootId));
+      button.addEventListener("click", async () => {
+        const originalLabel = button.textContent;
+        const needsResolution = !button.dataset.rootId;
+        if (needsResolution) {
+          button.disabled = true;
+          button.textContent = "Načítám vlákno…";
+        }
+        const opened = await openThread(button.dataset.rootId, button.dataset.postId);
+        if (!opened && button.isConnected) {
+          button.disabled = false;
+          button.textContent = "Vlákno nelze načíst";
+          window.setTimeout(() => {
+            if (button.isConnected) button.textContent = originalLabel;
+          }, 1_500);
+        }
+      });
     }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {

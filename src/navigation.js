@@ -88,6 +88,8 @@ export function installNavigation(ctx) {
   const nativeReady = (...args) => ctx.nativeReady(...args);
   const render = (...args) => ctx.render(...args);
   const observeNative = (...args) => ctx.observeNative(...args);
+  const ensureStructuredModel = (...args) => ctx.ensureStructuredModel(...args);
+  const cachedStructuredModel = (...args) => ctx.cachedStructuredModel(...args);
   const leaveBoardVisit = (...args) => ctx.leaveBoardVisit(...args);
   const setLayered = (...args) => ctx.setLayered(...args);
   const setHostReveal = (...args) => ctx.setHostReveal(...args);
@@ -296,13 +298,27 @@ export function installNavigation(ctx) {
     navigateNative("/fav/activity", { direction: "back" });
   }
 
-  function openThread(rootId) {
-    const normalized = String(rootId || "");
-    if (!/^\d+$/.test(normalized) || routeType() !== "board") return;
+  async function openThread(rootId, postId = "") {
+    let normalized = String(rootId || "");
+    const normalizedPostId = String(postId || "");
+    if (routeType() !== "board") return false;
+    if (!/^\d+$/.test(normalized)) {
+      if (!/^\d+$/.test(normalizedPostId)) return false;
+      const sourceRoute = routeKey();
+      const entry = await ensureStructuredModel("board", sourceRoute, {
+        reason: "manual-refresh",
+      });
+      if (routeKey() !== sourceRoute || routeType() !== "board") return false;
+      const model = entry?.model || cachedStructuredModel("board", sourceRoute);
+      const post = model?.posts?.find((candidate) => candidate.id === normalizedPostId);
+      normalized = String(post?.rootId || post?.id || "");
+    }
+    if (!/^\d+$/.test(normalized)) return false;
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.set("rootId", normalized);
     navigateNative(`${target.pathname}${target.search}`, { direction: "forward", bokoun: true });
+    return true;
   }
 
   function closeThread() {

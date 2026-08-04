@@ -45,8 +45,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.9/);
-  assert.match(source, /export const VERSION = "0\.10\.9"/);
+  assert.match(source, /@version\s+0\.10\.10/);
+  assert.match(source, /export const VERSION = "0\.10\.10"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -1140,7 +1140,8 @@ test("reply metadata follows the body and reply moved into the popout menu", () 
   assert.doesNotMatch(source, /<div class="post-actions">\s*<button class="reply-button"/);
   assert.match(source, /data-setting="reply-meta"/);
   assert.match(source, /data-action="thread"/);
-  assert.match(source, /const threadRootId = post\.rootId \|\| post\.id/);
+  assert.match(source, /const rootMetadataKnown = Boolean\(post\.rootId\)/);
+  assert.match(source, /const threadRootId = post\.rootId \|\| \(rootMetadataKnown \? post\.id : ""\)/);
   assert.match(source, /data-root-id="\$\{escapeHtml\(threadRootId\)\}"/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
 });
@@ -1309,6 +1310,16 @@ test("thread fallback retains the loaded same-club structured model", () => {
   assert.match(controllerSource, /isThreadRoute[\s\S]*!structured[\s\S]*state\.boardPosts\.length > 0/);
   assert.match(controllerSource, /new URL\(state\.boardKey, location\.origin\)\.pathname/);
   assert.match(controllerSource, /if \(retainLoadedThread\) \{[\s\S]*readSource = state\.host\.dataset\.readSource/);
+});
+
+test("a cold-club thread click waits for real root metadata", () => {
+  assert.doesNotMatch(uiSource, /const threadRootId = post\.rootId \|\| post\.id/);
+  assert.match(uiSource, /data-action="thread"[\s\S]*data-post-id="\$\{escapeHtml\(post\.id\)\}"/);
+  assert.match(uiSource, /button\.textContent = "Načítám vlákno…"/);
+  assert.match(navigationSource, /async function openThread\(rootId, postId = ""\)/);
+  assert.match(navigationSource, /await ensureStructuredModel\("board", sourceRoute/);
+  assert.match(navigationSource, /post\?\.rootId \|\| post\?\.id/);
+  assert.match(source, /storeStructuredEntry\(cacheKey, entry\);[\s\S]*return entry;/);
 });
 
 test("classic new-post state uses a visit boundary and has no timeout", () => {
