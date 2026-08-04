@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.8
+// @version      0.10.9
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1855,7 +1855,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.8";
+  var VERSION = "0.10.9";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -6940,7 +6940,10 @@
         const nativeModel = structuredModel || readBoardFromDom(document, key);
         const structured = Boolean(structuredModel);
         if (structured) readSource = "structured";
-        if (state2.boardKey !== boardRouteIdentity(key)) {
+        const retainLoadedThread = isThreadRoute && !structured && state2.boardPosts.length > 0 && new URL(state2.boardKey, location.origin).pathname === new URL(key, location.origin).pathname;
+        if (retainLoadedThread) {
+          readSource = state2.host.dataset.readSource || readSource;
+        } else if (state2.boardKey !== boardRouteIdentity(key)) {
           resetBoardAccumulator(nativeModel, key, { structured });
         } else if (structured && !new URL(key, location.origin).searchParams.has("f")) {
           refreshBoardNewestPage(nativeModel, key);

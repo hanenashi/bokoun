@@ -45,8 +45,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.8/);
-  assert.match(source, /export const VERSION = "0\.10\.8"/);
+  assert.match(source, /@version\s+0\.10\.9/);
+  assert.match(source, /export const VERSION = "0\.10\.9"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -1302,6 +1302,13 @@ test("thread view keeps the root first and defaults to newest-first replies", ()
     board.threadPosts(posts, "100", "ascending").map((post) => post.id),
     ["100", "102", "103"],
   );
+});
+
+test("thread fallback retains the loaded same-club structured model", () => {
+  assert.match(controllerSource, /const retainLoadedThread = \(/);
+  assert.match(controllerSource, /isThreadRoute[\s\S]*!structured[\s\S]*state\.boardPosts\.length > 0/);
+  assert.match(controllerSource, /new URL\(state\.boardKey, location\.origin\)\.pathname/);
+  assert.match(controllerSource, /if \(retainLoadedThread\) \{[\s\S]*readSource = state\.host\.dataset\.readSource/);
 });
 
 test("classic new-post state uses a visit boundary and has no timeout", () => {

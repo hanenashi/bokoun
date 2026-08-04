@@ -238,7 +238,19 @@ export function installController(ctx) {
       const nativeModel = structuredModel || readBoardFromDom(document, key);
       const structured = Boolean(structuredModel);
       if (structured) readSource = "structured";
-      if (state.boardKey !== boardRouteIdentity(key)) {
+      const retainLoadedThread = (
+        isThreadRoute
+        && !structured
+        && state.boardPosts.length > 0
+        && new URL(state.boardKey, location.origin).pathname
+          === new URL(key, location.origin).pathname
+      );
+      if (retainLoadedThread) {
+        // The normal club model already carries rootId for every loaded reply.
+        // Keep it when Kapybara's new thread endpoint is slow or unavailable;
+        // boardViewModel() can filter the complete loaded thread immediately.
+        readSource = state.host.dataset.readSource || readSource;
+      } else if (state.boardKey !== boardRouteIdentity(key)) {
         resetBoardAccumulator(nativeModel, key, { structured });
       } else if (
         structured
