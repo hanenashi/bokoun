@@ -492,7 +492,11 @@ export function installSettings(ctx) {
   }
 
   function observeNativeColorScheme() {
-    if (typeof MutationObserver !== "function" || !document.documentElement) return;
+    if (typeof MutationObserver !== "function") return;
+    if (!document.documentElement) {
+      ctx.waitForDocumentElement?.().then(observeNativeColorScheme);
+      return;
+    }
     const observer = new MutationObserver(() => {
       if (currentDisplaySettings().colorScheme === "kapybara") applyVisualSettings();
     });
