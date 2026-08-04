@@ -86,6 +86,11 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
         viewport: { width: 390, height: 844 },
       });
       const page = await context.newPage();
+      const runtimeErrors = [];
+      page.on("pageerror", (error) => runtimeErrors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") runtimeErrors.push(message.text());
+      });
       await page.addInitScript({
         content: `localStorage.setItem(
           "bokoun.gm.bokoun.display.v1",
@@ -225,6 +230,7 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
         assert.equal(targetRoute.pending, "");
         assert.ok(["none", "blur(0px)"].includes(targetRoute.filter));
       }
+      assert.deepEqual(runtimeErrors, []);
       await context.close();
     }
     assert.equal(structuredRequests, 2, "startup adds no request beyond the existing structured read");
