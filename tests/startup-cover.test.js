@@ -166,6 +166,12 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
           "Nastavení Bokouna…",
           "Vypnout Bokouna",
         ]);
+        if (process.env.BOKOUN_QA_SCREENSHOT) {
+          await page.screenshot({
+            path: process.env.BOKOUN_QA_SCREENSHOT,
+            fullPage: false,
+          });
+        }
         await page.locator("#bokoun-host .title").click();
         await page.waitForFunction(() => !(
           document.getElementById("bokoun-host")?.shadowRoot
