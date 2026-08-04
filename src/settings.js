@@ -12,6 +12,7 @@ const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   postSpacing: 9,
   postSeparators: true,
   compareHandle: false,
+  firstUnread: false,
 });
 
 const DEFAULT_FONT_SETTINGS = Object.freeze({
@@ -136,6 +137,7 @@ export function installSettings(ctx) {
       postSpacing: normalizePostSpacing(value.postSpacing),
       postSeparators: value.postSeparators !== false,
       compareHandle: value.compareHandle === true,
+      firstUnread: value.firstUnread === true,
     };
   }
 

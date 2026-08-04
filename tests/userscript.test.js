@@ -10,6 +10,7 @@ import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
 import { canonicalScrollRoute, installShell } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
+import { installFirstUnread } from "../src/first-unread.js";
 import {
   inferNavigationDirection,
   installNavigation,
@@ -43,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.1/);
+  assert.match(source, /@version\s+0\.9\.2/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -655,6 +656,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     postSpacing: 9,
     postSeparators: true,
     compareHandle: false,
+    firstUnread: false,
   });
   settings.updateDisplaySettings({ avatarPosition: "left" });
   assert.equal(stored.get("display").avatarPosition, "left");
@@ -713,6 +715,56 @@ test("post display settings persist avatar layout and safe font controls", () =>
     '"Atkinson Hyperlegible", Arial, sans-serif',
   );
   assert.equal(settings.normalizeCustomFamily("url(evil), serif"), "");
+});
+
+test("first unread navigation is one-shot, paint-safe, and route scoped", async () => {
+  const originalLocation = globalThis.location;
+  const originalRaf = globalThis.requestAnimationFrame;
+  globalThis.location = { origin: "https://kapybara.okoun.cz" };
+  globalThis.requestAnimationFrame = (callback) => callback();
+  const listeners = new Map();
+  const target = {
+    dataset: { bokounPostId: "unread-2" },
+    getBoundingClientRect: () => ({ top: 420 }),
+  };
+  const scroller = {
+    scrollTop: 100,
+    addEventListener(type, callback) { listeners.set(type, callback); },
+    querySelectorAll: () => [target],
+    getBoundingClientRect: () => ({ top: 0 }),
+    scrollTo({ top }) { this.scrollTop = top; },
+  };
+  const state = {
+    scroller,
+    shadow: { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 50 }) }) },
+    currentRouteKey: "/boards/test",
+    disabled: false,
+    nativeMode: false,
+  };
+  const ctx = {
+    state,
+    routeType: () => "board",
+    currentDisplaySettings: () => ({ firstUnread: true }),
+  };
+  installFirstUnread(ctx);
+  ctx.maybeScrollFirstUnread({
+    model: { newPostIds: ["unread-2"] },
+    key: "/boards/test",
+    restorePromise: Promise.resolve(),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(scroller.scrollTop, 462);
+  scroller.scrollTop = 900;
+  ctx.maybeScrollFirstUnread({
+    model: { newPostIds: ["unread-2"] },
+    key: "/boards/test",
+    restorePromise: Promise.resolve(),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(scroller.scrollTop, 900);
+  assert.ok(listeners.has("wheel"));
+  globalThis.location = originalLocation;
+  globalThis.requestAnimationFrame = originalRaf;
 });
 
 test("Favorites preferences sort, persist manual order, and map unread heat", () => {

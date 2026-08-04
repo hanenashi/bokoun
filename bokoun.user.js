@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.1
+// @version      0.9.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -4390,6 +4390,80 @@
     });
   }
 
+  // src/first-unread.js
+  function installFirstUnread(ctx2) {
+    const { state: state2 } = ctx2;
+    const routeType = (...args) => ctx2.routeType(...args);
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
+    let observedRoute = "";
+    let handledRoute = "";
+    let cancelledRoute = "";
+    let generation = 0;
+    let listeningScroller = null;
+    function cancelForCurrentRoute() {
+      if (observedRoute) cancelledRoute = observedRoute;
+    }
+    function resetFirstUnread() {
+      observedRoute = "";
+      handledRoute = "";
+      cancelledRoute = "";
+      generation += 1;
+    }
+    function attachCancellationListeners() {
+      const scroller = state2.scroller;
+      if (!scroller || scroller === listeningScroller) return;
+      listeningScroller = scroller;
+      scroller.addEventListener("wheel", cancelForCurrentRoute, { passive: true });
+      scroller.addEventListener("touchstart", cancelForCurrentRoute, { passive: true });
+      scroller.addEventListener("keydown", (event) => {
+        if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) {
+          cancelForCurrentRoute();
+        }
+      });
+    }
+    function nextPaint() {
+      return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    function firstUnreadElement(ids) {
+      const wanted = new Set(ids.map(String));
+      return [...state2.scroller.querySelectorAll("[data-bokoun-post-id]")].find((element) => wanted.has(element.dataset.bokounPostId));
+    }
+    function scrollToFirstUnread(target) {
+      const scrollerRect = state2.scroller.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const topbar = state2.shadow?.querySelector(".topbar");
+      const topbarRect = topbar?.getBoundingClientRect();
+      const headerOffset = topbarRect ? Math.max(0, topbarRect.bottom - scrollerRect.top + 8) : 8;
+      const top = state2.scroller.scrollTop + targetRect.top - scrollerRect.top - headerOffset;
+      state2.scroller.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    }
+    function maybeScrollFirstUnread({ model, key, restorePromise }) {
+      attachCancellationListeners();
+      if (key !== observedRoute) {
+        observedRoute = key;
+        handledRoute = "";
+        cancelledRoute = "";
+        generation += 1;
+      }
+      if (state2.disabled || state2.nativeMode || routeType() !== "board" || !currentDisplaySettings().firstUnread || handledRoute === key || cancelledRoute === key) return;
+      const url = new URL(key, location.origin);
+      if (url.hash || model.threadRootId || !model.newPostIds?.length) {
+        handledRoute = key;
+        return;
+      }
+      const token = ++generation;
+      Promise.resolve(restorePromise).then(nextPaint).then(() => {
+        if (token !== generation || state2.currentRouteKey !== key || state2.disabled || state2.nativeMode || cancelledRoute === key) return;
+        const target = firstUnreadElement(model.newPostIds);
+        if (!target) return;
+        scrollToFirstUnread(target);
+        handledRoute = key;
+      }).catch(() => {
+      });
+    }
+    Object.assign(ctx2, { maybeScrollFirstUnread, resetFirstUnread });
+  }
+
   // src/settings.js
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
     interfacePreset: "default",
@@ -4404,7 +4478,8 @@
     replyMeta: "full",
     postSpacing: 9,
     postSeparators: true,
-    compareHandle: false
+    compareHandle: false,
+    firstUnread: false
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
     family: "default",
@@ -4510,7 +4585,8 @@
         replyMeta: REPLY_META_MODES.has(value.replyMeta) ? value.replyMeta : DEFAULT_DISPLAY_SETTINGS.replyMeta,
         postSpacing: normalizePostSpacing(value.postSpacing),
         postSeparators: value.postSeparators !== false,
-        compareHandle: value.compareHandle === true
+        compareHandle: value.compareHandle === true,
+        firstUnread: value.firstUnread === true
       };
     }
     function normalizeFontSettings(value = {}) {
@@ -4849,6 +4925,7 @@
     const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
     const currentFontSettings = (...args) => ctx2.currentFontSettings(...args);
     const updateDisplaySettings = (...args) => ctx2.updateDisplaySettings(...args);
+    const resetFirstUnread = (...args) => ctx2.resetFirstUnread?.(...args);
     const updateFontSettings = (...args) => ctx2.updateFontSettings(...args);
     const resetFontSettings = (...args) => ctx2.resetFontSettings(...args);
     const displayFontSize = (...args) => ctx2.displayFontSize(...args);
@@ -5334,6 +5411,14 @@
             ${display.compareHandle ? "checked" : ""}
           >
         </label>
+        <label class="settings-switch">
+          <span>Při vstupu přeskočit na první nepřečtený</span>
+          <input
+            type="checkbox"
+            data-setting="first-unread"
+            ${display.firstUnread ? "checked" : ""}
+          >
+        </label>
         <p class="settings-note">Tažením svislé čáry porovnáte Bokouna s živou Kapybarou pod ním.</p>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
       </section>
@@ -5728,6 +5813,10 @@
       });
       state2.shadow.querySelector("[data-setting='compare-handle']")?.addEventListener("change", (event) => {
         updateDisplaySettings({ compareHandle: event.currentTarget.checked }, { render: false });
+      });
+      state2.shadow.querySelector("[data-setting='first-unread']")?.addEventListener("change", (event) => {
+        resetFirstUnread();
+        updateDisplaySettings({ firstUnread: event.currentTarget.checked });
       });
       state2.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
         updateFavoritesSettings(
@@ -6418,6 +6507,7 @@
     const clearVisualLog = (...args) => ctx2.clearVisualLog(...args);
     const watchVisualState = (...args) => ctx2.watchVisualState(...args);
     const commitLayerState = (...args) => ctx2.commitLayerState(...args);
+    const maybeScrollFirstUnread = (...args) => ctx2.maybeScrollFirstUnread?.(...args);
     function requestStructuredRefresh(reason, { force = false } = {}) {
       const type = routeType();
       const key = routeKey();
@@ -6586,6 +6676,7 @@
       commitLayerState("render-committed");
       const transitionDirection = consumeNavigationTransition(key);
       const scrollReady = restoreScroll(key, previousKey === key ? previousY : 0);
+      maybeScrollFirstUnread({ model, key, restorePromise: scrollReady });
       if (transitionDirection) {
         void scrollReady.then(() => {
           if (state2.currentRouteKey !== key) return;
@@ -6865,6 +6956,7 @@
   installBoardState(ctx);
   installWriting(ctx);
   installPagination(ctx);
+  installFirstUnread(ctx);
   installSettings(ctx);
   installUi(ctx);
   installNavigation(ctx);

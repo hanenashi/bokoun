@@ -20,6 +20,7 @@ export function installUi(ctx) {
   const currentDisplaySettings = (...args) => ctx.currentDisplaySettings(...args);
   const currentFontSettings = (...args) => ctx.currentFontSettings(...args);
   const updateDisplaySettings = (...args) => ctx.updateDisplaySettings(...args);
+  const resetFirstUnread = (...args) => ctx.resetFirstUnread?.(...args);
   const updateFontSettings = (...args) => ctx.updateFontSettings(...args);
   const resetFontSettings = (...args) => ctx.resetFontSettings(...args);
   const displayFontSize = (...args) => ctx.displayFontSize(...args);
@@ -545,6 +546,14 @@ export function installUi(ctx) {
             ${display.compareHandle ? "checked" : ""}
           >
         </label>
+        <label class="settings-switch">
+          <span>Při vstupu přeskočit na první nepřečtený</span>
+          <input
+            type="checkbox"
+            data-setting="first-unread"
+            ${display.firstUnread ? "checked" : ""}
+          >
+        </label>
         <p class="settings-note">Tažením svislé čáry porovnáte Bokouna s živou Kapybarou pod ním.</p>
         <p class="settings-note">Kliknutí na avatar nebo jméno otevře nabídku příspěvku.</p>
       </section>
@@ -983,6 +992,10 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-setting='compare-handle']")?.addEventListener("change", (event) => {
       updateDisplaySettings({ compareHandle: event.currentTarget.checked }, { render: false });
+    });
+    state.shadow.querySelector("[data-setting='first-unread']")?.addEventListener("change", (event) => {
+      resetFirstUnread();
+      updateDisplaySettings({ firstUnread: event.currentTarget.checked });
     });
     state.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
       updateFavoritesSettings(

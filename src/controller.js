@@ -62,6 +62,7 @@ export function installController(ctx) {
   const clearVisualLog = (...args) => ctx.clearVisualLog(...args);
   const watchVisualState = (...args) => ctx.watchVisualState(...args);
   const commitLayerState = (...args) => ctx.commitLayerState(...args);
+  const maybeScrollFirstUnread = (...args) => ctx.maybeScrollFirstUnread?.(...args);
 
   function requestStructuredRefresh(reason, { force = false } = {}) {
     const type = routeType();
@@ -262,6 +263,7 @@ export function installController(ctx) {
 
     const transitionDirection = consumeNavigationTransition(key);
     const scrollReady = restoreScroll(key, previousKey === key ? previousY : 0);
+    maybeScrollFirstUnread({ model, key, restorePromise: scrollReady });
     if (transitionDirection) {
       void scrollReady.then(() => {
         if (state.currentRouteKey !== key) return;
