@@ -150,6 +150,28 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       assert.equal(ready.nativeSpinnerDisplay, "none");
 
       if (colorScheme === "light") {
+        await page.locator("#bokoun-host [data-action='overflow']").click();
+        await page.waitForFunction(() => (
+          document.getElementById("bokoun-host")?.shadowRoot
+            ?.querySelector(".overflow-menu")
+        ));
+        const menuItems = await page.locator("#bokoun-host .overflow-menu button")
+          .allTextContents();
+        assert.deepEqual(menuItems, [
+          "Řazení…",
+          "Pouze nepřečtené",
+          "Upravit pořadí",
+          "Písmo a vzhled…",
+          "Plná Kapybara",
+          "Nastavení Bokouna…",
+          "Vypnout Bokouna",
+        ]);
+        await page.locator("#bokoun-host .title").click();
+        await page.waitForFunction(() => !(
+          document.getElementById("bokoun-host")?.shadowRoot
+            ?.querySelector(".overflow-menu")
+        ));
+
         await page.evaluate(() => {
           const host = document.getElementById("bokoun-host");
           host.dataset.testStableHost = "startup-host";

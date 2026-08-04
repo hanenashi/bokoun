@@ -12,6 +12,7 @@ import { canonicalScrollRoute, installShell } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
 import { installFirstUnread } from "../src/first-unread.js";
 import { isThreadBranchOnlyChange } from "../src/controller.js";
+import { installUiEvents } from "../src/ui-events.js";
 import {
   inferNavigationDirection,
   installNavigation,
@@ -26,8 +27,11 @@ const sourceDir = path.join(dirname, "..", "src");
 const packageJson = JSON.parse(fs.readFileSync(path.join(dirname, "..", "package.json"), "utf8"));
 const generatedSource = fs.readFileSync(scriptPath, "utf8");
 const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
+const mainSource = fs.readFileSync(path.join(sourceDir, "main.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
 const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
+const uiPanelsSource = fs.readFileSync(path.join(sourceDir, "ui-panels.js"), "utf8");
+const uiEventsSource = fs.readFileSync(path.join(sourceDir, "ui-events.js"), "utf8");
 const navigationSource = fs.readFileSync(path.join(sourceDir, "navigation.js"), "utf8");
 const source = [
   generatedSource,
@@ -46,8 +50,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.13/);
-  assert.match(source, /export const VERSION = "0\.10\.13"/);
+  assert.match(source, /@version\s+0\.11\.0/);
+  assert.match(source, /export const VERSION = "0\.11\.0"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -972,9 +976,9 @@ test("compact headers keep the mode switch visible and use contextual overflow m
   assert.doesNotMatch(uiSource, /class="font-toggle"/);
   assert.doesNotMatch(uiSource, /Plná verze/);
 
-  const menuSource = uiSource.slice(
-    uiSource.indexOf("function overflowMenuMarkup"),
-    uiSource.indexOf("function favoriteSortPanelMarkup"),
+  const menuSource = uiPanelsSource.slice(
+    uiPanelsSource.indexOf("function overflowMenuMarkup"),
+    uiPanelsSource.indexOf("function favoriteSortPanelMarkup"),
   );
   for (const item of [
     "Řazení…",
@@ -990,16 +994,46 @@ test("compact headers keep the mode switch visible and use contextual overflow m
   ]) assert.match(menuSource, new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(menuSource, /\bfetch\(|requestStructuredRefresh/);
   assert.match(uiSource, /state\.openHeaderPanel = ""/);
-  assert.match(uiSource, /event\.key === "Escape"/);
-  assert.match(uiSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
+  assert.match(uiEventsSource, /event\.key === "Escape"/);
+  assert.match(uiEventsSource, /\["ArrowDown", "ArrowUp", "Home", "End"\]/);
   assert.match(uiSource, /history\.pushState\(\{ \.\.\.historyState, bokounHeaderPanel: true \}/);
   assert.match(controllerSource, /state\.openHeaderPanel && routeKey\(\) === state\.currentRouteKey/);
 });
 
+test("contextual panel rendering is isolated behind the shared UI contract", () => {
+  assert.match(mainSource, /import \{ installUiPanels \} from "\.\/ui-panels\.js"/);
+  assert.ok(mainSource.indexOf("installUiPanels(ctx)") < mainSource.indexOf("installUi(ctx)"));
+  assert.ok(mainSource.indexOf("installUi(ctx)") < mainSource.indexOf("installUiEvents(ctx)"));
+  assert.doesNotMatch(uiSource, /function overflowMenuMarkup/);
+  assert.doesNotMatch(uiSource, /function displayPanelMarkup/);
+  assert.match(uiPanelsSource, /function overflowMenuMarkup/);
+  assert.match(uiPanelsSource, /function displayPanelMarkup/);
+  assert.match(uiSource, /ctx\.overflowControlMarkup\(\.\.\.args\)/);
+  assert.doesNotMatch(uiSource, /function attachUiEvents/);
+  assert.match(uiEventsSource, /function attachUiEvents/);
+  assert.match(packageJson.scripts.check, /check-size-budgets\.mjs/);
+});
+
+test("the extracted UI event contract attaches safely to an empty rendered shell", () => {
+  const inner = {};
+  const shadow = {
+    querySelector: (selector) => selector === ".app-inner" ? inner : null,
+    querySelectorAll: () => [],
+    onkeydown: null,
+  };
+  const ctx = {
+    state: { shadow, editingFavoriteOrder: false },
+  };
+  installUiEvents(ctx);
+  ctx.attachUiEvents();
+  assert.equal(typeof inner.onpointerdown, "function");
+  assert.equal(typeof shadow.onkeydown, "function");
+});
+
 test("mode switching and disabling remain distinct and preserve the handoff anchor", () => {
-  assert.match(uiSource, /\[data-action='mode-switch'\][\s\S]*openFullKapybara/);
-  assert.match(uiSource, /\[data-action='full'\][\s\S]*openFullKapybara/);
-  assert.match(uiSource, /\[data-action='disable-bokoun'\][\s\S]*disableBokoun/);
+  assert.match(uiEventsSource, /\[data-action='mode-switch'\][\s\S]*openFullKapybara/);
+  assert.match(uiEventsSource, /\[data-action='full'\][\s\S]*openFullKapybara/);
+  assert.match(uiEventsSource, /\[data-action='disable-bokoun'\][\s\S]*disableBokoun/);
   assert.match(shellSource, /function openFullKapybara\(\)[\s\S]*captureBokounAnchor/);
   assert.match(source, /function returnToBokoun\(\)[\s\S]*captureNativeAnchor/);
   assert.match(shellSource, /function disableBokoun\(\)[\s\S]*gmSet\(PREF_ENABLED_KEY, false\)/);
@@ -1379,7 +1413,7 @@ test("thread fallback retains the loaded same-club structured model", () => {
 test("a cold-club thread click waits for real root metadata", () => {
   assert.doesNotMatch(uiSource, /const threadRootId = post\.rootId \|\| post\.id/);
   assert.match(uiSource, /data-action="thread"[\s\S]*data-post-id="\$\{escapeHtml\(post\.id\)\}"/);
-  assert.match(uiSource, /button\.textContent = "Načítám vlákno…"/);
+  assert.match(uiEventsSource, /button\.textContent = "Načítám vlákno…"/);
   assert.match(navigationSource, /async function openThread\(rootId, postId = ""\)/);
   assert.match(navigationSource, /await ensureStructuredModel\("board", sourceRoute/);
   assert.match(navigationSource, /post\?\.rootId \|\| post\?\.id/);
@@ -1467,7 +1501,7 @@ test("club back targets Favorites while thread back first clears branch focus", 
   assert.doesNotMatch(goBack, /history\.back/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
   assert.match(
-    uiSource,
+    uiEventsSource,
     /\[data-action='thread-back'\][\s\S]*searchParams\.has\("branch"\)[\s\S]*toggleThreadBranch\(\)[\s\S]*else closeThread\(\)/,
   );
 });

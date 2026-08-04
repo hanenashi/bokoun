@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.10.13`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.0`).
 
 ## Install the first prototype
 
@@ -557,7 +557,10 @@ bokoun/
 │   ├── writing.js              # drafts and native composer bridge
 │   ├── pagination.js           # endless older-page loading
 │   ├── settings.js             # persistent Favorites, display and font preferences
-│   ├── ui.js                   # markup and UI event binding
+│   ├── ui-shared.js            # shared escaping and small UI primitives
+│   ├── ui-panels.js            # contextual menus and settings-panel markup
+│   ├── ui.js                   # route and post markup
+│   ├── ui-events.js            # UI actions, settings inputs and Favorites dragging
 │   ├── navigation.js           # native/Bokoun handoff and anchors
 │   ├── controller.js
 ├── tests/
@@ -565,7 +568,8 @@ bokoun/
 │   └── userscript.test.js
 └── tools/
     ├── build-userscript.mjs
-    └── check-generated.mjs
+    ├── check-generated.mjs
+    └── check-size-budgets.mjs
 ```
 
 Development commands:
@@ -579,8 +583,15 @@ npm test
 
 `npm run check` compares a fresh in-memory build with the committed
 `bokoun.user.js`, so a forgotten or manually edited artifact fails
-deterministically. esbuild bundles the modules into an IIFE; Bokoun does not
-load code or dependencies from the network at runtime.
+deterministically. It also enforces generous generated/source size ceilings so
+growth is reviewed deliberately instead of silently accumulating in the
+largest modules. esbuild still bundles every source module into one installable
+IIFE; Bokoun does not load code or dependencies from the network at runtime.
+
+Version `0.11.0` begins a behavior-preserving maintainability pass. Contextual
+header/settings-panel rendering and event binding now live separately from
+board/post markup. The split changes source ownership only: selectors, generated
+markup, navigation, storage, reads and network behavior remain unchanged.
 
 ## Roadmap
 

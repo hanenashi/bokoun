@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.13
+// @version      0.11.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1892,7 +1892,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.13";
+  var VERSION = "0.11.0";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -5231,220 +5231,21 @@
     });
   }
 
-  // src/ui.js
-  function installUi(ctx2) {
-    const {
-      ICONS: ICONS2,
-      state: state2
-    } = ctx2;
-    const routeKey = (...args) => ctx2.routeKey(...args);
-    const routeType = (...args) => ctx2.routeType(...args);
-    const openFullKapybara = (...args) => ctx2.openFullKapybara(...args);
-    const currentBoardId = (...args) => ctx2.currentBoardId(...args);
-    const openComposer = (...args) => ctx2.openComposer(...args);
-    const closeComposer = (...args) => ctx2.closeComposer(...args);
-    const discardComposerDraft = (...args) => ctx2.discardComposerDraft(...args);
-    const updateComposerBody = (...args) => ctx2.updateComposerBody(...args);
-    const clearWriteFeedback = (...args) => ctx2.clearWriteFeedback(...args);
-    const submitComposer = (...args) => ctx2.submitComposer(...args);
-    const loadOlderPosts = (...args) => ctx2.loadOlderPosts(...args);
-    const navigateNative = (...args) => ctx2.navigateNative(...args);
-    const goBack = (...args) => ctx2.goBack(...args);
-    const scheduleRender = (...args) => ctx2.scheduleRender(...args);
+  // src/ui-shared.js
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value ?? "";
+    return div.innerHTML;
+  }
+
+  // src/ui-panels.js
+  function installUiPanels(ctx2) {
+    const { state: state2 } = ctx2;
     const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
     const currentFontSettings = (...args) => ctx2.currentFontSettings(...args);
-    const updateDisplaySettings = (...args) => ctx2.updateDisplaySettings(...args);
-    const resetFirstUnread = (...args) => ctx2.resetFirstUnread?.(...args);
-    const updateFontSettings = (...args) => ctx2.updateFontSettings(...args);
-    const resetFontSettings = (...args) => ctx2.resetFontSettings(...args);
+    const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
     const displayFontSize = (...args) => ctx2.displayFontSize(...args);
     const normalizeCustomFamily = (...args) => ctx2.normalizeCustomFamily(...args);
-    const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
-    const currentRecentClubs = (...args) => ctx2.currentRecentClubs(...args);
-    const normalizeClubRoute = (...args) => ctx2.normalizeClubRoute(...args);
-    const updateFavoritesSettings = (...args) => ctx2.updateFavoritesSettings(...args);
-    const resetFavoritesAppearance = (...args) => ctx2.resetFavoritesAppearance(...args);
-    const saveFavoriteOrder = (...args) => ctx2.saveFavoriteOrder(...args);
-    const resetFavoriteOrder = (...args) => ctx2.resetFavoriteOrder(...args);
-    const unreadHeat = (...args) => ctx2.unreadHeat(...args);
-    const openThread = (...args) => ctx2.openThread(...args);
-    const closeThread = (...args) => ctx2.closeThread(...args);
-    const toggleThreadBranch = (...args) => ctx2.toggleThreadBranch(...args);
-    const startBoardVisitFromFavorite = (...args) => ctx2.startBoardVisitFromFavorite(...args);
-    const requestBokounFullscreen = (...args) => ctx2.requestBokounFullscreen(...args);
-    const requestStructuredRefresh = (...args) => ctx2.requestStructuredRefresh(...args);
-    const disableBokoun = (...args) => ctx2.disableBokoun(...args);
-    function escapeHtml(value) {
-      const div = document.createElement("div");
-      div.textContent = value ?? "";
-      return div.innerHTML;
-    }
-    function signatureFor(type, model) {
-      if (type === "favorites") {
-        return [
-          routeKey(),
-          JSON.stringify(currentDisplaySettings()),
-          JSON.stringify(currentFavoritesSettings()),
-          JSON.stringify(currentRecentClubs()),
-          state2.openHeaderPanel,
-          state2.editingFavoriteOrder,
-          model.length,
-          model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")
-        ].join("|");
-      }
-      return [
-        location.pathname,
-        model.title,
-        model.posts.map((post) => post.id).join(","),
-        model.nextOlderHref,
-        model.loading,
-        model.end,
-        model.error,
-        model.loadedPageCount,
-        model.newPostIds.join(","),
-        state2.openHeaderPanel,
-        state2.openPostMenuId,
-        JSON.stringify(currentDisplaySettings()),
-        JSON.stringify(currentFontSettings()),
-        JSON.stringify(currentRecentClubs()),
-        state2.composer ? [
-          state2.composer.kind,
-          state2.composer.replyTo,
-          state2.composer.status,
-          state2.composer.error,
-          state2.composer.ambiguous
-        ].join(":") : "",
-        state2.writeFeedback ? [
-          state2.writeFeedback.boardId,
-          state2.writeFeedback.postId,
-          state2.writeFeedback.replyTo,
-          state2.writeFeedback.message
-        ].join(":") : "",
-        model.threadRootId,
-        model.threadFocusId,
-        model.threadBranchFocusId
-      ].join("|");
-    }
-    function modeSwitchButton() {
-      return `
-      <button
-        class="icon-button mode-switch"
-        type="button"
-        data-action="mode-switch"
-        aria-label="Přepnout do plné Kapybary"
-        title="Přepnout do plné Kapybary"
-      >
-        <span aria-hidden="true">◐</span>
-      </button>
-    `;
-    }
-    function fullscreenButton() {
-      const active = Boolean(document.fullscreenElement);
-      return `
-      <button
-        class="icon-button fullscreen-toggle"
-        type="button"
-        data-action="fullscreen-toggle"
-        aria-label="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
-        aria-pressed="${active ? "true" : "false"}"
-        title="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
-      ><span aria-hidden="true">⛶</span></button>
-    `;
-    }
-    function clubStripMarkup(currentTitle = "") {
-      const display = currentDisplaySettings();
-      if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
-      const activeClub = normalizeClubRoute(location.pathname);
-      const favoritesActive = routeType() === "favorites";
-      const recent = currentRecentClubs();
-      const candidates = favoritesActive ? [{
-        href: "/fav/activity",
-        name: "Oblíbené",
-        active: true
-      }, ...recent] : [{
-        href: activeClub,
-        name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub",
-        active: true
-      }, ...recent];
-      const seen = /* @__PURE__ */ new Set();
-      const links = candidates.filter((link) => {
-        const href = normalizeClubRoute(link.href) || link.href;
-        if (!href || seen.has(href)) return false;
-        seen.add(href);
-        return true;
-      }).slice(0, favoritesActive ? 7 : 6).map((link) => ({
-        ...link,
-        active: favoritesActive ? link.href === "/fav/activity" : normalizeClubRoute(link.href) === activeClub
-      }));
-      return `
-      <nav class="club-strip" aria-label="Rychlé přepínání klubů">
-        ${links.map((link) => `
-          <a
-            class="club-strip-link${link.active ? " club-strip-link--active" : ""}"
-            href="${escapeHtml(link.href)}"
-            data-native-href="${escapeHtml(link.href)}"
-            ${link.active ? 'aria-current="page"' : ""}
-          >${escapeHtml(link.name)}</a>
-        `).join("")}
-      </nav>
-    `;
-    }
-    function favoritesMarkup(clubs) {
-      const favorites = currentFavoritesSettings();
-      const editing = favorites.sort === "manual" && state2.editingFavoriteOrder;
-      const showCount = ["count", "both"].includes(favorites.unreadMode);
-      const showHeat = ["heat", "both"].includes(favorites.unreadMode);
-      const rows = clubs.length ? clubs.map((club) => {
-        const heat = showHeat ? unreadHeat(club.unread) : "";
-        const unreadClass = club.unread ? " favorite-row--unread" : "";
-        const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
-        const unreadLabel = club.unread ? `${club.unread} nových příspěvků` : "bez nových příspěvků";
-        return `
-          <li
-            class="favorite-item${editing ? " favorite-item--editing" : ""}"
-            data-favorite-href="${escapeHtml(club.href)}"
-          >
-            <a
-              class="favorite-row${unreadClass}${heatClass}"
-              href="${escapeHtml(club.href)}"
-              data-native-href="${escapeHtml(club.href)}"
-              data-board-id="${escapeHtml(club.id)}"
-              data-unread-count="${escapeHtml(club.unread)}"
-              aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
-              ${editing ? 'aria-disabled="true"' : ""}
-            >
-              <span class="favorite-main">
-                <span class="favorite-name">${escapeHtml(club.name)}</span>
-                <span class="favorite-time">${escapeHtml(club.activity)}</span>
-              </span>
-              ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
-            </a>
-            ${editing ? `
-              <button
-                class="favorite-drag-handle"
-                type="button"
-                aria-label="Přesunout ${escapeHtml(club.name)}"
-                title="Přetáhnout"
-              >
-                <span aria-hidden="true">≡</span>
-              </button>
-            ` : ""}
-          </li>
-        `;
-      }).join("") : `<li class="empty">Žádné oblíbené kluby.</li>`;
-      return `
-      <header class="topbar topbar--favorites">
-        <h1 class="title title--brand">Bokoun</h1>
-        ${modeSwitchButton()}
-        ${fullscreenButton()}
-        ${overflowControlMarkup("favorites")}
-      </header>
-      ${clubStripMarkup()}
-      <div class="route-content">
-        <ul class="favorites">${rows}</ul>
-      </div>
-    `;
-    }
     function overflowControlMarkup(type) {
       const open = state2.openHeaderPanel === "overflow";
       return `
@@ -5592,31 +5393,6 @@
         </div>
       </section>
     `;
-    }
-    function setHeaderPanel(panel = "") {
-      const previous = state2.openHeaderPanel;
-      const next = previous === panel ? "" : panel;
-      if (next && !previous) {
-        const historyState = history.state && typeof history.state === "object" ? history.state : {};
-        history.pushState({ ...historyState, bokounHeaderPanel: true }, "", location.href);
-      } else if (!next && previous && history.state?.bokounHeaderPanel) {
-        history.back();
-      }
-      state2.openHeaderPanel = next;
-      state2.openPostMenuId = "";
-      state2.currentSignature = "";
-      scheduleRender({ force: true });
-      window.setTimeout(() => {
-        if (!state2.shadow) return;
-        const target = state2.openHeaderPanel ? state2.shadow.querySelector(".header-panel button, .header-panel select, .header-panel input") : state2.shadow.querySelector("[data-action='overflow']");
-        target?.focus();
-      }, 60);
-    }
-    function setPostMenu(postId = "") {
-      state2.openPostMenuId = state2.openPostMenuId === String(postId) ? "" : String(postId);
-      state2.openHeaderPanel = "";
-      state2.currentSignature = "";
-      scheduleRender({ force: true });
     }
     function fontPanelMarkup() {
       const font = currentFontSettings();
@@ -5822,6 +5598,224 @@
       <p class="settings-note">Kompaktní čtečka mění pouze vzhled; vaše písmo, avatary a řazení zůstanou zachované.</p>
       </section>
     `;
+    }
+    Object.assign(ctx2, {
+      overflowControlMarkup,
+      overflowMenuMarkup,
+      favoriteSortPanelMarkup,
+      favoritesPanelMarkup,
+      fontPanelMarkup,
+      displayPanelMarkup
+    });
+  }
+
+  // src/ui.js
+  function installUi(ctx2) {
+    const {
+      ICONS: ICONS2,
+      state: state2
+    } = ctx2;
+    const routeKey = (...args) => ctx2.routeKey(...args);
+    const routeType = (...args) => ctx2.routeType(...args);
+    const currentBoardId = (...args) => ctx2.currentBoardId(...args);
+    const scheduleRender = (...args) => ctx2.scheduleRender(...args);
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
+    const currentFontSettings = (...args) => ctx2.currentFontSettings(...args);
+    const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
+    const currentRecentClubs = (...args) => ctx2.currentRecentClubs(...args);
+    const normalizeClubRoute = (...args) => ctx2.normalizeClubRoute(...args);
+    const unreadHeat = (...args) => ctx2.unreadHeat(...args);
+    const overflowControlMarkup = (...args) => ctx2.overflowControlMarkup(...args);
+    function signatureFor(type, model) {
+      if (type === "favorites") {
+        return [
+          routeKey(),
+          JSON.stringify(currentDisplaySettings()),
+          JSON.stringify(currentFavoritesSettings()),
+          JSON.stringify(currentRecentClubs()),
+          state2.openHeaderPanel,
+          state2.editingFavoriteOrder,
+          model.length,
+          model.map((club) => `${club.href}:${club.unread}:${club.activity}`).join(";")
+        ].join("|");
+      }
+      return [
+        location.pathname,
+        model.title,
+        model.posts.map((post) => post.id).join(","),
+        model.nextOlderHref,
+        model.loading,
+        model.end,
+        model.error,
+        model.loadedPageCount,
+        model.newPostIds.join(","),
+        state2.openHeaderPanel,
+        state2.openPostMenuId,
+        JSON.stringify(currentDisplaySettings()),
+        JSON.stringify(currentFontSettings()),
+        JSON.stringify(currentRecentClubs()),
+        state2.composer ? [
+          state2.composer.kind,
+          state2.composer.replyTo,
+          state2.composer.status,
+          state2.composer.error,
+          state2.composer.ambiguous
+        ].join(":") : "",
+        state2.writeFeedback ? [
+          state2.writeFeedback.boardId,
+          state2.writeFeedback.postId,
+          state2.writeFeedback.replyTo,
+          state2.writeFeedback.message
+        ].join(":") : "",
+        model.threadRootId,
+        model.threadFocusId,
+        model.threadBranchFocusId
+      ].join("|");
+    }
+    function modeSwitchButton() {
+      return `
+      <button
+        class="icon-button mode-switch"
+        type="button"
+        data-action="mode-switch"
+        aria-label="Přepnout do plné Kapybary"
+        title="Přepnout do plné Kapybary"
+      >
+        <span aria-hidden="true">◐</span>
+      </button>
+    `;
+    }
+    function fullscreenButton() {
+      const active = Boolean(document.fullscreenElement);
+      return `
+      <button
+        class="icon-button fullscreen-toggle"
+        type="button"
+        data-action="fullscreen-toggle"
+        aria-label="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
+        aria-pressed="${active ? "true" : "false"}"
+        title="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
+      ><span aria-hidden="true">⛶</span></button>
+    `;
+    }
+    function clubStripMarkup(currentTitle = "") {
+      const display = currentDisplaySettings();
+      if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
+      const activeClub = normalizeClubRoute(location.pathname);
+      const favoritesActive = routeType() === "favorites";
+      const recent = currentRecentClubs();
+      const candidates = favoritesActive ? [{
+        href: "/fav/activity",
+        name: "Oblíbené",
+        active: true
+      }, ...recent] : [{
+        href: activeClub,
+        name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub",
+        active: true
+      }, ...recent];
+      const seen = /* @__PURE__ */ new Set();
+      const links = candidates.filter((link) => {
+        const href = normalizeClubRoute(link.href) || link.href;
+        if (!href || seen.has(href)) return false;
+        seen.add(href);
+        return true;
+      }).slice(0, favoritesActive ? 7 : 6).map((link) => ({
+        ...link,
+        active: favoritesActive ? link.href === "/fav/activity" : normalizeClubRoute(link.href) === activeClub
+      }));
+      return `
+      <nav class="club-strip" aria-label="Rychlé přepínání klubů">
+        ${links.map((link) => `
+          <a
+            class="club-strip-link${link.active ? " club-strip-link--active" : ""}"
+            href="${escapeHtml(link.href)}"
+            data-native-href="${escapeHtml(link.href)}"
+            ${link.active ? 'aria-current="page"' : ""}
+          >${escapeHtml(link.name)}</a>
+        `).join("")}
+      </nav>
+    `;
+    }
+    function favoritesMarkup(clubs) {
+      const favorites = currentFavoritesSettings();
+      const editing = favorites.sort === "manual" && state2.editingFavoriteOrder;
+      const showCount = ["count", "both"].includes(favorites.unreadMode);
+      const showHeat = ["heat", "both"].includes(favorites.unreadMode);
+      const rows = clubs.length ? clubs.map((club) => {
+        const heat = showHeat ? unreadHeat(club.unread) : "";
+        const unreadClass = club.unread ? " favorite-row--unread" : "";
+        const heatClass = heat ? ` favorite-row--heat-${heat}` : "";
+        const unreadLabel = club.unread ? `${club.unread} nových příspěvků` : "bez nových příspěvků";
+        return `
+          <li
+            class="favorite-item${editing ? " favorite-item--editing" : ""}"
+            data-favorite-href="${escapeHtml(club.href)}"
+          >
+            <a
+              class="favorite-row${unreadClass}${heatClass}"
+              href="${escapeHtml(club.href)}"
+              data-native-href="${escapeHtml(club.href)}"
+              data-board-id="${escapeHtml(club.id)}"
+              data-unread-count="${escapeHtml(club.unread)}"
+              aria-label="${escapeHtml(`${club.name}, ${unreadLabel}${club.activity ? `, ${club.activity}` : ""}`)}"
+              ${editing ? 'aria-disabled="true"' : ""}
+            >
+              <span class="favorite-main">
+                <span class="favorite-name">${escapeHtml(club.name)}</span>
+                <span class="favorite-time">${escapeHtml(club.activity)}</span>
+              </span>
+              ${showCount && club.unread ? `<span class="favorite-unread" aria-hidden="true">${club.unread}</span>` : ""}
+            </a>
+            ${editing ? `
+              <button
+                class="favorite-drag-handle"
+                type="button"
+                aria-label="Přesunout ${escapeHtml(club.name)}"
+                title="Přetáhnout"
+              >
+                <span aria-hidden="true">≡</span>
+              </button>
+            ` : ""}
+          </li>
+        `;
+      }).join("") : `<li class="empty">Žádné oblíbené kluby.</li>`;
+      return `
+      <header class="topbar topbar--favorites">
+        <h1 class="title title--brand">Bokoun</h1>
+        ${modeSwitchButton()}
+        ${fullscreenButton()}
+        ${overflowControlMarkup("favorites")}
+      </header>
+      ${clubStripMarkup()}
+      <div class="route-content">
+        <ul class="favorites">${rows}</ul>
+      </div>
+    `;
+    }
+    function setHeaderPanel(panel = "") {
+      const previous = state2.openHeaderPanel;
+      const next = previous === panel ? "" : panel;
+      if (next && !previous) {
+        const historyState = history.state && typeof history.state === "object" ? history.state : {};
+        history.pushState({ ...historyState, bokounHeaderPanel: true }, "", location.href);
+      } else if (!next && previous && history.state?.bokounHeaderPanel) {
+        history.back();
+      }
+      state2.openHeaderPanel = next;
+      state2.openPostMenuId = "";
+      state2.currentSignature = "";
+      scheduleRender({ force: true });
+      window.setTimeout(() => {
+        if (!state2.shadow) return;
+        const target = state2.openHeaderPanel ? state2.shadow.querySelector(".header-panel button, .header-panel select, .header-panel input") : state2.shadow.querySelector("[data-action='overflow']");
+        target?.focus();
+      }, 60);
+    }
+    function setPostMenu(postId = "") {
+      state2.openPostMenuId = state2.openPostMenuId === String(postId) ? "" : String(postId);
+      state2.openHeaderPanel = "";
+      state2.currentSignature = "";
+      scheduleRender({ force: true });
     }
     function avatarImageMarkup(post, className = "") {
       return post.avatarUrl ? `<img class="${className}" src="${escapeHtml(post.avatarUrl)}" alt="" loading="lazy" decoding="async">` : `<span class="${className} avatar-fallback" aria-hidden="true">${escapeHtml(post.author.slice(0, 1).toUpperCase())}</span>`;
@@ -6038,6 +6032,59 @@
       </section>
     `;
     }
+    Object.assign(ctx2, {
+      escapeHtml,
+      signatureFor,
+      modeSwitchButton,
+      fullscreenButton,
+      favoritesMarkup,
+      clubStripMarkup,
+      boardMarkup,
+      composerMarkup,
+      setHeaderPanel,
+      setPostMenu,
+      avatarImageMarkup,
+      postMenuMarkup,
+      replyMetaMarkup
+    });
+  }
+
+  // src/ui-events.js
+  function installUiEvents(ctx2) {
+    const { state: state2 } = ctx2;
+    const routeKey = (...args) => ctx2.routeKey(...args);
+    const openFullKapybara = (...args) => ctx2.openFullKapybara(...args);
+    const openComposer = (...args) => ctx2.openComposer(...args);
+    const closeComposer = (...args) => ctx2.closeComposer(...args);
+    const discardComposerDraft = (...args) => ctx2.discardComposerDraft(...args);
+    const updateComposerBody = (...args) => ctx2.updateComposerBody(...args);
+    const clearWriteFeedback = (...args) => ctx2.clearWriteFeedback(...args);
+    const submitComposer = (...args) => ctx2.submitComposer(...args);
+    const loadOlderPosts = (...args) => ctx2.loadOlderPosts(...args);
+    const navigateNative = (...args) => ctx2.navigateNative(...args);
+    const goBack = (...args) => ctx2.goBack(...args);
+    const scheduleRender = (...args) => ctx2.scheduleRender(...args);
+    const updateDisplaySettings = (...args) => ctx2.updateDisplaySettings(...args);
+    const resetFirstUnread = (...args) => ctx2.resetFirstUnread?.(...args);
+    const updateFontSettings = (...args) => ctx2.updateFontSettings(...args);
+    const resetFontSettings = (...args) => ctx2.resetFontSettings(...args);
+    const displayFontSize = (...args) => ctx2.displayFontSize(...args);
+    const normalizeCustomFamily = (...args) => ctx2.normalizeCustomFamily(...args);
+    const currentFavoritesSettings = (...args) => ctx2.currentFavoritesSettings(...args);
+    const normalizeClubRoute = (...args) => ctx2.normalizeClubRoute(...args);
+    const updateFavoritesSettings = (...args) => ctx2.updateFavoritesSettings(...args);
+    const resetFavoritesAppearance = (...args) => ctx2.resetFavoritesAppearance(...args);
+    const saveFavoriteOrder = (...args) => ctx2.saveFavoriteOrder(...args);
+    const resetFavoriteOrder = (...args) => ctx2.resetFavoriteOrder(...args);
+    const openThread = (...args) => ctx2.openThread(...args);
+    const closeThread = (...args) => ctx2.closeThread(...args);
+    const toggleThreadBranch = (...args) => ctx2.toggleThreadBranch(...args);
+    const startBoardVisitFromFavorite = (...args) => ctx2.startBoardVisitFromFavorite(...args);
+    const requestBokounFullscreen = (...args) => ctx2.requestBokounFullscreen(...args);
+    const requestStructuredRefresh = (...args) => ctx2.requestStructuredRefresh(...args);
+    const disableBokoun = (...args) => ctx2.disableBokoun(...args);
+    const setHeaderPanel = (...args) => ctx2.setHeaderPanel(...args);
+    const setPostMenu = (...args) => ctx2.setPostMenu(...args);
     function attachUiEvents() {
       state2.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
       const fullscreenToggle = state2.shadow.querySelector("[data-action='fullscreen-toggle']");
@@ -6413,26 +6460,7 @@
       }
     }
     Object.assign(ctx2, {
-      escapeHtml,
-      signatureFor,
-      modeSwitchButton,
-      fullscreenButton,
-      favoritesMarkup,
-      clubStripMarkup,
-      overflowControlMarkup,
-      overflowMenuMarkup,
-      favoriteSortPanelMarkup,
-      favoritesPanelMarkup,
-      boardMarkup,
-      composerMarkup,
       attachUiEvents,
-      setHeaderPanel,
-      setPostMenu,
-      fontPanelMarkup,
-      displayPanelMarkup,
-      avatarImageMarkup,
-      postMenuMarkup,
-      replyMetaMarkup,
       attachFavoriteReordering
     });
   }
@@ -7446,8 +7474,10 @@
   installPagination(ctx);
   installFirstUnread(ctx);
   installSettings(ctx);
+  installUiPanels(ctx);
   installUi(ctx);
   installNavigation(ctx);
+  installUiEvents(ctx);
   installController(ctx);
   ctx.waitForDocumentElement().then(() => {
     ctx.startPaintGuard();

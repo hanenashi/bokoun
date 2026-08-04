@@ -7,7 +7,9 @@ import { installWriting } from "./writing.js";
 import { installPagination } from "./pagination.js";
 import { installFirstUnread } from "./first-unread.js";
 import { installSettings } from "./settings.js";
+import { installUiPanels } from "./ui-panels.js";
 import { installUi } from "./ui.js";
+import { installUiEvents } from "./ui-events.js";
 import { installNavigation } from "./navigation.js";
 import { installController } from "./controller.js";
 
@@ -20,8 +22,10 @@ installWriting(ctx);
 installPagination(ctx);
 installFirstUnread(ctx);
 installSettings(ctx);
+installUiPanels(ctx);
 installUi(ctx);
 installNavigation(ctx);
+installUiEvents(ctx);
 installController(ctx);
 
 ctx.waitForDocumentElement().then(() => {
