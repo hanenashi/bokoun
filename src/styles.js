@@ -1152,6 +1152,97 @@ export const STYLES = `
     }
   }
 
+  /* Kapybara-compatible color schemes. */
+  .app[data-color-scheme="traditional"] {
+    --bg: #dce8fa;
+    --surface: #e8f0fc;
+    --surface-raised: #ffffff;
+    --text: #000000;
+    --muted: #40516a;
+    --border: #9aaac1;
+    --accent: #8a4f00;
+    --accent-soft: #f3dfbd;
+    --link: #164f91;
+    --post-read: #dce8fa;
+    --post-new: #ffffff;
+    --post-reply: #eef4fd;
+    --post-thread: #d1e0f5;
+    --code-bg: #d2e0f4;
+    --header-bg: rgba(232, 240, 252, 0.98);
+    color-scheme: light;
+  }
+
+  .app[data-color-scheme="light"] {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --text: #000000;
+    --muted: #5f6368;
+    --border: #c7c7c7;
+    --accent: #8a4f00;
+    --accent-soft: #f1e2cd;
+    --link: #164f91;
+    --post-read: #ffffff;
+    --post-new: #ffffff;
+    --post-reply: #f5f5f5;
+    --post-thread: #eeeeee;
+    --code-bg: #eeeeee;
+    --header-bg: rgba(248, 248, 248, 0.98);
+    color-scheme: light;
+  }
+
+  .app[data-color-scheme="dark"] {
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --surface-raised: #2a2a2a;
+    --text: #ffffff;
+    --muted: #b5b5b5;
+    --border: #555555;
+    --accent: #ef9a62;
+    --accent-soft: #3a2a20;
+    --link: #9fc5ef;
+    --post-read: #181818;
+    --post-new: #242424;
+    --post-reply: #282828;
+    --post-thread: #29333d;
+    --code-bg: #101010;
+    --header-bg: rgba(30, 30, 30, 0.98);
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .app[data-color-scheme="system"] {
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --surface-raised: #2a2a2a;
+      --text: #ffffff;
+      --muted: #b5b5b5;
+      --border: #555555;
+      --accent: #ef9a62;
+      --accent-soft: #3a2a20;
+      --link: #9fc5ef;
+      --post-read: #181818;
+      --post-new: #242424;
+      --post-reply: #282828;
+      --post-thread: #29333d;
+      --code-bg: #101010;
+      --header-bg: rgba(30, 30, 30, 0.98);
+      color-scheme: dark;
+    }
+  }
+
+  .app[data-color-scheme="traditional"] .topbar,
+  .app[data-color-scheme="light"] .topbar,
+  .app[data-color-scheme="dark"] .topbar,
+  .app[data-color-scheme="system"] .topbar,
+  .app[data-color-scheme="traditional"] .club-strip,
+  .app[data-color-scheme="light"] .club-strip,
+  .app[data-color-scheme="dark"] .club-strip,
+  .app[data-color-scheme="system"] .club-strip {
+    background: var(--header-bg);
+    border-color: var(--border);
+  }
+
   /*
    * Compact reader preset
    *

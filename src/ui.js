@@ -572,9 +572,10 @@ export function installUi(ctx) {
       <label class="settings-field settings-field--wide-label">
         <span>Barvy</span>
         <select data-setting="color-scheme" aria-label="Barevný režim">
+          <option value="traditional" ${display.colorScheme === "traditional" ? "selected" : ""}>Tradiční</option>
+          <option value="light" ${display.colorScheme === "light" ? "selected" : ""}>Světlé</option>
+          <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavé</option>
           <option value="system" ${display.colorScheme === "system" ? "selected" : ""}>Podle systému</option>
-          <option value="light" ${display.colorScheme === "light" ? "selected" : ""}>Světlý</option>
-          <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavý</option>
         </select>
       </label>
     `;

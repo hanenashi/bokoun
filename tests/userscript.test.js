@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.4/);
+  assert.match(source, /@version\s+0\.9\.5/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -682,6 +682,8 @@ test("post display settings persist avatar layout and safe font controls", () =>
   assert.equal(stored.get("display").pageTransitions, false);
   settings.updateDisplaySettings({ fullscreenMode: false });
   assert.equal(stored.get("display").fullscreenMode, false);
+  settings.updateDisplaySettings({ colorScheme: "traditional" });
+  assert.equal(stored.get("display").colorScheme, "traditional");
   settings.updateDisplaySettings({
     interfacePreset: "unknown",
     colorScheme: "sepia",
