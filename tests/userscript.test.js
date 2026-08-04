@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.9/);
+  assert.match(source, /@version\s+0\.9\.10/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.9
+// @version      0.9.10
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -348,7 +348,7 @@
   }
 
   .post--visit-new {
-    background: #fff;
+    background: var(--post-new, #fff);
   }
 
   .post--just-sent,
@@ -1274,7 +1274,7 @@
     --accent-soft: #3a2a20;
     --link: #9fc5ef;
     --post-read: #181818;
-    --post-new: #242424;
+    --post-new: #30363d;
     --post-reply: #282828;
     --post-thread: #29333d;
     --code-bg: #101010;
@@ -1294,7 +1294,7 @@
       --accent-soft: #3a2a20;
       --link: #9fc5ef;
       --post-read: #181818;
-      --post-new: #242424;
+      --post-new: #30363d;
       --post-reply: #282828;
       --post-thread: #29333d;
       --code-bg: #101010;
@@ -1362,7 +1362,7 @@
     --accent-soft: #3b261f;
     --link: #91aec7;
     --post-read: #181b1d;
-    --post-new: #23272a;
+    --post-new: #30363d;
     --post-reply: #211f1c;
     --post-thread: #1d252b;
     --code-bg: #101214;
@@ -1742,7 +1742,7 @@
       --accent-soft: #3b261f;
       --link: #91aec7;
       --post-read: #181b1d;
-      --post-new: #23272a;
+      --post-new: #30363d;
       --post-reply: #211f1c;
       --post-thread: #1d252b;
       --code-bg: #101214;
