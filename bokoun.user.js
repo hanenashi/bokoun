@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.1
+// @version      0.10.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -664,7 +664,7 @@
   }
 
   .overflow-control .header-panel {
-    right: -44px;
+    right: 0;
   }
 
   .favorites-panel {
@@ -1405,7 +1405,7 @@
   }
 
   .app[data-interface-preset="compact-reader"] .overflow-control .header-panel {
-    right: -40px;
+    right: 0;
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip {

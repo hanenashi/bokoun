@@ -592,7 +592,7 @@ export const STYLES = `
   }
 
   .overflow-control .header-panel {
-    right: -44px;
+    right: 0;
   }
 
   .favorites-panel {
@@ -1333,7 +1333,7 @@ export const STYLES = `
   }
 
   .app[data-interface-preset="compact-reader"] .overflow-control .header-panel {
-    right: -40px;
+    right: 0;
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip {
