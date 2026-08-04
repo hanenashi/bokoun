@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.6/);
+  assert.match(source, /@version\s+0\.10\.7/);
   assert.match(source, /\/t\/\$\{threadRoot\}\/__data\.json/);
   assert.match(
     source,
@@ -1051,6 +1051,8 @@ test("fullscreen mode defaults on, requires a safe gesture, and remains escapabl
   assert.match(source, /requestBokounFullscreen\(\{ force: true \}\)/);
   assert.match(source, /window\.location\.reload\(\)/);
   assert.match(source, /data-fullscreen="active"/);
+  assert.match(source, /touch-action:\s*pan-x pan-y pinch-zoom/);
+  assert.match(source, /html:fullscreen/);
   assert.match(source, /void exitBokounFullscreen\(\);\s*state\.active = false/);
   assert.doesNotMatch(source, /requestFullscreen\(\)[\s\S]*console\.warn/);
 });

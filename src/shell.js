@@ -116,6 +116,13 @@ export function installShell(ctx) {
         overflow: hidden !important;
         background: #fff !important;
       }
+      /* Fullscreen changes the browser gesture negotiation surface. Explicitly
+         retain pinch zoom for both Firefox and Chromium-based mobile browsers. */
+      html:fullscreen,
+      html:fullscreen body,
+      #${HOST_ID}:fullscreen {
+        touch-action: pan-x pan-y pinch-zoom !important;
+      }
       html[data-bokoun-active="true"][data-bokoun-aligning="true"],
       html[data-bokoun-active="true"][data-bokoun-aligning="true"] body {
         height: auto !important;

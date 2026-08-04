@@ -34,6 +34,8 @@ export const STYLES = `
     height: 100dvh;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Keep browser pinch-zoom available, including while the document is fullscreen. */
+    touch-action: pan-x pan-y pinch-zoom;
     overscroll-behavior-y: contain;
     background: var(--bg);
     color: var(--text);

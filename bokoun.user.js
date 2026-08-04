@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.6
+// @version      0.10.7
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -106,6 +106,8 @@
     height: 100dvh;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Keep browser pinch-zoom available, including while the document is fullscreen. */
+    touch-action: pan-x pan-y pinch-zoom;
     overscroll-behavior-y: contain;
     background: var(--bg);
     color: var(--text);
@@ -2149,6 +2151,13 @@
         margin: 0 !important;
         overflow: hidden !important;
         background: #fff !important;
+      }
+      /* Fullscreen changes the browser gesture negotiation surface. Explicitly
+         retain pinch zoom for both Firefox and Chromium-based mobile browsers. */
+      html:fullscreen,
+      html:fullscreen body,
+      #${HOST_ID2}:fullscreen {
+        touch-action: pan-x pan-y pinch-zoom !important;
       }
       html[data-bokoun-active="true"][data-bokoun-aligning="true"],
       html[data-bokoun-active="true"][data-bokoun-aligning="true"] body {
