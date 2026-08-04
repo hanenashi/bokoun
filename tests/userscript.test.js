@@ -45,8 +45,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.10/);
-  assert.match(source, /export const VERSION = "0\.10\.10"/);
+  assert.match(source, /@version\s+0\.10\.11/);
+  assert.match(source, /export const VERSION = "0\.10\.11"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -665,7 +665,6 @@ test("post display settings persist avatar layout and safe font controls", () =>
     postSeparators: true,
     compareHandle: false,
     firstUnread: false,
-    threadOrder: "descending",
   });
   settings.updateDisplaySettings({ avatarPosition: "left" });
   assert.equal(stored.get("display").avatarPosition, "left");
@@ -1286,23 +1285,27 @@ test("decodes a sanitized streamed SvelteKit board contract", () => {
   );
 });
 
-test("thread view keeps the root first and defaults to newest-first replies", () => {
+test("thread view pins the clicked post and keeps all other members newest-first", () => {
   const board = { state: {} };
   installBoardState(board);
   const posts = [
     { id: "103", rootId: "100", datetime: "2026-07-25T11:00:00.000Z", sequence: 3 },
+    { id: "104", rootId: "100", datetime: "2026-07-25T11:30:00.000Z", sequence: 4, depth: 2 },
     { id: "900", rootId: "800", datetime: "2026-07-25T08:00:00.000Z", sequence: 1 },
     { id: "100", rootId: "", datetime: "2026-07-25T09:00:00.000Z", sequence: 1 },
     { id: "102", rootId: "100", datetime: "2026-07-25T10:30:00.000Z", sequence: 2 },
   ];
   assert.deepEqual(
-    board.threadPosts(posts, "100").map((post) => post.id),
-    ["100", "103", "102"],
+    board.threadPosts(posts, "100", "102").map((post) => post.id),
+    ["102", "104", "103", "100"],
   );
   assert.deepEqual(
-    board.threadPosts(posts, "100", "ascending").map((post) => post.id),
-    ["100", "102", "103"],
+    board.threadPosts(posts, "100", "100").map((post) => post.id),
+    ["100", "104", "103", "102"],
   );
+  assert.doesNotMatch(uiSource, /data-setting="thread-order"/);
+  assert.match(navigationSource, /target\.searchParams\.set\("p", normalizedPostId \|\| normalized\)/);
+  assert.match(source, /threadMode && post\.id === board\.threadFocusId \? "post--thread-focus"/);
 });
 
 test("thread fallback retains the loaded same-club structured model", () => {

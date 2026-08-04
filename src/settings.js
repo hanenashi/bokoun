@@ -13,7 +13,6 @@ const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   postSeparators: true,
   compareHandle: false,
   firstUnread: false,
-  threadOrder: "descending",
 });
 
 const DEFAULT_FONT_SETTINGS = Object.freeze({
@@ -61,7 +60,6 @@ const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
 const REPLY_META_MODES = new Set(["full", "compact", "hidden"]);
 const INTERFACE_PRESETS = new Set(["default", "compact-reader"]);
 const COLOR_SCHEMES = new Set(["kapybara", "traditional", "system", "light", "dark"]);
-const THREAD_ORDERS = new Set(["ascending", "descending"]);
 const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
 const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -145,9 +143,6 @@ export function installSettings(ctx) {
       postSeparators: value.postSeparators !== false,
       compareHandle: value.compareHandle === true,
       firstUnread: value.firstUnread === true,
-      threadOrder: THREAD_ORDERS.has(value.threadOrder)
-        ? value.threadOrder
-        : DEFAULT_DISPLAY_SETTINGS.threadOrder,
     };
   }
 

@@ -231,6 +231,8 @@ export function installAdapters(ctx) {
     query.set("f", cursor);
     const threadRoot = url.searchParams.get("rootId");
     if (threadRoot) query.set("rootId", threadRoot);
+    const threadFocus = url.searchParams.get("p");
+    if (threadFocus) query.set("p", threadFocus);
     return `${url.pathname}?${query}`;
   }
 
@@ -322,8 +324,9 @@ export function installAdapters(ctx) {
       // Bokoun's simple rootId URL externally, but fetch the thread contract
       // directly so the native Svelte redirect cannot replace our renderer.
       url.pathname = `${url.pathname.replace(/\/$/, "")}/t/${threadRoot}/__data.json`;
+      const threadFocus = url.searchParams.get("p") || threadRoot;
       url.searchParams.delete("rootId");
-      url.searchParams.set("p", threadRoot);
+      url.searchParams.set("p", threadFocus);
     } else {
       url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
     }

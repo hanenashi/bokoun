@@ -296,7 +296,7 @@ export const STYLES = `
     box-shadow: inset 2px 0 0 #d9b58e;
   }
 
-  .post--thread-root {
+  .post--thread-focus {
     background: #fff;
     box-shadow: inset 3px 0 #a85a00;
   }
@@ -1500,7 +1500,7 @@ export const STYLES = `
     box-shadow: inset 2px 0 var(--accent);
   }
 
-  .app[data-interface-preset="compact-reader"] .post--thread-root {
+  .app[data-interface-preset="compact-reader"] .post--thread-focus {
     background: var(--post-new);
     box-shadow: inset 3px 0 var(--accent);
   }

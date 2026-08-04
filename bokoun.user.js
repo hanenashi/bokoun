@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.10
+// @version      0.10.11
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -368,7 +368,7 @@
     box-shadow: inset 2px 0 0 #d9b58e;
   }
 
-  .post--thread-root {
+  .post--thread-focus {
     background: #fff;
     box-shadow: inset 3px 0 #a85a00;
   }
@@ -1572,7 +1572,7 @@
     box-shadow: inset 2px 0 var(--accent);
   }
 
-  .app[data-interface-preset="compact-reader"] .post--thread-root {
+  .app[data-interface-preset="compact-reader"] .post--thread-focus {
     background: var(--post-new);
     box-shadow: inset 3px 0 var(--accent);
   }
@@ -1855,7 +1855,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.10";
+  var VERSION = "0.10.11";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -3107,6 +3107,8 @@
       query.set("f", cursor);
       const threadRoot = url.searchParams.get("rootId");
       if (threadRoot) query.set("rootId", threadRoot);
+      const threadFocus = url.searchParams.get("p");
+      if (threadFocus) query.set("p", threadFocus);
       return `${url.pathname}?${query}`;
     }
     function normalizedStructuredPageHref(pageHref) {
@@ -3171,8 +3173,9 @@
       const threadRoot = url.searchParams.get("rootId");
       if (threadRoot && /^\d+$/.test(threadRoot)) {
         url.pathname = `${url.pathname.replace(/\/$/, "")}/t/${threadRoot}/__data.json`;
+        const threadFocus = url.searchParams.get("p") || threadRoot;
         url.searchParams.delete("rootId");
-        url.searchParams.set("p", threadRoot);
+        url.searchParams.set("p", threadFocus);
       } else {
         url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
       }
@@ -3718,7 +3721,6 @@
     const routeKey = (...args) => ctx2.routeKey(...args);
     const normalizeHref = (...args) => ctx2.normalizeHref(...args);
     const syncNativeBoardRead = (...args) => ctx2.syncNativeBoardRead(...args);
-    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings?.(...args) || { threadOrder: "descending" };
     function boardPath(pageHref = routeKey()) {
       try {
         return new URL(pageHref, location.origin).pathname;
@@ -3885,16 +3887,24 @@
         return "";
       }
     }
-    function threadPosts(posts, rootId, order = "descending") {
+    function threadFocusId(pageHref = routeKey()) {
+      try {
+        const url = new URL(pageHref, location.origin);
+        return url.searchParams.get("p") || url.searchParams.get("rootId") || "";
+      } catch {
+        return "";
+      }
+    }
+    function threadPosts(posts, rootId, focusId = rootId) {
       if (!rootId) return [...posts];
-      return posts.filter((post) => post.id === rootId || post.rootId === rootId).sort((left, right) => {
-        if (left.id === rootId) return -1;
-        if (right.id === rootId) return 1;
+      const members = posts.filter((post) => post.id === rootId || post.rootId === rootId).sort((left, right) => {
         const leftTime = Date.parse(left.datetime) || 0;
         const rightTime = Date.parse(right.datetime) || 0;
-        const direction = order === "ascending" ? 1 : -1;
-        return direction * (leftTime - rightTime || left.sequence - right.sequence || Number(left.id) - Number(right.id));
+        return -1 * (leftTime - rightTime || left.sequence - right.sequence || Number(left.id) - Number(right.id));
       });
+      const focusIndex = members.findIndex((post) => post.id === focusId);
+      if (focusIndex > 0) members.unshift(members.splice(focusIndex, 1)[0]);
+      return members;
     }
     function resetBoardAccumulator(model, pageHref, { structured = false } = {}) {
       state2.boardLoadAbort?.abort();
@@ -3989,15 +3999,13 @@
     }
     function boardViewModel() {
       const activeRootId = threadRootId();
-      const posts = threadPosts(
-        state2.boardPosts,
-        activeRootId,
-        currentDisplaySettings().threadOrder
-      );
+      const activeFocusId = threadFocusId();
+      const posts = threadPosts(state2.boardPosts, activeRootId, activeFocusId);
       return {
         title: state2.boardTitle,
         posts,
         threadRootId: activeRootId,
+        threadFocusId: activeFocusId,
         threadCount: posts.length,
         newPostIds: newPostIdsForVisit(state2.boardPosts),
         nextOlderHref: state2.boardNextHref,
@@ -4024,6 +4032,7 @@
       startBoardVisitFromFavorite,
       newPostIdsForVisit,
       threadRootId,
+      threadFocusId,
       threadPosts,
       resetBoardAccumulator,
       mergeBoardPage,
@@ -4690,8 +4699,7 @@
     postSpacing: 9,
     postSeparators: true,
     compareHandle: false,
-    firstUnread: false,
-    threadOrder: "descending"
+    firstUnread: false
   });
   var DEFAULT_FONT_SETTINGS = Object.freeze({
     family: "default",
@@ -4734,7 +4742,6 @@
   var AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
   var COLOR_SCHEMES = /* @__PURE__ */ new Set(["kapybara", "traditional", "system", "light", "dark"]);
-  var THREAD_ORDERS = /* @__PURE__ */ new Set(["ascending", "descending"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -4802,8 +4809,7 @@
         postSpacing: normalizePostSpacing(value.postSpacing),
         postSeparators: value.postSeparators !== false,
         compareHandle: value.compareHandle === true,
-        firstUnread: value.firstUnread === true,
-        threadOrder: THREAD_ORDERS.has(value.threadOrder) ? value.threadOrder : DEFAULT_DISPLAY_SETTINGS.threadOrder
+        firstUnread: value.firstUnread === true
       };
     }
     function normalizeFontSettings(value = {}) {
@@ -5223,7 +5229,8 @@
           state2.writeFeedback.replyTo,
           state2.writeFeedback.message
         ].join(":") : "",
-        model.threadRootId
+        model.threadRootId,
+        model.threadFocusId
       ].join("|");
     }
     function modeSwitchButton() {
@@ -5602,13 +5609,6 @@
           >
         </label>
         <label class="settings-field">
-          <span>Řazení vláken</span>
-          <select data-setting="thread-order" aria-label="Řazení příspěvků ve vlákně">
-            <option value="descending" ${display.threadOrder === "descending" ? "selected" : ""}>Nejnovější → nejstarší</option>
-            <option value="ascending" ${display.threadOrder === "ascending" ? "selected" : ""}>Nejstarší → nejnovější</option>
-          </select>
-        </label>
-        <label class="settings-field">
           <span>Tvar</span>
           <select data-setting="avatar-shape" aria-label="Tvar avataru" ${display.showAvatars ? "" : "disabled"}>
             <option value="circle" ${display.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
@@ -5796,8 +5796,8 @@
         const postClasses = [
           "post",
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
-          threadMode && post.id === board.threadRootId ? "post--thread-root" : "",
-          threadMode && post.id !== board.threadRootId ? "post--thread-reply" : "",
+          threadMode && post.id === board.threadFocusId ? "post--thread-focus" : "",
+          threadMode && post.id !== board.threadFocusId ? "post--thread-reply" : "",
           !threadMode && newPostIds.has(post.id) ? "post--visit-new" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
@@ -6100,9 +6100,6 @@
       state2.shadow.querySelector("[data-setting='first-unread']")?.addEventListener("change", (event) => {
         resetFirstUnread();
         updateDisplaySettings({ firstUnread: event.currentTarget.checked });
-      });
-      state2.shadow.querySelector("[data-setting='thread-order']")?.addEventListener("change", (event) => {
-        updateDisplaySettings({ threadOrder: event.currentTarget.value });
       });
       state2.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
         updateFavoritesSettings(
@@ -6598,6 +6595,7 @@
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.set("rootId", normalized);
+      target.searchParams.set("p", normalizedPostId || normalized);
       navigateNative(`${target.pathname}${target.search}`, { direction: "forward", bokoun: true });
       return true;
     }
@@ -6606,6 +6604,7 @@
       const target = new URL(routeKey(), location.origin);
       target.searchParams.delete("f");
       target.searchParams.delete("rootId");
+      target.searchParams.delete("p");
       navigateNative(`${target.pathname}${target.search}`, { direction: "back", bokoun: true });
     }
     function captureBokounAnchor() {
@@ -6896,6 +6895,7 @@
           title: "Bokoun render scale",
           posts,
           threadRootId: "",
+          threadFocusId: "",
           threadCount: posts.length,
           newPostIds: [],
           nextOlderHref: "",

@@ -145,6 +145,7 @@ export function installController(ctx) {
         title: "Bokoun render scale",
         posts,
         threadRootId: "",
+        threadFocusId: "",
         threadCount: posts.length,
         newPostIds: [],
         nextOlderHref: "",

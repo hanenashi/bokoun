@@ -317,6 +317,7 @@ export function installNavigation(ctx) {
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.set("rootId", normalized);
+    target.searchParams.set("p", normalizedPostId || normalized);
     navigateNative(`${target.pathname}${target.search}`, { direction: "forward", bokoun: true });
     return true;
   }
@@ -326,6 +327,7 @@ export function installNavigation(ctx) {
     const target = new URL(routeKey(), location.origin);
     target.searchParams.delete("f");
     target.searchParams.delete("rootId");
+    target.searchParams.delete("p");
     navigateNative(`${target.pathname}${target.search}`, { direction: "back", bokoun: true });
   }
 

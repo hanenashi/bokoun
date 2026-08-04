@@ -92,6 +92,7 @@ export function installUi(ctx) {
           ].join(":")
         : "",
       model.threadRootId,
+      model.threadFocusId,
     ].join("|");
   }
 
@@ -505,13 +506,6 @@ export function installUi(ctx) {
           >
         </label>
         <label class="settings-field">
-          <span>Řazení vláken</span>
-          <select data-setting="thread-order" aria-label="Řazení příspěvků ve vlákně">
-            <option value="descending" ${display.threadOrder === "descending" ? "selected" : ""}>Nejnovější → nejstarší</option>
-            <option value="ascending" ${display.threadOrder === "ascending" ? "selected" : ""}>Nejstarší → nejnovější</option>
-          </select>
-        </label>
-        <label class="settings-field">
           <span>Tvar</span>
           <select data-setting="avatar-shape" aria-label="Tvar avataru" ${display.showAvatars ? "" : "disabled"}>
             <option value="circle" ${display.avatarShape === "circle" ? "selected" : ""}>Kruh</option>
@@ -719,8 +713,8 @@ export function installUi(ctx) {
         const postClasses = [
           "post",
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
-          threadMode && post.id === board.threadRootId ? "post--thread-root" : "",
-          threadMode && post.id !== board.threadRootId ? "post--thread-reply" : "",
+          threadMode && post.id === board.threadFocusId ? "post--thread-focus" : "",
+          threadMode && post.id !== board.threadFocusId ? "post--thread-reply" : "",
           !threadMode && newPostIds.has(post.id) ? "post--visit-new" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
@@ -1048,9 +1042,6 @@ export function installUi(ctx) {
     state.shadow.querySelector("[data-setting='first-unread']")?.addEventListener("change", (event) => {
       resetFirstUnread();
       updateDisplaySettings({ firstUnread: event.currentTarget.checked });
-    });
-    state.shadow.querySelector("[data-setting='thread-order']")?.addEventListener("change", (event) => {
-      updateDisplaySettings({ threadOrder: event.currentTarget.value });
     });
     state.shadow.querySelector("[data-setting='favorites-sort']")?.addEventListener("change", (event) => {
       updateFavoritesSettings(

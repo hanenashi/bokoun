@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.10.10`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.10.11`).
 
 ## Install the first prototype
 
@@ -85,12 +85,13 @@ Current prototype boundaries:
   now lives instead of occupying a permanent row below every post;
 - replies use a compact lower-right `re: author` footer; settings can include
   the parent timestamp, show only the author, or hide the footer;
-- tapping `re: author` opens a root-first chronological thread view backed by
-  Kapybara's authenticated `rootId` route; Back returns to the normal club and
-  its saved reading position;
+- tapping `re: author` opens a thread view with the clicked post pinned first;
+  every other post sharing its root follows newest-to-oldest, including replies
+  to replies in the same flat list. Back returns to the normal club and its
+  saved reading position;
 - Bokoun thread view stays inside Bokoun (it does not activate Kapybara's native
-  thread presentation). Replies default to newest-first; Display settings can
-  switch them to oldest-first while keeping the root post first.
+  thread presentation). Thread ordering is fixed to match normal club reading:
+  newer posts above older posts, with no separate ordering preference.
 - **Písmo a vzhled…** in the contextual menu opens the persistent font family,
   custom stack, font-size, density and theme controls adapted from Cudloun;
   **Zobrazení příspěvků…** contains avatars, reply metadata, post spacing,
