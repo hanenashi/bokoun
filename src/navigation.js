@@ -328,7 +328,33 @@ export function installNavigation(ctx) {
     target.searchParams.delete("f");
     target.searchParams.delete("rootId");
     target.searchParams.delete("p");
+    target.searchParams.delete("branch");
     navigateNative(`${target.pathname}${target.search}`, { direction: "back", bokoun: true });
+  }
+
+  function toggleThreadBranch(branchId = "") {
+    if (routeType() !== "board") return;
+    const target = new URL(routeKey(), location.origin);
+    if (!target.searchParams.has("rootId")) return;
+    const current = target.searchParams.get("branch") || "";
+    const normalized = String(branchId || "");
+
+    if (current) {
+      if (history.state?.bokounThreadBranch === current) {
+        history.back();
+        return;
+      }
+      target.searchParams.delete("branch");
+      history.replaceState({ ...history.state, bokounThreadBranch: "" }, "", target.href);
+      return;
+    }
+    if (!normalized) return;
+    target.searchParams.set("branch", normalized);
+    history.pushState(
+      { ...history.state, bokounThreadBranch: normalized },
+      "",
+      target.href,
+    );
   }
 
   function captureBokounAnchor() {
@@ -499,6 +525,7 @@ export function installNavigation(ctx) {
     goBack,
     openThread,
     closeThread,
+    toggleThreadBranch,
     captureBokounAnchor,
     captureNativeAnchor,
     nativePostById,

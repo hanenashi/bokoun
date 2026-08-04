@@ -35,6 +35,7 @@ export function installUi(ctx) {
   const unreadHeat = (...args) => ctx.unreadHeat(...args);
   const openThread = (...args) => ctx.openThread(...args);
   const closeThread = (...args) => ctx.closeThread(...args);
+  const toggleThreadBranch = (...args) => ctx.toggleThreadBranch(...args);
   const startBoardVisitFromFavorite = (...args) => ctx.startBoardVisitFromFavorite(...args);
   const requestBokounFullscreen = (...args) => ctx.requestBokounFullscreen(...args);
   const requestStructuredRefresh = (...args) => ctx.requestStructuredRefresh(...args);
@@ -93,6 +94,7 @@ export function installUi(ctx) {
         : "",
       model.threadRootId,
       model.threadFocusId,
+      model.threadBranchFocusId,
     ].join("|");
   }
 
@@ -710,11 +712,22 @@ export function installUi(ctx) {
         const replyTarget = replyingTo === post.id;
         const justSent = feedback?.postId === post.id;
         const replyContext = feedback?.replyTo === post.id;
+        const branchFocused = Boolean(board.threadBranchFocusId);
+        const inFocusedBranch = branchFocused
+          && Boolean(post.threadBranchId)
+          && post.threadBranchId === board.threadBranchFocusId;
+        const branchMuted = threadMode
+          && branchFocused
+          && Boolean(post.threadBranchId)
+          && !inFocusedBranch;
         const postClasses = [
           "post",
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
           threadMode && post.id === board.threadFocusId ? "post--thread-focus" : "",
           threadMode && post.id !== board.threadFocusId ? "post--thread-reply" : "",
+          threadMode && post.threadBranchId ? "post--thread-branch" : "",
+          inFocusedBranch ? "post--thread-branch-active" : "",
+          branchMuted ? "post--thread-muted" : "",
           !threadMode && newPostIds.has(post.id) ? "post--visit-new" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
@@ -742,6 +755,9 @@ export function installUi(ctx) {
             class="${postClasses}"
             data-bokoun-post-id="${escapeHtml(post.id)}"
             ${threadMode ? `data-thread-depth="${escapeHtml(post.depth)}"` : ""}
+            ${post.threadBranchId ? `data-thread-branch="${escapeHtml(post.threadBranchId)}"` : ""}
+            ${post.threadBranchId ? `data-thread-tone="${escapeHtml(post.threadBranchTone)}"` : ""}
+            ${post.threadBranchId && !branchMuted ? `tabindex="0" aria-label="${inFocusedBranch ? "Zobrazit celé vlákno" : "Zobrazit pouze tuto větev vlákna"}"` : ""}
           >
             <div class="post-layout">
               ${leftAvatar}
@@ -922,7 +938,9 @@ export function installUi(ctx) {
     });
     state.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", () => {
       if (state.openHeaderPanel) setHeaderPanel("");
-      else closeThread();
+      else if (new URL(routeKey(), location.origin).searchParams.has("branch")) {
+        toggleThreadBranch();
+      } else closeThread();
     });
     state.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
     state.shadow.querySelector("[data-action='overflow']")?.addEventListener("click", () => {
@@ -1142,6 +1160,17 @@ export function installUi(ctx) {
           }, 1_500);
         }
       });
+    }
+    for (const post of state.shadow.querySelectorAll("[data-thread-branch]:not(.post--thread-muted)")) {
+      const activate = (event) => {
+        if (event.type === "keydown" && !["Enter", " "].includes(event.key)) return;
+        if (event.target.closest("a, button, input, select, textarea, label")) return;
+        if (event.type === "click" && window.getSelection?.().toString()) return;
+        event.preventDefault();
+        toggleThreadBranch(post.dataset.threadBranch);
+      };
+      post.addEventListener("click", activate);
+      post.addEventListener("keydown", activate);
     }
     for (const link of state.shadow.querySelectorAll("[data-native-href]")) {
       link.addEventListener("click", (event) => {

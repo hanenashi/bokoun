@@ -225,6 +225,52 @@ export function installBoardState(ctx) {
     }
   }
 
+  function threadBranchFocusId(pageHref = routeKey()) {
+    try {
+      return new URL(pageHref, location.origin).searchParams.get("branch") || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function threadBranchTone(branchId) {
+    let hash = 0;
+    for (const character of String(branchId || "")) {
+      hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+    }
+    return hash % 4;
+  }
+
+  function assignThreadBranches(posts, rootId) {
+    if (!rootId) return posts.map((post) => ({ ...post }));
+    const byId = new Map(posts.map((post) => [String(post.id), post]));
+    return posts.map((post) => {
+      if (String(post.id) === String(rootId)) {
+        return { ...post, threadBranchId: "", threadBranchTone: -1 };
+      }
+
+      let branch = post;
+      const seen = new Set();
+      for (let index = 0; index <= posts.length; index += 1) {
+        const branchId = String(branch.id || "");
+        const parentId = String(branch.parentId || "");
+        if (!parentId || parentId === String(rootId)) break;
+        if (seen.has(branchId)) break;
+        seen.add(branchId);
+        const parent = byId.get(parentId);
+        if (!parent || String(parent.id) === String(rootId)) break;
+        branch = parent;
+      }
+
+      const branchId = String(branch.id || post.id || "");
+      return {
+        ...post,
+        threadBranchId: branchId,
+        threadBranchTone: threadBranchTone(branchId),
+      };
+    });
+  }
+
   function threadPosts(posts, rootId) {
     if (!rootId) return [...posts];
     const members = posts
@@ -349,12 +395,20 @@ export function installBoardState(ctx) {
   function boardViewModel() {
     const activeRootId = threadRootId();
     const activeFocusId = threadFocusId();
-    const posts = threadPosts(state.boardPosts, activeRootId);
+    const posts = assignThreadBranches(
+      threadPosts(state.boardPosts, activeRootId),
+      activeRootId,
+    );
+    const requestedBranchId = threadBranchFocusId();
+    const activeBranchId = posts.some((post) => post.threadBranchId === requestedBranchId)
+      ? requestedBranchId
+      : "";
     return {
       title: state.boardTitle,
       posts,
       threadRootId: activeRootId,
       threadFocusId: activeFocusId,
+      threadBranchFocusId: activeBranchId,
       threadCount: posts.length,
       newPostIds: newPostIdsForVisit(state.boardPosts),
       nextOlderHref: state.boardNextHref,
@@ -383,6 +437,9 @@ export function installBoardState(ctx) {
     newPostIdsForVisit,
     threadRootId,
     threadFocusId,
+    threadBranchFocusId,
+    threadBranchTone,
+    assignThreadBranches,
     threadPosts,
     resetBoardAccumulator,
     mergeBoardPage,

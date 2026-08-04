@@ -4,6 +4,7 @@ export function canonicalScrollRoute(route, origin = "") {
       || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
     const url = new URL(route, base);
     url.searchParams.delete("bokoun");
+    url.searchParams.delete("branch");
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return route;

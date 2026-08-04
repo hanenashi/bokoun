@@ -1,3 +1,21 @@
+export function isThreadBranchOnlyChange(previousRoute, nextRoute, origin = "") {
+  try {
+    const base = origin
+      || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+    const previous = new URL(previousRoute, base);
+    const next = new URL(nextRoute, base);
+    const previousBranch = previous.searchParams.get("branch") || "";
+    const nextBranch = next.searchParams.get("branch") || "";
+    previous.searchParams.delete("branch");
+    next.searchParams.delete("branch");
+    return previousBranch !== nextBranch
+      && `${previous.pathname}${previous.search}` === `${next.pathname}${next.search}`
+      && previous.searchParams.has("rootId");
+  } catch {
+    return false;
+  }
+}
+
 export function installController(ctx) {
   const {
     VERSION,
@@ -313,6 +331,15 @@ export function installController(ctx) {
     if (state.disabled || state.nativeMode) return;
     const key = routeKey();
     if (key === state.currentRouteKey) return;
+
+    if (isThreadBranchOnlyChange(state.currentRouteKey, key)) {
+      state.currentRouteKey = key;
+      state.currentSignature = "";
+      state.openHeaderPanel = "";
+      state.openPostMenuId = "";
+      scheduleRender({ force: true });
+      return;
+    }
 
     prepareNavigationTransition(key, {
       direction: state.historyTraversalPending ? "back" : "",

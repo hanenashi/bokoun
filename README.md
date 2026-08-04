@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.10.12`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.10.13`).
 
 ## Install the first prototype
 
@@ -88,7 +88,10 @@ Current prototype boundaries:
 - tapping `re: author` opens the whole thread as one newest-to-oldest timeline;
   the clicked post remains visually marked at its natural chronological place,
   with newer posts above and older posts below. Replies to replies stay in the
-  same flat list. Back returns to the normal club and its saved reading position;
+  same flat list. Each top-level reply branch has a subtle stable tint. Tapping
+  a tinted post focuses that branch while retaining the blank space occupied by
+  the others; tapping it again or pressing Back restores the complete thread.
+  Back then returns to the normal club and its saved reading position;
 - Bokoun thread view stays inside Bokoun (it does not activate Kapybara's native
   thread presentation). Thread ordering is fixed to match normal club reading:
   newer posts above older posts, with no separate ordering preference.
@@ -930,7 +933,8 @@ Every functional milestone should cover:
 | Return through B | Same loaded window and reading anchor without reload |
 | Reset to newest | Happens only after an explicit user action |
 | Open reply | Correct target shown |
-| Open `re: author` | Root and replies appear as one chronological thread |
+| Open `re: author` | Root and replies appear as one chronological thread with subtly tinted branches |
+| Tap a tinted branch | Root and that branch remain readable; other posts retain their space but hide their contents |
 | Back from thread | Normal club and saved reading position return |
 | Compose while reading | Board stays scrollable; other posts dim for a reply |
 | Reload or leave while composing | Editor and text reopen in the same place |

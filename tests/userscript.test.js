@@ -11,6 +11,7 @@ import { installSettings } from "../src/settings.js";
 import { canonicalScrollRoute, installShell } from "../src/shell.js";
 import { installWriting } from "../src/writing.js";
 import { installFirstUnread } from "../src/first-unread.js";
+import { isThreadBranchOnlyChange } from "../src/controller.js";
 import {
   inferNavigationDirection,
   installNavigation,
@@ -45,8 +46,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.10\.12/);
-  assert.match(source, /export const VERSION = "0\.10\.12"/);
+  assert.match(source, /@version\s+0\.10\.13/);
+  assert.match(source, /export const VERSION = "0\.10\.13"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -433,7 +434,7 @@ test("stale native-navigation fallbacks cannot reload an older destination", () 
   assert.ok(ownershipIndex < assignIndex);
 });
 
-test("scroll positions ignore the temporary Bokoun mode query", () => {
+test("scroll positions ignore temporary Bokoun mode and thread-branch queries", () => {
   assert.equal(
     canonicalScrollRoute("/fav/activity?bokoun=on"),
     "/fav/activity",
@@ -445,6 +446,10 @@ test("scroll positions ignore the temporary Bokoun mode query", () => {
   assert.equal(
     canonicalScrollRoute("/boards/test?f=older&bokoun=on"),
     "/boards/test?f=older",
+  );
+  assert.equal(
+    canonicalScrollRoute("/boards/test?rootId=42&p=44&branch=43"),
+    "/boards/test?rootId=42&p=44",
   );
 });
 
@@ -1305,6 +1310,65 @@ test("thread view keeps every member in one newest-first timeline", () => {
   assert.doesNotMatch(source, /members\.unshift\(members\.splice/);
 });
 
+test("thread replies inherit a stable tint from their first branch below the root", () => {
+  const board = { state: {} };
+  installBoardState(board);
+  const posts = [
+    { id: "105", parentId: "104", rootId: "100" },
+    { id: "104", parentId: "103", rootId: "100" },
+    { id: "103", parentId: "100", rootId: "100" },
+    { id: "102", parentId: "101", rootId: "100" },
+    { id: "101", parentId: "100", rootId: "100" },
+    { id: "100", parentId: "", rootId: "" },
+  ];
+  const assigned = board.assignThreadBranches(posts, "100");
+  const branchByPost = Object.fromEntries(
+    assigned.map((post) => [post.id, [post.threadBranchId, post.threadBranchTone]]),
+  );
+  assert.deepEqual(branchByPost["100"], ["", -1]);
+  assert.equal(branchByPost["101"][0], "101");
+  assert.deepEqual(branchByPost["102"], branchByPost["101"]);
+  assert.equal(branchByPost["103"][0], "103");
+  assert.deepEqual(branchByPost["104"], branchByPost["103"]);
+  assert.deepEqual(branchByPost["105"], branchByPost["103"]);
+  assert.notEqual(branchByPost["101"][0], branchByPost["103"][0]);
+});
+
+test("thread branch focus is local history state and does not refetch the thread", () => {
+  const origin = "https://kapybara.okoun.cz";
+  assert.equal(
+    isThreadBranchOnlyChange(
+      "/boards/test?rootId=100&p=102",
+      "/boards/test?rootId=100&p=102&branch=101",
+      origin,
+    ),
+    true,
+  );
+  assert.equal(
+    isThreadBranchOnlyChange(
+      "/boards/test?rootId=100&p=102&branch=101",
+      "/boards/test?rootId=100&p=102",
+      origin,
+    ),
+    true,
+  );
+  assert.equal(
+    isThreadBranchOnlyChange(
+      "/boards/test?rootId=100&p=102",
+      "/boards/test?rootId=200&p=202&branch=201",
+      origin,
+    ),
+    false,
+  );
+  assert.match(navigationSource, /history\.pushState\([\s\S]*bokounThreadBranch/);
+  assert.match(navigationSource, /history\.back\(\)/);
+  assert.match(controllerSource, /isThreadBranchOnlyChange\(state\.currentRouteKey, key\)/);
+  assert.match(uiSource, /data-thread-branch=/);
+  assert.match(uiSource, /post--thread-muted/);
+  assert.match(source, /\.post--thread-muted \.post-layout \{[\s\S]*visibility: hidden/);
+  assert.match(source, /url\.searchParams\.delete\("branch"\)/);
+});
+
 test("thread fallback retains the loaded same-club structured model", () => {
   assert.match(controllerSource, /const retainLoadedThread = \(/);
   assert.match(controllerSource, /isThreadRoute[\s\S]*!structured[\s\S]*state\.boardPosts\.length > 0/);
@@ -1394,12 +1458,18 @@ test("hardware Back finalizes a board visit before Favorites render", () => {
   assert.match(source, /boundary >= lastPosted/);
 });
 
-test("club header back arrow always targets Bokoun Favorites", () => {
-  const goBack = source.match(/function goBack\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
+test("club back targets Favorites while thread back first clears branch focus", () => {
+  const goBack = navigationSource.slice(
+    navigationSource.indexOf("function goBack()"),
+    navigationSource.indexOf("async function openThread"),
+  );
   assert.match(goBack, /navigateNative\("\/fav\/activity", \{ direction: "back" \}\)/);
   assert.doesNotMatch(goBack, /history\.back/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
-  assert.match(source, /\[data-action='thread-back'\][\s\S]*else closeThread\(\)/);
+  assert.match(
+    uiSource,
+    /\[data-action='thread-back'\][\s\S]*searchParams\.has\("branch"\)[\s\S]*toggleThreadBranch\(\)[\s\S]*else closeThread\(\)/,
+  );
 });
 
 test("native read sync is visit-boundary only, deduplicated, and unload-safe", () => {

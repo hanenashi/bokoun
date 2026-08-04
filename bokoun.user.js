@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.10.12
+// @version      0.10.13
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -376,6 +376,39 @@
   .post--thread-reply {
     background: #edf4ff;
     box-shadow: inset 3px 0 #8baee8;
+  }
+
+  .post--thread-branch[data-thread-tone="0"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #cf8b42);
+  }
+
+  .post--thread-branch[data-thread-tone="1"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #6ca377);
+  }
+
+  .post--thread-branch[data-thread-tone="2"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #747fbd);
+  }
+
+  .post--thread-branch[data-thread-tone="3"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #a46f9a);
+  }
+
+  .post--thread-branch {
+    background: var(--thread-branch-tint, var(--post-thread, #edf4ff));
+    cursor: pointer;
+  }
+
+  .post--thread-branch-active {
+    box-shadow: inset 3px 0 var(--accent);
+  }
+
+  .post--thread-muted {
+    cursor: default;
+  }
+
+  .post--thread-muted .post-layout {
+    visibility: hidden;
   }
 
   .thread-banner {
@@ -1582,6 +1615,10 @@
     box-shadow: inset 3px 0 var(--link);
   }
 
+  .app[data-interface-preset="compact-reader"] .post--thread-branch {
+    background: var(--thread-branch-tint, var(--post-thread));
+  }
+
   .app[data-interface-preset="compact-reader"] .thread-banner {
     min-height: 30px;
     padding: 6px 12px;
@@ -1855,7 +1892,7 @@
 `;
 
   // src/runtime.js
-  var VERSION = "0.10.12";
+  var VERSION = "0.10.13";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -2049,6 +2086,7 @@
       const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
       const url = new URL(route, base);
       url.searchParams.delete("bokoun");
+      url.searchParams.delete("branch");
       return `${url.pathname}${url.search}${url.hash}`;
     } catch {
       return route;
@@ -3180,6 +3218,7 @@
         url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
       }
       url.searchParams.delete("bokoun");
+      url.searchParams.delete("branch");
       url.hash = "";
       return url;
     }
@@ -3199,7 +3238,10 @@
       return { type, model, fetchedAt: now() };
     }
     function structuredCacheKey(type, pageHref) {
-      return `${type}:${normalizeHref(pageHref)}`;
+      const base = typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz";
+      const url = new URL(pageHref, base);
+      url.searchParams.delete("branch");
+      return `${type}:${normalizeHref(`${url.pathname}${url.search}`)}`;
     }
     function cachedStructuredModel(type, pageHref) {
       const cacheKey = structuredCacheKey(type, pageHref);
@@ -3895,6 +3937,47 @@
         return "";
       }
     }
+    function threadBranchFocusId(pageHref = routeKey()) {
+      try {
+        return new URL(pageHref, location.origin).searchParams.get("branch") || "";
+      } catch {
+        return "";
+      }
+    }
+    function threadBranchTone(branchId) {
+      let hash = 0;
+      for (const character of String(branchId || "")) {
+        hash = hash * 31 + character.charCodeAt(0) >>> 0;
+      }
+      return hash % 4;
+    }
+    function assignThreadBranches(posts, rootId) {
+      if (!rootId) return posts.map((post) => ({ ...post }));
+      const byId = new Map(posts.map((post) => [String(post.id), post]));
+      return posts.map((post) => {
+        if (String(post.id) === String(rootId)) {
+          return { ...post, threadBranchId: "", threadBranchTone: -1 };
+        }
+        let branch = post;
+        const seen = /* @__PURE__ */ new Set();
+        for (let index = 0; index <= posts.length; index += 1) {
+          const branchId2 = String(branch.id || "");
+          const parentId = String(branch.parentId || "");
+          if (!parentId || parentId === String(rootId)) break;
+          if (seen.has(branchId2)) break;
+          seen.add(branchId2);
+          const parent = byId.get(parentId);
+          if (!parent || String(parent.id) === String(rootId)) break;
+          branch = parent;
+        }
+        const branchId = String(branch.id || post.id || "");
+        return {
+          ...post,
+          threadBranchId: branchId,
+          threadBranchTone: threadBranchTone(branchId)
+        };
+      });
+    }
     function threadPosts(posts, rootId) {
       if (!rootId) return [...posts];
       const members = posts.filter((post) => post.id === rootId || post.rootId === rootId).sort((left, right) => {
@@ -3998,12 +4081,18 @@
     function boardViewModel() {
       const activeRootId = threadRootId();
       const activeFocusId = threadFocusId();
-      const posts = threadPosts(state2.boardPosts, activeRootId);
+      const posts = assignThreadBranches(
+        threadPosts(state2.boardPosts, activeRootId),
+        activeRootId
+      );
+      const requestedBranchId = threadBranchFocusId();
+      const activeBranchId = posts.some((post) => post.threadBranchId === requestedBranchId) ? requestedBranchId : "";
       return {
         title: state2.boardTitle,
         posts,
         threadRootId: activeRootId,
         threadFocusId: activeFocusId,
+        threadBranchFocusId: activeBranchId,
         threadCount: posts.length,
         newPostIds: newPostIdsForVisit(state2.boardPosts),
         nextOlderHref: state2.boardNextHref,
@@ -4031,6 +4120,9 @@
       newPostIdsForVisit,
       threadRootId,
       threadFocusId,
+      threadBranchFocusId,
+      threadBranchTone,
+      assignThreadBranches,
       threadPosts,
       resetBoardAccumulator,
       mergeBoardPage,
@@ -5177,6 +5269,7 @@
     const unreadHeat = (...args) => ctx2.unreadHeat(...args);
     const openThread = (...args) => ctx2.openThread(...args);
     const closeThread = (...args) => ctx2.closeThread(...args);
+    const toggleThreadBranch = (...args) => ctx2.toggleThreadBranch(...args);
     const startBoardVisitFromFavorite = (...args) => ctx2.startBoardVisitFromFavorite(...args);
     const requestBokounFullscreen = (...args) => ctx2.requestBokounFullscreen(...args);
     const requestStructuredRefresh = (...args) => ctx2.requestStructuredRefresh(...args);
@@ -5228,7 +5321,8 @@
           state2.writeFeedback.message
         ].join(":") : "",
         model.threadRootId,
-        model.threadFocusId
+        model.threadFocusId,
+        model.threadBranchFocusId
       ].join("|");
     }
     function modeSwitchButton() {
@@ -5791,11 +5885,17 @@
         const replyTarget = replyingTo === post.id;
         const justSent = feedback?.postId === post.id;
         const replyContext = feedback?.replyTo === post.id;
+        const branchFocused = Boolean(board.threadBranchFocusId);
+        const inFocusedBranch = branchFocused && Boolean(post.threadBranchId) && post.threadBranchId === board.threadBranchFocusId;
+        const branchMuted = threadMode && branchFocused && Boolean(post.threadBranchId) && !inFocusedBranch;
         const postClasses = [
           "post",
           display.showAvatars ? `post--avatar-${display.avatarPosition}` : "post--avatar-hidden",
           threadMode && post.id === board.threadFocusId ? "post--thread-focus" : "",
           threadMode && post.id !== board.threadFocusId ? "post--thread-reply" : "",
+          threadMode && post.threadBranchId ? "post--thread-branch" : "",
+          inFocusedBranch ? "post--thread-branch-active" : "",
+          branchMuted ? "post--thread-muted" : "",
           !threadMode && newPostIds.has(post.id) ? "post--visit-new" : "",
           replyTarget ? "post--reply-target" : "",
           justSent ? "post--just-sent" : "",
@@ -5819,6 +5919,9 @@
             class="${postClasses}"
             data-bokoun-post-id="${escapeHtml(post.id)}"
             ${threadMode ? `data-thread-depth="${escapeHtml(post.depth)}"` : ""}
+            ${post.threadBranchId ? `data-thread-branch="${escapeHtml(post.threadBranchId)}"` : ""}
+            ${post.threadBranchId ? `data-thread-tone="${escapeHtml(post.threadBranchTone)}"` : ""}
+            ${post.threadBranchId && !branchMuted ? `tabindex="0" aria-label="${inFocusedBranch ? "Zobrazit celé vlákno" : "Zobrazit pouze tuto větev vlákna"}"` : ""}
           >
             <div class="post-layout">
               ${leftAvatar}
@@ -5980,7 +6083,9 @@
       });
       state2.shadow.querySelector("[data-action='thread-back']")?.addEventListener("click", () => {
         if (state2.openHeaderPanel) setHeaderPanel("");
-        else closeThread();
+        else if (new URL(routeKey(), location.origin).searchParams.has("branch")) {
+          toggleThreadBranch();
+        } else closeThread();
       });
       state2.shadow.querySelector("[data-action='compose']")?.addEventListener("click", () => openComposer("new"));
       state2.shadow.querySelector("[data-action='overflow']")?.addEventListener("click", () => {
@@ -6196,6 +6301,17 @@
             }, 1500);
           }
         });
+      }
+      for (const post of state2.shadow.querySelectorAll("[data-thread-branch]:not(.post--thread-muted)")) {
+        const activate = (event) => {
+          if (event.type === "keydown" && !["Enter", " "].includes(event.key)) return;
+          if (event.target.closest("a, button, input, select, textarea, label")) return;
+          if (event.type === "click" && window.getSelection?.().toString()) return;
+          event.preventDefault();
+          toggleThreadBranch(post.dataset.threadBranch);
+        };
+        post.addEventListener("click", activate);
+        post.addEventListener("keydown", activate);
       }
       for (const link of state2.shadow.querySelectorAll("[data-native-href]")) {
         link.addEventListener("click", (event) => {
@@ -6603,7 +6719,31 @@
       target.searchParams.delete("f");
       target.searchParams.delete("rootId");
       target.searchParams.delete("p");
+      target.searchParams.delete("branch");
       navigateNative(`${target.pathname}${target.search}`, { direction: "back", bokoun: true });
+    }
+    function toggleThreadBranch(branchId = "") {
+      if (routeType() !== "board") return;
+      const target = new URL(routeKey(), location.origin);
+      if (!target.searchParams.has("rootId")) return;
+      const current = target.searchParams.get("branch") || "";
+      const normalized = String(branchId || "");
+      if (current) {
+        if (history.state?.bokounThreadBranch === current) {
+          history.back();
+          return;
+        }
+        target.searchParams.delete("branch");
+        history.replaceState({ ...history.state, bokounThreadBranch: "" }, "", target.href);
+        return;
+      }
+      if (!normalized) return;
+      target.searchParams.set("branch", normalized);
+      history.pushState(
+        { ...history.state, bokounThreadBranch: normalized },
+        "",
+        target.href
+      );
     }
     function captureBokounAnchor() {
       if (!state2.scroller || !state2.shadow) return null;
@@ -6751,6 +6891,7 @@
       goBack,
       openThread,
       closeThread,
+      toggleThreadBranch,
       captureBokounAnchor,
       captureNativeAnchor,
       nativePostById,
@@ -6762,6 +6903,20 @@
   }
 
   // src/controller.js
+  function isThreadBranchOnlyChange(previousRoute, nextRoute, origin = "") {
+    try {
+      const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
+      const previous = new URL(previousRoute, base);
+      const next = new URL(nextRoute, base);
+      const previousBranch = previous.searchParams.get("branch") || "";
+      const nextBranch = next.searchParams.get("branch") || "";
+      previous.searchParams.delete("branch");
+      next.searchParams.delete("branch");
+      return previousBranch !== nextBranch && `${previous.pathname}${previous.search}` === `${next.pathname}${next.search}` && previous.searchParams.has("rootId");
+    } catch {
+      return false;
+    }
+  }
   function installController(ctx2) {
     const {
       VERSION: VERSION2,
@@ -7029,6 +7184,14 @@
       if (state2.disabled || state2.nativeMode) return;
       const key = routeKey();
       if (key === state2.currentRouteKey) return;
+      if (isThreadBranchOnlyChange(state2.currentRouteKey, key)) {
+        state2.currentRouteKey = key;
+        state2.currentSignature = "";
+        state2.openHeaderPanel = "";
+        state2.openPostMenuId = "";
+        scheduleRender({ force: true });
+        return;
+      }
       prepareNavigationTransition(key, {
         direction: state2.historyTraversalPending ? "back" : "",
         sourceHref: state2.currentRouteKey,

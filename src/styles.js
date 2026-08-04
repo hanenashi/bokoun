@@ -306,6 +306,39 @@ export const STYLES = `
     box-shadow: inset 3px 0 #8baee8;
   }
 
+  .post--thread-branch[data-thread-tone="0"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #cf8b42);
+  }
+
+  .post--thread-branch[data-thread-tone="1"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #6ca377);
+  }
+
+  .post--thread-branch[data-thread-tone="2"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #747fbd);
+  }
+
+  .post--thread-branch[data-thread-tone="3"] {
+    --thread-branch-tint: color-mix(in srgb, var(--post-thread, #edf4ff) 91%, #a46f9a);
+  }
+
+  .post--thread-branch {
+    background: var(--thread-branch-tint, var(--post-thread, #edf4ff));
+    cursor: pointer;
+  }
+
+  .post--thread-branch-active {
+    box-shadow: inset 3px 0 var(--accent);
+  }
+
+  .post--thread-muted {
+    cursor: default;
+  }
+
+  .post--thread-muted .post-layout {
+    visibility: hidden;
+  }
+
   .thread-banner {
     position: sticky;
     top: calc(var(--header-height) + env(safe-area-inset-top));
@@ -1508,6 +1541,10 @@ export const STYLES = `
   .app[data-interface-preset="compact-reader"] .post--thread-reply {
     background: var(--post-thread);
     box-shadow: inset 3px 0 var(--link);
+  }
+
+  .app[data-interface-preset="compact-reader"] .post--thread-branch {
+    background: var(--thread-branch-tint, var(--post-thread));
   }
 
   .app[data-interface-preset="compact-reader"] .thread-banner {

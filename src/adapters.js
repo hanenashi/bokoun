@@ -331,6 +331,7 @@ export function installAdapters(ctx) {
       url.pathname = `${url.pathname.replace(/\/$/, "")}/__data.json`;
     }
     url.searchParams.delete("bokoun");
+    url.searchParams.delete("branch");
     url.hash = "";
     return url;
   }
@@ -358,7 +359,12 @@ export function installAdapters(ctx) {
   }
 
   function structuredCacheKey(type, pageHref) {
-    return `${type}:${normalizeHref(pageHref)}`;
+    const base = typeof location !== "undefined"
+      ? location.origin
+      : "https://kapybara.okoun.cz";
+    const url = new URL(pageHref, base);
+    url.searchParams.delete("branch");
+    return `${type}:${normalizeHref(`${url.pathname}${url.search}`)}`;
   }
 
   function cachedStructuredModel(type, pageHref) {
