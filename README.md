@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.9.6`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and an experimental compact-reader skin (`0.9.7`).
 
 ## Install the first prototype
 
@@ -55,7 +55,9 @@ Current prototype boundaries:
   a club was entered. The jump waits for Bokoun's restored scroll position and
   first paint, and manual scrolling cancels it for that visit.
 - Appearance settings now mirror Kapybara's native color names: Tradiční, Světlé,
-  Tmavé and Systémové, with matching light/dark surfaces and accents.
+  Tmavé and Systémové, with matching light/dark surfaces and accents. The
+  Kapybara (automaticky) option follows Kapybara's current native theme; choosing
+  any named scheme is a persistent manual override.
 - refreshing or opening a thread keeps the active visit boundary, while leaving
   the club records its newest seen timestamp and returning combines it with
   Kapybara's latest read marker;

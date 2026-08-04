@@ -572,6 +572,7 @@ export function installUi(ctx) {
       <label class="settings-field settings-field--wide-label">
         <span>Barvy</span>
         <select data-setting="color-scheme" aria-label="Barevný režim">
+          <option value="kapybara" ${display.colorScheme === "kapybara" ? "selected" : ""}>Kapybara (automaticky)</option>
           <option value="traditional" ${display.colorScheme === "traditional" ? "selected" : ""}>Tradiční</option>
           <option value="light" ${display.colorScheme === "light" ? "selected" : ""}>Světlé</option>
           <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavé</option>

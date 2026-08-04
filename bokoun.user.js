@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.6
+// @version      0.9.7
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -4581,7 +4581,7 @@
   // src/settings.js
   var DEFAULT_DISPLAY_SETTINGS = Object.freeze({
     interfacePreset: "default",
-    colorScheme: "system",
+    colorScheme: "kapybara",
     showClubStrip: true,
     pageTransitions: true,
     fullscreenMode: true,
@@ -4636,7 +4636,7 @@
   var AVATAR_SHAPES = /* @__PURE__ */ new Set(["circle", "rounded", "square"]);
   var REPLY_META_MODES = /* @__PURE__ */ new Set(["full", "compact", "hidden"]);
   var INTERFACE_PRESETS = /* @__PURE__ */ new Set(["default", "compact-reader"]);
-  var COLOR_SCHEMES = /* @__PURE__ */ new Set(["traditional", "system", "light", "dark"]);
+  var COLOR_SCHEMES = /* @__PURE__ */ new Set(["kapybara", "traditional", "system", "light", "dark"]);
   var FAVORITE_SORTS = /* @__PURE__ */ new Set(["activity", "alphabetical", "unread", "manual"]);
   var UNREAD_MODES = /* @__PURE__ */ new Set(["count", "heat", "both", "hidden"]);
   var MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -4655,6 +4655,10 @@
       state: state2
     } = ctx2;
     const scheduleRender = (...args) => ctx2.scheduleRender(...args);
+    function nativeColorScheme() {
+      const theme = document.documentElement?.dataset?.theme;
+      return ["traditional", "light", "dark"].includes(theme) ? theme : "system";
+    }
     function loadSettings() {
       if (!state2.displaySettings) {
         const stored = safeStoredObject(gmGet2(DISPLAY_SETTINGS_KEY2, {}));
@@ -4958,7 +4962,7 @@
       const favoriteStack = fontStack(favorites.fontFamily, favorites.customFontFamily);
       scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
       scroller.dataset.interfacePreset = display.interfacePreset;
-      scroller.dataset.colorScheme = display.colorScheme;
+      scroller.dataset.colorScheme = display.colorScheme === "kapybara" ? nativeColorScheme() : display.colorScheme;
       scroller.dataset.clubStrip = display.interfacePreset === "compact-reader" && display.showClubStrip ? "visible" : "hidden";
       scroller.dataset.pageTransitions = display.interfacePreset === "compact-reader" && display.pageTransitions ? "enabled" : "disabled";
       scroller.dataset.avatarPosition = display.avatarPosition;
@@ -4980,6 +4984,17 @@
       ctx2.syncCompareMode?.();
       ctx2.syncFullscreenMode?.();
     }
+    function observeNativeColorScheme() {
+      if (typeof MutationObserver !== "function" || !document.documentElement) return;
+      const observer = new MutationObserver(() => {
+        if (currentDisplaySettings().colorScheme === "kapybara") applyVisualSettings();
+      });
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"]
+      });
+    }
+    observeNativeColorScheme();
     Object.assign(ctx2, {
       fontFamilies: FONT_FAMILIES,
       loadSettings,
@@ -5012,7 +5027,8 @@
       normalizeFavoriteSpacing,
       normalizePostSpacing,
       normalizeCustomFamily,
-      applyVisualSettings
+      applyVisualSettings,
+      nativeColorScheme
     });
   }
 
@@ -5550,6 +5566,7 @@
       <label class="settings-field settings-field--wide-label">
         <span>Barvy</span>
         <select data-setting="color-scheme" aria-label="Barevný režim">
+          <option value="kapybara" ${display.colorScheme === "kapybara" ? "selected" : ""}>Kapybara (automaticky)</option>
           <option value="traditional" ${display.colorScheme === "traditional" ? "selected" : ""}>Tradiční</option>
           <option value="light" ${display.colorScheme === "light" ? "selected" : ""}>Světlé</option>
           <option value="dark" ${display.colorScheme === "dark" ? "selected" : ""}>Tmavé</option>

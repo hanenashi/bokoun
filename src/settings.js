@@ -1,6 +1,6 @@
 const DEFAULT_DISPLAY_SETTINGS = Object.freeze({
   interfacePreset: "default",
-  colorScheme: "system",
+  colorScheme: "kapybara",
   showClubStrip: true,
   pageTransitions: true,
   fullscreenMode: true,
@@ -59,7 +59,7 @@ const AVATAR_POSITIONS = new Set(["inline", "left"]);
 const AVATAR_SHAPES = new Set(["circle", "rounded", "square"]);
 const REPLY_META_MODES = new Set(["full", "compact", "hidden"]);
 const INTERFACE_PRESETS = new Set(["default", "compact-reader"]);
-const COLOR_SCHEMES = new Set(["traditional", "system", "light", "dark"]);
+const COLOR_SCHEMES = new Set(["kapybara", "traditional", "system", "light", "dark"]);
 const FAVORITE_SORTS = new Set(["activity", "alphabetical", "unread", "manual"]);
 const UNREAD_MODES = new Set(["count", "heat", "both", "hidden"]);
 const MAX_CUSTOM_FAMILY_LENGTH = 160;
@@ -79,6 +79,13 @@ export function installSettings(ctx) {
     state,
   } = ctx;
   const scheduleRender = (...args) => ctx.scheduleRender(...args);
+
+  function nativeColorScheme() {
+    const theme = document.documentElement?.dataset?.theme;
+    return ["traditional", "light", "dark"].includes(theme)
+      ? theme
+      : "system";
+  }
 
   function loadSettings() {
     if (!state.displaySettings) {
@@ -455,7 +462,9 @@ export function installSettings(ctx) {
 
     scroller.dataset.avatars = display.showAvatars ? "visible" : "hidden";
     scroller.dataset.interfacePreset = display.interfacePreset;
-    scroller.dataset.colorScheme = display.colorScheme;
+    scroller.dataset.colorScheme = display.colorScheme === "kapybara"
+      ? nativeColorScheme()
+      : display.colorScheme;
     scroller.dataset.clubStrip = (
       display.interfacePreset === "compact-reader" && display.showClubStrip
     ) ? "visible" : "hidden";
@@ -481,6 +490,19 @@ export function installSettings(ctx) {
     ctx.syncCompareMode?.();
     ctx.syncFullscreenMode?.();
   }
+
+  function observeNativeColorScheme() {
+    if (typeof MutationObserver !== "function" || !document.documentElement) return;
+    const observer = new MutationObserver(() => {
+      if (currentDisplaySettings().colorScheme === "kapybara") applyVisualSettings();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
+
+  observeNativeColorScheme();
 
   Object.assign(ctx, {
     fontFamilies: FONT_FAMILIES,
@@ -515,5 +537,6 @@ export function installSettings(ctx) {
     normalizePostSpacing,
     normalizeCustomFamily,
     applyVisualSettings,
+    nativeColorScheme,
   });
 }

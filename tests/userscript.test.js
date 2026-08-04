@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.6/);
+  assert.match(source, /@version\s+0\.9\.7/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -644,7 +644,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
 
   assert.deepEqual(settings.currentDisplaySettings(), {
     interfacePreset: "default",
-    colorScheme: "system",
+    colorScheme: "kapybara",
     showClubStrip: true,
     pageTransitions: true,
     fullscreenMode: true,
@@ -689,7 +689,7 @@ test("post display settings persist avatar layout and safe font controls", () =>
     colorScheme: "sepia",
   });
   assert.equal(stored.get("display").interfacePreset, "default");
-  assert.equal(stored.get("display").colorScheme, "system");
+  assert.equal(stored.get("display").colorScheme, "kapybara");
   for (let index = 0; index < 10; index += 1) {
     settings.rememberRecentClub(`/boards/club-${index}`, `Club ${index}`);
   }
