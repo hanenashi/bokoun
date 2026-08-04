@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.5
+// @version      0.9.6
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1756,6 +1756,25 @@
       --drag-bg: rgba(32, 35, 38, 0.92);
       color-scheme: dark;
     }
+  }
+
+  .app[data-interface-preset="compact-reader"][data-color-scheme="traditional"] {
+    --bg: #dce8fa;
+    --surface: #dce8fa;
+    --surface-raised: #e8f0fc;
+    --text: #000000;
+    --muted: #40516a;
+    --border: #9aaac1;
+    --accent: #8a4f00;
+    --accent-soft: #f3dfbd;
+    --link: #164f91;
+    --post-read: #dce8fa;
+    --post-new: #ffffff;
+    --post-reply: #eef4fd;
+    --post-thread: #d1e0f5;
+    --code-bg: #d2e0f4;
+    --header-bg: rgba(232, 240, 252, 0.98);
+    color-scheme: light;
   }
 
 `;
