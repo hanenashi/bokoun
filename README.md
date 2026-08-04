@@ -808,6 +808,16 @@ re-enable the mode explicitly. Disabling Bokoun or opening full Kapybara exits
 fullscreen owned by Bokoun; manual browser exit is respected for the rest of
 the current document. Unsupported or denied fullscreen requests fail silently.
 
+Native document fullscreen has an important mobile-browser limitation: Kiwi
+and Firefox may lock page-level pinch zoom while `document.documentElement` is
+fullscreen. Bokoun explicitly permits `pan-x pan-y pinch-zoom` and keeps the
+normal viewport metadata zoomable, but CSS cannot override that browser-level
+fullscreen restriction. This is why pinch zoom can work before entering
+**Celá obrazovka** and stop while it is active. Bokoun keeps native fullscreen
+for its immersive layout; restoring browser pinch behavior would require
+either a CSS-only edge-to-edge mode (with browser chrome still visible) or a
+separate custom two-finger reader scaling implementation.
+
 Version `0.8.5` replaces the lateral wipe/slide language with a softer
 blur-and-fade transition. Existing content blurs out briefly before navigation;
 the destination waits until it is loaded and its scroll position is restored,
