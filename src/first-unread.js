@@ -38,10 +38,21 @@ export function installFirstUnread(ctx) {
     )));
   }
 
-  function firstUnreadElement(ids) {
+  function firstUnreadElement(ids, posts = []) {
     const wanted = new Set(ids.map(String));
-    return [...state.scroller.querySelectorAll("[data-bokoun-post-id]")]
-      .find((element) => wanted.has(element.dataset.bokounPostId));
+    const orderedIds = posts
+      .filter((post) => wanted.has(String(post.id)))
+      .sort((left, right) => (
+        (Date.parse(left.datetime) || 0) - (Date.parse(right.datetime) || 0)
+        || (Number(left.sequence) || 0) - (Number(right.sequence) || 0)
+        || String(left.id).localeCompare(String(right.id), undefined, { numeric: true })
+      ))
+      .map((post) => String(post.id));
+    const candidates = orderedIds.length ? orderedIds : [...wanted];
+    const elements = [...state.scroller.querySelectorAll("[data-bokoun-post-id]")];
+    return candidates
+      .map((id) => elements.find((element) => element.dataset.bokounPostId === id))
+      .find(Boolean);
   }
 
   function scrollToFirstUnread(target) {
@@ -88,7 +99,7 @@ export function installFirstUnread(ctx) {
           || state.nativeMode
           || cancelledRoute === key
         ) return;
-        const target = firstUnreadElement(model.newPostIds);
+        const target = firstUnreadElement(model.newPostIds, model.posts);
         if (!target) return;
         scrollToFirstUnread(target);
         handledRoute = key;

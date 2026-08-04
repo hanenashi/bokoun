@@ -727,10 +727,14 @@ test("first unread navigation is one-shot, paint-safe, and route scoped", async 
     dataset: { bokounPostId: "unread-2" },
     getBoundingClientRect: () => ({ top: 420 }),
   };
+  const oldestTarget = {
+    dataset: { bokounPostId: "unread-1" },
+    getBoundingClientRect: () => ({ top: 220 }),
+  };
   const scroller = {
     scrollTop: 100,
     addEventListener(type, callback) { listeners.set(type, callback); },
-    querySelectorAll: () => [target],
+    querySelectorAll: () => [target, oldestTarget],
     getBoundingClientRect: () => ({ top: 0 }),
     scrollTo({ top }) { this.scrollTop = top; },
   };
@@ -748,15 +752,27 @@ test("first unread navigation is one-shot, paint-safe, and route scoped", async 
   };
   installFirstUnread(ctx);
   ctx.maybeScrollFirstUnread({
-    model: { newPostIds: ["unread-2"] },
+    model: {
+      newPostIds: ["unread-2", "unread-1"],
+      posts: [
+        { id: "unread-2", datetime: "2026-08-04T12:00:00Z", sequence: 2 },
+        { id: "unread-1", datetime: "2026-08-04T11:00:00Z", sequence: 1 },
+      ],
+    },
     key: "/boards/test",
     restorePromise: Promise.resolve(),
   });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(scroller.scrollTop, 462);
+  assert.equal(scroller.scrollTop, 262);
   scroller.scrollTop = 900;
   ctx.maybeScrollFirstUnread({
-    model: { newPostIds: ["unread-2"] },
+    model: {
+      newPostIds: ["unread-2", "unread-1"],
+      posts: [
+        { id: "unread-2", datetime: "2026-08-04T12:00:00Z", sequence: 2 },
+        { id: "unread-1", datetime: "2026-08-04T11:00:00Z", sequence: 1 },
+      ],
+    },
     key: "/boards/test",
     restorePromise: Promise.resolve(),
   });

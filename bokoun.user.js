@@ -4424,9 +4424,12 @@
     function nextPaint() {
       return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
-    function firstUnreadElement(ids) {
+    function firstUnreadElement(ids, posts = []) {
       const wanted = new Set(ids.map(String));
-      return [...state2.scroller.querySelectorAll("[data-bokoun-post-id]")].find((element) => wanted.has(element.dataset.bokounPostId));
+      const orderedIds = posts.filter((post) => wanted.has(String(post.id))).sort((left, right) => (Date.parse(left.datetime) || 0) - (Date.parse(right.datetime) || 0) || (Number(left.sequence) || 0) - (Number(right.sequence) || 0) || String(left.id).localeCompare(String(right.id), void 0, { numeric: true })).map((post) => String(post.id));
+      const candidates = orderedIds.length ? orderedIds : [...wanted];
+      const elements = [...state2.scroller.querySelectorAll("[data-bokoun-post-id]")];
+      return candidates.map((id) => elements.find((element) => element.dataset.bokounPostId === id)).find(Boolean);
     }
     function scrollToFirstUnread(target) {
       const scrollerRect = state2.scroller.getBoundingClientRect();
@@ -4454,7 +4457,7 @@
       const token = ++generation;
       Promise.resolve(restorePromise).then(nextPaint).then(() => {
         if (token !== generation || state2.currentRouteKey !== key || state2.disabled || state2.nativeMode || cancelledRoute === key) return;
-        const target = firstUnreadElement(model.newPostIds);
+        const target = firstUnreadElement(model.newPostIds, model.posts);
         if (!target) return;
         scrollToFirstUnread(target);
         handledRoute = key;
