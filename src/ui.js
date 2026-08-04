@@ -109,6 +109,20 @@ export function installUi(ctx) {
     `;
   }
 
+  function fullscreenButton() {
+    const active = Boolean(document.fullscreenElement);
+    return `
+      <button
+        class="icon-button fullscreen-toggle"
+        type="button"
+        data-action="fullscreen-toggle"
+        aria-label="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
+        aria-pressed="${active ? "true" : "false"}"
+        title="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
+      ><span aria-hidden="true">⛶</span></button>
+    `;
+  }
+
   function clubStripMarkup(currentTitle = "") {
     const display = currentDisplaySettings();
     if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
@@ -206,8 +220,9 @@ export function installUi(ctx) {
     return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
-        ${overflowControlMarkup("favorites")}
         ${modeSwitchButton()}
+        ${fullscreenButton()}
+        ${overflowControlMarkup("favorites")}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -789,8 +804,9 @@ export function installUi(ctx) {
         >${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
-        ${overflowControlMarkup("board")}
         ${modeSwitchButton()}
+        ${fullscreenButton()}
+        ${overflowControlMarkup("board")}
       </header>
       ${clubStripMarkup(board.title)}
       <div class="route-content">
@@ -865,6 +881,14 @@ export function installUi(ctx) {
 
   function attachUiEvents() {
     state.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
+    state.shadow.querySelector("[data-action='fullscreen-toggle']")?.addEventListener("click", async () => {
+      if (document.fullscreenElement) {
+        if (state.fullscreenOwned) await ctx.exitBokounFullscreen({ suppress: true });
+        else await document.exitFullscreen?.();
+        return;
+      }
+      await requestBokounFullscreen({ force: true });
+    });
     state.shadow.querySelector("[data-action='full']")?.addEventListener("click", () => {
       setHeaderPanel("");
       void openFullKapybara();
@@ -1207,6 +1231,7 @@ export function installUi(ctx) {
     escapeHtml,
     signatureFor,
     modeSwitchButton,
+    fullscreenButton,
     favoritesMarkup,
     clubStripMarkup,
     overflowControlMarkup,

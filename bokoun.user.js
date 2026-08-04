@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.9.8
+// @version      0.9.9
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -130,13 +130,13 @@
   }
 
   .topbar--board {
-    grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px 44px;
     padding-left: 4px;
     padding-right: 0;
   }
 
   .topbar--favorites {
-    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    grid-template-columns: minmax(0, 1fr) 44px 44px 44px;
     padding-right: 0;
   }
 
@@ -1208,7 +1208,7 @@
     }
 
     .topbar--board {
-      grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
+      grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px 40px;
     }
 
     .topbar--board .title {
@@ -1389,13 +1389,13 @@
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--board {
-    grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px 40px;
     padding-left: 2px;
     padding-right: 0;
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
-    grid-template-columns: minmax(0, 1fr) 40px 40px;
+    grid-template-columns: minmax(0, 1fr) 40px 40px 40px;
     padding-left: 12px;
     padding-right: 0;
   }
@@ -2134,7 +2134,7 @@
     }
     function fullscreenGestureAllowed(event) {
       if (!event?.isTrusted || !state2.active || state2.nativeMode) return false;
-      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='mode-switch']") || node.matches("[data-action='overflow']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-setting='fullscreen-mode']")));
+      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='mode-switch']") || node.matches("[data-action='overflow']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-action='fullscreen-toggle']") || node.matches("[data-setting='fullscreen-mode']")));
     }
     async function requestBokounFullscreen({ force = false } = {}) {
       if (!fullscreenEnabled() || !state2.active || state2.nativeMode || state2.fullscreenRequestPending) return false;
@@ -2188,6 +2188,7 @@
     }
     function handleFullscreenGesture(event) {
       if (!fullscreenEnabled() || !fullscreenGestureAllowed(event)) return;
+      state2.fullscreenSuppressed = false;
       void requestBokounFullscreen();
     }
     function syncFullscreenMode() {
@@ -5140,6 +5141,19 @@
       </button>
     `;
     }
+    function fullscreenButton() {
+      const active = Boolean(document.fullscreenElement);
+      return `
+      <button
+        class="icon-button fullscreen-toggle"
+        type="button"
+        data-action="fullscreen-toggle"
+        aria-label="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
+        aria-pressed="${active ? "true" : "false"}"
+        title="${active ? "Opustit celou obrazovku" : "Celá obrazovka"}"
+      ><span aria-hidden="true">⛶</span></button>
+    `;
+    }
     function clubStripMarkup(currentTitle = "") {
       const display = currentDisplaySettings();
       if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
@@ -5224,8 +5238,9 @@
       return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
-        ${overflowControlMarkup("favorites")}
         ${modeSwitchButton()}
+        ${fullscreenButton()}
+        ${overflowControlMarkup("favorites")}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -5755,8 +5770,9 @@
         >${ICONS2.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS2.write}</button>
-        ${overflowControlMarkup("board")}
         ${modeSwitchButton()}
+        ${fullscreenButton()}
+        ${overflowControlMarkup("board")}
       </header>
       ${clubStripMarkup(board.title)}
       <div class="route-content">
@@ -5822,6 +5838,14 @@
     }
     function attachUiEvents() {
       state2.shadow.querySelector("[data-action='mode-switch']")?.addEventListener("click", openFullKapybara);
+      state2.shadow.querySelector("[data-action='fullscreen-toggle']")?.addEventListener("click", async () => {
+        if (document.fullscreenElement) {
+          if (state2.fullscreenOwned) await ctx2.exitBokounFullscreen({ suppress: true });
+          else await document.exitFullscreen?.();
+          return;
+        }
+        await requestBokounFullscreen({ force: true });
+      });
       state2.shadow.querySelector("[data-action='full']")?.addEventListener("click", () => {
         setHeaderPanel("");
         void openFullKapybara();
@@ -6140,6 +6164,7 @@
       escapeHtml,
       signatureFor,
       modeSwitchButton,
+      fullscreenButton,
       favoritesMarkup,
       clubStripMarkup,
       overflowControlMarkup,

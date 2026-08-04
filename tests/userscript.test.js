@@ -44,7 +44,7 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.9\.8/);
+  assert.match(source, /@version\s+0\.9\.9/);
   assert.match(
     source,
     /@icon\s+https:\/\/github\.com\/hanenashi\/bokoun\/raw\/refs\/heads\/main\/assets\/bokoun\.ico/,
@@ -952,8 +952,8 @@ test("compact reader club strip is optional, bounded, and request-free", () => {
 });
 
 test("compact headers keep the mode switch visible and use contextual overflow menus", () => {
-  assert.match(uiSource, /class="topbar topbar--favorites"[\s\S]*\$\{overflowControlMarkup\("favorites"\)\}[\s\S]*\$\{modeSwitchButton\(\)\}/);
-  assert.match(uiSource, /class="topbar topbar--board"[\s\S]*data-action="compose"[\s\S]*\$\{overflowControlMarkup\("board"\)\}[\s\S]*\$\{modeSwitchButton\(\)\}/);
+  assert.match(uiSource, /class="topbar topbar--favorites"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{fullscreenButton\(\)\}[\s\S]*\$\{overflowControlMarkup\("favorites"\)\}/);
+  assert.match(uiSource, /class="topbar topbar--board"[\s\S]*data-action="compose"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{fullscreenButton\(\)\}[\s\S]*\$\{overflowControlMarkup\("board"\)\}/);
   assert.match(uiSource, /data-action="mode-switch"/);
   assert.match(uiSource, /aria-label="Přepnout do plné Kapybary"/);
   assert.doesNotMatch(uiSource, /class="font-toggle"/);
@@ -1040,6 +1040,7 @@ test("compact reader route transitions classify routes and use bounded blur moti
 
 test("fullscreen mode defaults on, requires a safe gesture, and remains escapable", () => {
   assert.match(source, /data-setting="fullscreen-mode"/);
+  assert.match(source, /data-action="fullscreen-toggle"/);
   assert.match(source, /Celá obrazovka/);
   assert.match(source, /request\.call\(document\.documentElement\)/);
   assert.match(source, /await document\.exitFullscreen\(\)/);

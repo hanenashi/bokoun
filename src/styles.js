@@ -58,13 +58,13 @@ export const STYLES = `
   }
 
   .topbar--board {
-    grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px 44px 44px 44px;
     padding-left: 4px;
     padding-right: 0;
   }
 
   .topbar--favorites {
-    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    grid-template-columns: minmax(0, 1fr) 44px 44px 44px;
     padding-right: 0;
   }
 
@@ -1136,7 +1136,7 @@ export const STYLES = `
     }
 
     .topbar--board {
-      grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
+      grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px 40px;
     }
 
     .topbar--board .title {
@@ -1317,13 +1317,13 @@ export const STYLES = `
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--board {
-    grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px 40px 40px 40px;
     padding-left: 2px;
     padding-right: 0;
   }
 
   .app[data-interface-preset="compact-reader"] .topbar--favorites {
-    grid-template-columns: minmax(0, 1fr) 40px 40px;
+    grid-template-columns: minmax(0, 1fr) 40px 40px 40px;
     padding-left: 12px;
     padding-right: 0;
   }

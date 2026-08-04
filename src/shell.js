@@ -188,6 +188,7 @@ export function installShell(ctx) {
         || node.matches("[data-action='back']")
         || node.matches("[data-action='thread-back']")
         || node.matches("[data-action='thread']")
+        || node.matches("[data-action='fullscreen-toggle']")
         || node.matches("[data-setting='fullscreen-mode']")
       )
     ));
@@ -257,6 +258,10 @@ export function installShell(ctx) {
 
   function handleFullscreenGesture(event) {
     if (!fullscreenEnabled() || !fullscreenGestureAllowed(event)) return;
+    // A failed request can be retried on the next safe Bokoun gesture. Browsers
+    // only grant fullscreen from a live user activation, so this is deliberately
+    // event-driven rather than timer-based.
+    state.fullscreenSuppressed = false;
     void requestBokounFullscreen();
   }
 
