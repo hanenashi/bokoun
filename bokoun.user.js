@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.12.0
+// @version      0.12.1
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -39,7 +39,6 @@
     HOST_ID: () => HOST_ID,
     ICONS: () => ICONS,
     LIST_RETURN_KEY: () => LIST_RETURN_KEY,
-    MOBILE_QUERY: () => MOBILE_QUERY,
     NAVIGATION_INTENT_KEY: () => NAVIGATION_INTENT_KEY,
     OLDER_TRIGGER_PX: () => OLDER_TRIGGER_PX,
     PAGE_LOAD_TIMEOUT_MS: () => PAGE_LOAD_TIMEOUT_MS,
@@ -1898,7 +1897,7 @@ ${COMPACT_READER_STYLES}
 `;
 
   // src/runtime.js
-  var VERSION = "0.12.0";
+  var VERSION = "0.12.1";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1922,7 +1921,6 @@ ${COMPACT_READER_STYLES}
   var READ_SYNC_MIN_INTERVAL_MS = 5e3;
   var READ_SYNC_BACKOFF_BASE_MS = 15e3;
   var READ_SYNC_BACKOFF_MAX_MS = 15 * 6e4;
-  var MOBILE_QUERY = "(max-width: 760px)";
   var SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
   var BOARD_VISIT_KEY = "bokoun.board-visit.v1";
   var BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1";
@@ -2096,7 +2094,6 @@ ${COMPACT_READER_STYLES}
       HOST_ID: HOST_ID2,
       RETURN_HOST_ID: RETURN_HOST_ID2,
       COMPARE_HOST_ID: COMPARE_HOST_ID2,
-      MOBILE_QUERY: MOBILE_QUERY2,
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       PREF_ENABLED_KEY: PREF_ENABLED_KEY2,
       SELECTORS: SELECTORS2,
@@ -2129,12 +2126,10 @@ ${COMPACT_READER_STYLES}
     }
     function isMobileEligible() {
       const params = new URLSearchParams(location.search);
-      if (params.get("bokoun") === "on") return true;
-      if (params.get("bokoun") === "off") return false;
-      return matchMedia(MOBILE_QUERY2).matches;
+      return params.get("bokoun") !== "off";
     }
     function shouldBoot() {
-      return Boolean(gmGet2(PREF_ENABLED_KEY2, true)) && sessionStorage.getItem(SESSION_DISABLED_KEY2) !== "1" && isMobileEligible() && routeType() !== "unsupported";
+      return Boolean(gmGet2(PREF_ENABLED_KEY2, true)) && isMobileEligible() && routeType() !== "unsupported";
     }
     function installGlobalStyle() {
       if (document.getElementById("bokoun-global-style")) return;
@@ -2223,6 +2218,7 @@ ${COMPACT_READER_STYLES}
       document.documentElement.append(style);
     }
     function startPaintGuard() {
+      sessionStorage.removeItem(SESSION_DISABLED_KEY2);
       if (shouldBoot()) {
         installGlobalStyle();
         document.documentElement.dataset.bokounBooting = "true";
@@ -2520,7 +2516,6 @@ ${COMPACT_READER_STYLES}
       if (state2.nativeMode || state2.visualIntent === "native-transition") return false;
       const generation = beginVisualTransition("native-transition");
       const anchor = captureBokounAnchor();
-      sessionStorage.setItem(SESSION_DISABLED_KEY2, "1");
       state2.nativeMode = true;
       state2.revealRunning = true;
       removeCompareHandle();
@@ -2599,11 +2594,7 @@ ${COMPACT_READER_STYLES}
       revealNative({ stop: true });
     }
     function registerMenus() {
-      if (sessionStorage.getItem(SESSION_DISABLED_KEY2) === "1") {
-        gmMenu2("Bokoun: zapnout v tomto panelu", returnToBokoun);
-      } else {
-        gmMenu2("Bokoun: otevřít plnou Kapybaru", openFullKapybara);
-      }
+      gmMenu2("Bokoun: otevřít plnou Kapybaru", openFullKapybara);
       gmMenu2(
         gmGet2(PREF_ENABLED_KEY2, true) ? "Bokoun: vypnout trvale" : "Bokoun: zapnout trvale",
         gmGet2(PREF_ENABLED_KEY2, true) ? disableBokoun : () => {
@@ -6642,6 +6633,8 @@ ${COMPACT_READER_STYLES}
     const setLayered = (...args) => ctx2.setLayered(...args);
     const setHostReveal = (...args) => ctx2.setHostReveal(...args);
     const revealBokoun = (...args) => ctx2.revealBokoun(...args);
+    const revealNative = (...args) => ctx2.revealNative(...args);
+    const showReturnControl = (...args) => ctx2.showReturnControl(...args);
     const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
     const prefersReducedMotion = (...args) => ctx2.prefersReducedMotion(...args);
     function transitionsEnabled() {
@@ -7025,21 +7018,33 @@ ${COMPACT_READER_STYLES}
       if (!state2.nativeMode || state2.visualIntent === "bokoun-transition") return false;
       const anchor = captureNativeAnchor();
       sessionStorage.removeItem(SESSION_DISABLED_KEY2);
+      if (!isMobileEligible() || routeType() === "unsupported") return false;
       document.getElementById(RETURN_HOST_ID2)?.remove();
       state2.nativeMode = false;
       state2.disabled = false;
       state2.visualIntent = "bokoun-transition";
-      if (!isMobileEligible() || routeType() === "unsupported") return false;
-      await waitForBody();
-      setLayered("transition", true);
-      mountShell();
-      setHostReveal(0);
-      state2.currentRouteKey = routeKey();
-      observeNative();
-      render({ force: true });
-      restoreBokounAnchor(anchor);
-      await revealBokoun();
-      return true;
+      try {
+        await waitForBody();
+        setLayered("transition", true);
+        mountShell();
+        setHostReveal(0);
+        state2.currentRouteKey = routeKey();
+        observeNative();
+        render({ force: true });
+        restoreBokounAnchor(anchor);
+        if (!await revealBokoun()) throw new Error("Bokoun reveal was superseded");
+        return true;
+      } catch (error) {
+        state2.nativeMode = true;
+        state2.visualIntent = "native";
+        revealNative({ reason: "return-failed" });
+        showReturnControl();
+        console.warn(
+          `[Bokoun ${ctx2.VERSION}] Could not return from full Kapybara; the switch remains available.`,
+          error?.name || "Error"
+        );
+        return false;
+      }
     }
     Object.assign(ctx2, {
       navigateNative,
@@ -7086,7 +7091,6 @@ ${COMPACT_READER_STYLES}
       ROUTE_DATA_FALLBACK_MS: ROUTE_DATA_FALLBACK_MS2,
       STRUCTURED_RESUME_MS: STRUCTURED_RESUME_MS2,
       FAVORITES_REFRESH_MS: FAVORITES_REFRESH_MS2 = 6e4,
-      SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       SELECTORS: SELECTORS2,
       state: state2
     } = ctx2;
@@ -7097,7 +7101,6 @@ ${COMPACT_READER_STYLES}
     const waitForBody = (...args) => ctx2.waitForBody(...args);
     const mountShell = (...args) => ctx2.mountShell(...args);
     const revealNative = (...args) => ctx2.revealNative(...args);
-    const showReturnControl = (...args) => ctx2.showReturnControl(...args);
     const registerMenus = (...args) => ctx2.registerMenus(...args);
     const saveScroll = (...args) => ctx2.saveScroll(...args);
     const restoreScroll = (...args) => ctx2.restoreScroll(...args);
@@ -7555,16 +7558,11 @@ ${COMPACT_READER_STYLES}
       registerMenus();
       if (!shouldBoot()) {
         delete document.documentElement.dataset.bokounBooting;
-        if (sessionStorage.getItem(SESSION_DISABLED_KEY2) === "1") {
-          await waitForBody();
-          showReturnControl();
-        }
         return;
       }
       await waitForBody();
       if (!shouldBoot()) {
         delete document.documentElement.dataset.bokounBooting;
-        if (sessionStorage.getItem(SESSION_DISABLED_KEY2) === "1") showReturnControl();
         return;
       }
       state2.revealPending = true;

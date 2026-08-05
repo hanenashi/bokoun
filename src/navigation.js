@@ -98,6 +98,8 @@ export function installNavigation(ctx) {
   const setLayered = (...args) => ctx.setLayered(...args);
   const setHostReveal = (...args) => ctx.setHostReveal(...args);
   const revealBokoun = (...args) => ctx.revealBokoun(...args);
+  const revealNative = (...args) => ctx.revealNative(...args);
+  const showReturnControl = (...args) => ctx.showReturnControl(...args);
   const currentDisplaySettings = (...args) => ctx.currentDisplaySettings(...args);
   const prefersReducedMotion = (...args) => ctx.prefersReducedMotion(...args);
 
@@ -546,22 +548,34 @@ export function installNavigation(ctx) {
     if (!state.nativeMode || state.visualIntent === "bokoun-transition") return false;
     const anchor = captureNativeAnchor();
     sessionStorage.removeItem(SESSION_DISABLED_KEY);
+    if (!isMobileEligible() || routeType() === "unsupported") return false;
     document.getElementById(RETURN_HOST_ID)?.remove();
     state.nativeMode = false;
     state.disabled = false;
     state.visualIntent = "bokoun-transition";
 
-    if (!isMobileEligible() || routeType() === "unsupported") return false;
-    await waitForBody();
-    setLayered("transition", true);
-    mountShell();
-    setHostReveal(0);
-    state.currentRouteKey = routeKey();
-    observeNative();
-    render({ force: true });
-    restoreBokounAnchor(anchor);
-    await revealBokoun();
-    return true;
+    try {
+      await waitForBody();
+      setLayered("transition", true);
+      mountShell();
+      setHostReveal(0);
+      state.currentRouteKey = routeKey();
+      observeNative();
+      render({ force: true });
+      restoreBokounAnchor(anchor);
+      if (!await revealBokoun()) throw new Error("Bokoun reveal was superseded");
+      return true;
+    } catch (error) {
+      state.nativeMode = true;
+      state.visualIntent = "native";
+      revealNative({ reason: "return-failed" });
+      showReturnControl();
+      console.warn(
+        `[Bokoun ${ctx.VERSION}] Could not return from full Kapybara; the switch remains available.`,
+        error?.name || "Error",
+      );
+      return false;
+    }
   }
 
   Object.assign(ctx, {

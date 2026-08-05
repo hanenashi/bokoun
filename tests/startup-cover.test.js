@@ -104,10 +104,15 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       return;
     }
 
-    for (const colorScheme of ["light", "dark"]) {
+    const scenarios = [
+      { name: "mobile-light", colorScheme: "light", viewport: { width: 390, height: 844 } },
+      { name: "mobile-dark", colorScheme: "dark", viewport: { width: 390, height: 844 } },
+      { name: "desktop-light", colorScheme: "light", viewport: { width: 1280, height: 900 } },
+    ];
+    for (const scenario of scenarios) {
       const context = await browser.newContext({
-        colorScheme,
-        viewport: { width: 390, height: 844 },
+        colorScheme: scenario.colorScheme,
+        viewport: scenario.viewport,
       });
       const page = await context.newPage();
       const runtimeErrors = [];
@@ -116,7 +121,8 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
         if (message.type() === "error") runtimeErrors.push(message.text());
       });
       await page.addInitScript({
-        content: `localStorage.setItem(
+        content: `sessionStorage.setItem("bokoun.disabled-for-tab.v1", "1");
+          localStorage.setItem(
           "bokoun.gm.bokoun.display.v1",
           JSON.stringify({ interfacePreset: "compact-reader", pageTransitions: true })
         );\n${userscript}`,
@@ -143,7 +149,7 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       assert.deepEqual(startup.coverInset, ["0px", "0px", "0px", "0px"]);
       assert.equal(
         startup.coverBackground,
-        colorScheme === "dark" ? "rgb(23, 25, 27)" : "rgb(244, 242, 238)",
+        scenario.colorScheme === "dark" ? "rgb(23, 25, 27)" : "rgb(244, 242, 238)",
       );
       assert.equal(startup.spinnerVisibility, "hidden");
       assert.equal(startup.hostConnected, true);
@@ -177,8 +183,46 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       assert.notEqual(ready.background, "rgba(0, 0, 0, 0)");
       assert.equal(ready.clipPath, "inset(0px 0% 0px 0px)");
       assert.equal(ready.nativeSpinnerDisplay, "none");
+      assert.equal(
+        await page.evaluate(() => sessionStorage.getItem("bokoun.disabled-for-tab.v1")),
+        null,
+      );
+      if (scenario.name === "desktop-light" && process.env.BOKOUN_QA_SCREENSHOT) {
+        const desktopScreenshot = process.env.BOKOUN_QA_SCREENSHOT.replace(
+          /(\.[^.]+)?$/,
+          "-desktop$1",
+        );
+        await page.screenshot({ path: desktopScreenshot, fullPage: false });
+      }
 
-      if (colorScheme === "light") {
+      if (scenario.name === "mobile-light") {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          await page.locator("#bokoun-host [data-action='mode-switch']").click();
+          await page.waitForFunction(() => (
+            !document.getElementById("bokoun-host")
+            && document.getElementById("bokoun-return")?.shadowRoot?.querySelector("button")
+          ));
+          assert.equal(
+            await page.evaluate(() => sessionStorage.getItem("bokoun.disabled-for-tab.v1")),
+            null,
+          );
+          await page.locator("#bokoun-return button").click();
+          await page.waitForFunction(() => (
+            document.documentElement.dataset.bokounActive === "true"
+            && document.getElementById("bokoun-host")?.shadowRoot?.querySelector(".favorites")
+          ));
+        }
+
+        await page.locator("#bokoun-host [data-action='mode-switch']").click();
+        await page.waitForFunction(() => document.getElementById("bokoun-return"));
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => (
+          document.documentElement.dataset.bokounBooting !== "true"
+          && document.documentElement.dataset.bokounActive === "true"
+          && document.getElementById("bokoun-host")?.shadowRoot?.querySelector(".favorites")
+        ));
+        assert.equal(await page.locator("#bokoun-return").count(), 0);
+
         const fullscreenSupported = await page.evaluate(() => (
           typeof document.documentElement.requestFullscreen === "function"
         ));
@@ -328,7 +372,7 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
     }
     assert.equal(
       structuredRequests,
-      6,
+      8,
       "each explicit list/board navigation performs only its destination structured read",
     );
   } finally {

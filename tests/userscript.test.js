@@ -61,8 +61,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.12\.0/);
-  assert.match(source, /export const VERSION = "0\.12\.0"/);
+  assert.match(source, /@version\s+0\.12\.1/);
+  assert.match(source, /export const VERSION = "0\.12\.1"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -159,6 +159,18 @@ test("temporary full mode always provides a visible route back to Bokoun", () =>
   assert.match(source, /state\.nativeMode = false/);
   assert.match(shellSource, /if \(!document\.body \|\| document\.getElementById\(RETURN_HOST_ID\)\) return/);
   assert.match(shellSource, /document\.getElementById\(RETURN_HOST_ID\)\?\.remove\(\)/);
+  const openFull = shellSource.slice(
+    shellSource.indexOf("async function openFullKapybara"),
+    shellSource.indexOf("function showReturnControl"),
+  );
+  const returnToBokoun = navigationSource.slice(
+    navigationSource.indexOf("async function returnToBokoun"),
+    navigationSource.indexOf("Object.assign(ctx"),
+  );
+  assert.doesNotMatch(openFull, /sessionStorage\.setItem/);
+  assert.match(shellSource, /sessionStorage\.removeItem\(SESSION_DISABLED_KEY\)[\s\S]*if \(shouldBoot\(\)\)/);
+  assert.match(returnToBokoun, /catch \(error\)[\s\S]*state\.nativeMode = true/);
+  assert.match(returnToBokoun, /revealNative\(\{ reason: "return-failed" \}\)[\s\S]*showReturnControl\(\)/);
 });
 
 test("visual generations prevent stale and cancelled host reveals from reopening a hole", async () => {
@@ -521,6 +533,39 @@ test("forced desktop mode follows Bokoun-owned supported navigation", () => {
     ).href,
     `${origin}/boards/test?bokoun=off`,
   );
+});
+
+test("supported routes default to Bokoun at every viewport", () => {
+  const originals = new Map();
+  const replaceGlobal = (key, value) => {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  };
+  const fakeLocation = { pathname: "/fav/activity", search: "" };
+  replaceGlobal("location", fakeLocation);
+  replaceGlobal("sessionStorage", { getItem: () => "1", removeItem: () => undefined });
+  replaceGlobal("matchMedia", () => {
+    throw new Error("viewport eligibility must not query media state");
+  });
+  try {
+    const shell = {
+      PREF_ENABLED_KEY: "enabled",
+      SESSION_DISABLED_KEY: "legacy-native",
+      state: {},
+      gmGet: () => true,
+    };
+    installShell(shell);
+    assert.equal(shell.isMobileEligible(), true);
+    assert.equal(shell.shouldBoot(), true, "a stale temporary-native flag must not block reload");
+    fakeLocation.search = "?bokoun=off";
+    assert.equal(shell.isMobileEligible(), false);
+    assert.equal(shell.shouldBoot(), false);
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
 });
 
 test("favorite anchors ignore temporary Bokoun mode queries", () => {

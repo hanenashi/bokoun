@@ -24,7 +24,6 @@ export function installController(ctx) {
     ROUTE_DATA_FALLBACK_MS,
     STRUCTURED_RESUME_MS,
     FAVORITES_REFRESH_MS = 60_000,
-    SESSION_DISABLED_KEY,
     SELECTORS,
     state,
   } = ctx;
@@ -35,7 +34,6 @@ export function installController(ctx) {
   const waitForBody = (...args) => ctx.waitForBody(...args);
   const mountShell = (...args) => ctx.mountShell(...args);
   const revealNative = (...args) => ctx.revealNative(...args);
-  const showReturnControl = (...args) => ctx.showReturnControl(...args);
   const registerMenus = (...args) => ctx.registerMenus(...args);
   const saveScroll = (...args) => ctx.saveScroll(...args);
   const restoreScroll = (...args) => ctx.restoreScroll(...args);
@@ -578,17 +576,12 @@ export function installController(ctx) {
     registerMenus();
     if (!shouldBoot()) {
       delete document.documentElement.dataset.bokounBooting;
-      if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") {
-        await waitForBody();
-        showReturnControl();
-      }
       return;
     }
 
     await waitForBody();
     if (!shouldBoot()) {
       delete document.documentElement.dataset.bokounBooting;
-      if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") showReturnControl();
       return;
     }
 

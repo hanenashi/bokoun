@@ -4,7 +4,6 @@ export function installShell(ctx) {
     HOST_ID,
     RETURN_HOST_ID,
     COMPARE_HOST_ID,
-    MOBILE_QUERY,
     SESSION_DISABLED_KEY,
     PREF_ENABLED_KEY,
     SELECTORS,
@@ -40,14 +39,11 @@ export function installShell(ctx) {
 
   function isMobileEligible() {
     const params = new URLSearchParams(location.search);
-    if (params.get("bokoun") === "on") return true;
-    if (params.get("bokoun") === "off") return false;
-    return matchMedia(MOBILE_QUERY).matches;
+    return params.get("bokoun") !== "off";
   }
 
   function shouldBoot() {
     return Boolean(gmGet(PREF_ENABLED_KEY, true))
-      && sessionStorage.getItem(SESSION_DISABLED_KEY) !== "1"
       && isMobileEligible()
       && routeType() !== "unsupported";
   }
@@ -140,6 +136,10 @@ export function installShell(ctx) {
   }
 
   function startPaintGuard() {
+    // Versions through 0.12.0 persisted the temporary native handoff here.
+    // It could survive a reload while in-memory nativeMode did not, leaving an
+    // inert return button. Temporary ◐ switching is deliberately document-only.
+    sessionStorage.removeItem(SESSION_DISABLED_KEY);
     if (shouldBoot()) {
       installGlobalStyle();
       document.documentElement.dataset.bokounBooting = "true";
@@ -486,7 +486,6 @@ export function installShell(ctx) {
     if (state.nativeMode || state.visualIntent === "native-transition") return false;
     const generation = beginVisualTransition("native-transition");
     const anchor = captureBokounAnchor();
-    sessionStorage.setItem(SESSION_DISABLED_KEY, "1");
     state.nativeMode = true;
     state.revealRunning = true;
     removeCompareHandle();
@@ -571,11 +570,7 @@ export function installShell(ctx) {
   }
 
   function registerMenus() {
-    if (sessionStorage.getItem(SESSION_DISABLED_KEY) === "1") {
-      gmMenu("Bokoun: zapnout v tomto panelu", returnToBokoun);
-    } else {
-      gmMenu("Bokoun: otevřít plnou Kapybaru", openFullKapybara);
-    }
+    gmMenu("Bokoun: otevřít plnou Kapybaru", openFullKapybara);
 
     gmMenu(
       gmGet(PREF_ENABLED_KEY, true) ? "Bokoun: vypnout trvale" : "Bokoun: zapnout trvale",

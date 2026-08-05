@@ -1,6 +1,6 @@
 import { STYLES } from "./styles.js";
 
-export const VERSION = "0.12.0";
+export const VERSION = "0.12.1";
 export const HOST_ID = "bokoun-host";
 export const RETURN_HOST_ID = "bokoun-return";
 export const COMPARE_HOST_ID = "bokoun-compare";
@@ -24,7 +24,6 @@ export const OLDER_TRIGGER_PX = 900;
 export const READ_SYNC_MIN_INTERVAL_MS = 5_000;
 export const READ_SYNC_BACKOFF_BASE_MS = 15_000;
 export const READ_SYNC_BACKOFF_MAX_MS = 15 * 60_000;
-export const MOBILE_QUERY = "(max-width: 760px)";
 export const SESSION_DISABLED_KEY = "bokoun.disabled-for-tab.v1";
 export const BOARD_VISIT_KEY = "bokoun.board-visit.v1";
 export const BOARD_READ_BOUNDARIES_KEY = "bokoun.board-read-boundaries.v1";

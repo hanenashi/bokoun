@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, live active clubs and Favorites, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.12.0`).
+> Status: event-driven structured-data reading, live active clubs and Favorites, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.12.1`).
 
 ## Install the first prototype
 
@@ -17,8 +17,9 @@ another userscript manager, then open Kapybara on a phone:
   while signed into GitHub;
 - after the first installation, reload any Kapybara tab that was already open;
 - supported routes: `/` (Aktivní), `/fav/activity`, `/fav/topics` and `/boards/{club}`;
-- Bokoun activates automatically at viewport widths up to 760 px;
-- append `?bokoun=on` to a supported URL to try it on desktop;
+- Bokoun activates automatically on supported routes at phone and desktop widths;
+- append `?bokoun=off` for a one-route native-page escape, or disable Bokoun
+  persistently from its userscript-manager command;
 - tap the permanent **◐** switch to show normal Kapybara; the same **◐** stays
   aligned near the top-right and returns to Bokoun;
 - use the userscript-manager menu to turn Bokoun off or on persistently.
@@ -615,6 +616,12 @@ Bokoun route. The compact strip starts with **Aktivní** and **Oblíbené** befo
 recent clubs, list-to-club Back remembers its origin, and the visible active
 list reuses the existing bounded one-minute refresh without adding a parallel
 poller or direct GraphQL traffic.
+
+Version `0.12.1` enables Bokoun by default at every viewport width. The **◐**
+handoff to full Kapybara is now document-local instead of persisting a disabled
+tab flag: reloading deliberately starts Bokoun again, legacy stuck flags are
+cleared before boot, and a failed return transition restores a working return
+button for another attempt.
 
 ## Roadmap
 
