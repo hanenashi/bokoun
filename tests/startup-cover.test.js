@@ -155,6 +155,24 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       assert.equal(ready.nativeSpinnerDisplay, "none");
 
       if (colorScheme === "light") {
+        const fullscreenSupported = await page.evaluate(() => (
+          typeof document.documentElement.requestFullscreen === "function"
+        ));
+        if (fullscreenSupported) {
+          await page.locator("#bokoun-host [data-action='fullscreen-toggle']").click();
+          await page.waitForFunction(() => Boolean(document.fullscreenElement));
+          assert.equal(
+            await page.locator("#bokoun-host .app").getAttribute("data-fullscreen"),
+            "active",
+          );
+          await page.locator("#bokoun-host [data-action='fullscreen-toggle']").click();
+          await page.waitForFunction(() => !document.fullscreenElement);
+          assert.equal(
+            await page.locator("#bokoun-host .app").getAttribute("data-fullscreen"),
+            "inactive",
+          );
+        }
+
         await page.locator("#bokoun-host [data-action='overflow']").click();
         await page.waitForFunction(() => (
           document.getElementById("bokoun-host")?.shadowRoot

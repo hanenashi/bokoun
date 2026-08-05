@@ -1,6 +1,8 @@
 import * as runtime from "./runtime.js";
 import { installShell } from "./shell.js";
 import { installScrollState } from "./scroll-state.js";
+import { installFullscreen } from "./fullscreen.js";
+import { installComparison } from "./comparison.js";
 import { installAdapters } from "./adapters.js";
 import { installReadSync } from "./read-sync.js";
 import { installBoardState } from "./board-state.js";
@@ -17,6 +19,7 @@ import { installController } from "./controller.js";
 const ctx = { ...runtime };
 installShell(ctx);
 installScrollState(ctx);
+installFullscreen(ctx);
 installAdapters(ctx);
 installReadSync(ctx);
 installBoardState(ctx);
@@ -27,6 +30,7 @@ installSettings(ctx);
 installUiPanels(ctx);
 installUi(ctx);
 installNavigation(ctx);
+installComparison(ctx);
 installUiEvents(ctx);
 installController(ctx);
 

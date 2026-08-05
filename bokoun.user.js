@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.11.1
+// @version      0.11.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -1897,7 +1897,7 @@ ${COMPACT_READER_STYLES}
 `;
 
   // src/runtime.js
-  var VERSION = "0.11.1";
+  var VERSION = "0.11.2";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -2109,7 +2109,11 @@ ${COMPACT_READER_STYLES}
     const navigateNativeRoute = (...args) => ctx2.navigateNativeRoute(...args);
     const returnToBokoun = (...args) => ctx2.returnToBokoun(...args);
     const stopRouteObservation = (...args) => ctx2.stopRouteObservation?.(...args);
-    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
+    const exitBokounFullscreen = (...args) => ctx2.exitBokounFullscreen(...args);
+    const handleFullscreenChange = (...args) => ctx2.handleFullscreenChange(...args);
+    const handleFullscreenGesture = (...args) => ctx2.handleFullscreenGesture(...args);
+    const removeCompareHandle = (...args) => ctx2.removeCompareHandle(...args);
+    const syncCompareMode = (...args) => ctx2.syncCompareMode(...args);
     function routeType(pathname = location.pathname) {
       if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
       if (/^\/boards\/[^/]+\/?$/.test(pathname)) return "board";
@@ -2240,77 +2244,6 @@ ${COMPACT_READER_STYLES}
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });
       });
-    }
-    function fullscreenEnabled() {
-      return currentDisplaySettings().fullscreenMode !== false;
-    }
-    function fullscreenGestureAllowed(event) {
-      if (!event?.isTrusted || !state2.active || state2.nativeMode) return false;
-      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='mode-switch']") || node.matches("[data-action='overflow']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-action='fullscreen-toggle']") || node.matches("[data-setting='fullscreen-mode']")));
-    }
-    async function requestBokounFullscreen({ force = false } = {}) {
-      if (!fullscreenEnabled() || !state2.active || state2.nativeMode || state2.fullscreenRequestPending) return false;
-      if (document.fullscreenElement) return true;
-      if (force) state2.fullscreenSuppressed = false;
-      if (state2.fullscreenSuppressed) return false;
-      const request = document.documentElement?.requestFullscreen;
-      if (typeof request !== "function") {
-        state2.fullscreenSuppressed = true;
-        return false;
-      }
-      state2.fullscreenRequestPending = true;
-      try {
-        await request.call(document.documentElement);
-        state2.fullscreenOwned = document.fullscreenElement === document.documentElement;
-        if (state2.fullscreenOwned && (!state2.active || state2.nativeMode || !fullscreenEnabled())) {
-          await exitBokounFullscreen();
-          return false;
-        }
-        state2.fullscreenSuppressed = !state2.fullscreenOwned;
-        return state2.fullscreenOwned;
-      } catch {
-        state2.fullscreenOwned = false;
-        state2.fullscreenSuppressed = true;
-        return false;
-      } finally {
-        state2.fullscreenRequestPending = false;
-      }
-    }
-    async function exitBokounFullscreen({ suppress = true } = {}) {
-      if (suppress) state2.fullscreenSuppressed = true;
-      if (!state2.fullscreenOwned || !document.fullscreenElement) {
-        state2.fullscreenOwned = false;
-        return false;
-      }
-      state2.fullscreenOwned = false;
-      try {
-        await document.exitFullscreen();
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    function handleFullscreenChange() {
-      const active = Boolean(document.fullscreenElement);
-      if (state2.scroller) state2.scroller.dataset.fullscreen = active ? "active" : "inactive";
-      if (!active && state2.fullscreenOwned) {
-        state2.fullscreenOwned = false;
-        state2.fullscreenSuppressed = true;
-      }
-    }
-    function handleFullscreenGesture(event) {
-      if (!fullscreenEnabled() || !fullscreenGestureAllowed(event)) return;
-      state2.fullscreenSuppressed = false;
-      void requestBokounFullscreen();
-    }
-    function syncFullscreenMode() {
-      if (!fullscreenEnabled()) {
-        void exitBokounFullscreen();
-        return;
-      }
-      if (state2.scroller) {
-        state2.scroller.dataset.fullscreen = document.fullscreenElement ? "active" : "inactive";
-      }
     }
     function mountShell() {
       if (state2.host?.isConnected) return;
@@ -2501,125 +2434,6 @@ ${COMPACT_READER_STYLES}
       animation.cancel();
       setHostReveal(to);
       return true;
-    }
-    function removeCompareHandle() {
-      state2.compareHost?.remove();
-      state2.compareHost = null;
-      state2.compareAnchor = null;
-      setLayered("compare", false);
-      if (state2.active) setHostReveal(100);
-    }
-    function showCompareHandle() {
-      if (!state2.active || !state2.host || state2.compareHost?.isConnected) return;
-      setLayered("compare", true);
-      setHostReveal(100);
-      const host = document.createElement("div");
-      host.id = COMPARE_HOST_ID2;
-      const shadow = host.attachShadow({ mode: "open" });
-      shadow.innerHTML = `
-      <style>
-        :host {
-          all: initial;
-          position: fixed;
-          inset: 0;
-          z-index: 2147483647;
-          display: block;
-          pointer-events: none;
-        }
-        button {
-          --compare-percent: 100%;
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: clamp(0px, var(--compare-percent), 100%);
-          width: 44px;
-          margin: 0;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          color: #a85a00;
-          cursor: ew-resize;
-          pointer-events: auto;
-          touch-action: none;
-          transform: translateX(-50%);
-          -webkit-tap-highlight-color: transparent;
-        }
-        button::before {
-          content: "";
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: 21px;
-          width: 2px;
-          background: currentColor;
-          box-shadow: 0 0 0 1px rgba(255,255,255,.7);
-        }
-        span {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          display: grid;
-          width: 32px;
-          height: 56px;
-          place-items: center;
-          border: 1px solid currentColor;
-          border-radius: 18px;
-          background: #fff;
-          box-shadow: 0 2px 12px rgba(0,0,0,.22);
-          color: currentColor;
-          font: 700 15px/1 system-ui, sans-serif;
-          transform: translate(-50%, -50%);
-        }
-        button:focus-visible span {
-          outline: 3px solid #a85a00;
-          outline-offset: 2px;
-        }
-      </style>
-      <button
-        type="button"
-        role="slider"
-        aria-label="Porovnání Bokouna a Kapybary"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        aria-valuenow="100"
-      ><span aria-hidden="true">↔</span></button>
-    `;
-      document.body.append(host);
-      state2.compareHost = host;
-      const slider = shadow.querySelector("[role='slider']");
-      const updateFromClientX = (clientX) => {
-        const width = Math.max(1, document.documentElement.clientWidth);
-        setHostReveal(clientX / width * 100);
-      };
-      slider.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return;
-        state2.compareAnchor = captureBokounAnchor();
-        restoreNativeAnchor(state2.compareAnchor);
-        slider.setPointerCapture(event.pointerId);
-        updateFromClientX(event.clientX);
-      });
-      slider.addEventListener("pointermove", (event) => {
-        if (!slider.hasPointerCapture(event.pointerId)) return;
-        updateFromClientX(event.clientX);
-      });
-      slider.addEventListener("keydown", (event) => {
-        const amounts = { ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100 };
-        if (!(event.key in amounts)) return;
-        event.preventDefault();
-        if (!state2.compareAnchor) {
-          state2.compareAnchor = captureBokounAnchor();
-          restoreNativeAnchor(state2.compareAnchor);
-        }
-        setHostReveal(
-          event.key === "Home" ? 0 : event.key === "End" ? 100 : state2.comparePercent + amounts[event.key]
-        );
-      });
-      setHostReveal(state2.comparePercent);
-    }
-    function syncCompareMode() {
-      if (!state2.active || state2.nativeMode || state2.revealRunning || document.documentElement.dataset.bokounBooting === "true") return;
-      if (currentDisplaySettings().compareHandle) showCompareHandle();
-      else removeCompareHandle();
     }
     async function revealBokoun({ initial = false, instant = false } = {}) {
       if (!state2.host) return false;
@@ -2816,11 +2630,6 @@ ${COMPACT_READER_STYLES}
       waitForBody,
       mountShell,
       prefersReducedMotion,
-      requestBokounFullscreen,
-      exitBokounFullscreen,
-      handleFullscreenChange,
-      handleFullscreenGesture,
-      syncFullscreenMode,
       visualExposureAllowed,
       visualSnapshot,
       visualProblems,
@@ -2835,9 +2644,6 @@ ${COMPACT_READER_STYLES}
       setLayered,
       setHostReveal,
       animateHostReveal,
-      showCompareHandle,
-      removeCompareHandle,
-      syncCompareMode,
       revealBokoun,
       completeBootHandoff,
       openFullKapybara,
@@ -2953,6 +2759,226 @@ ${COMPACT_READER_STYLES}
       scheduleScrollSave,
       handleBokounScroll,
       restoreScroll
+    });
+  }
+
+  // src/fullscreen.js
+  function installFullscreen(ctx2) {
+    const { state: state2 } = ctx2;
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
+    function fullscreenEnabled() {
+      return currentDisplaySettings().fullscreenMode !== false;
+    }
+    function fullscreenGestureAllowed(event) {
+      if (!event?.isTrusted || !state2.active || state2.nativeMode) return false;
+      return !event.composedPath().some((node) => node instanceof Element && (node.matches("a, input, select, textarea") || node.matches("[data-native-href]") || node.matches("[data-action='mode-switch']") || node.matches("[data-action='overflow']") || node.matches("[data-action='back']") || node.matches("[data-action='thread-back']") || node.matches("[data-action='thread']") || node.matches("[data-action='fullscreen-toggle']") || node.matches("[data-setting='fullscreen-mode']")));
+    }
+    async function requestBokounFullscreen({ force = false } = {}) {
+      if (!fullscreenEnabled() || !state2.active || state2.nativeMode || state2.fullscreenRequestPending) return false;
+      if (document.fullscreenElement) return true;
+      if (force) state2.fullscreenSuppressed = false;
+      if (state2.fullscreenSuppressed) return false;
+      const request = document.documentElement?.requestFullscreen;
+      if (typeof request !== "function") {
+        state2.fullscreenSuppressed = true;
+        return false;
+      }
+      state2.fullscreenRequestPending = true;
+      try {
+        await request.call(document.documentElement);
+        state2.fullscreenOwned = document.fullscreenElement === document.documentElement;
+        if (state2.fullscreenOwned && (!state2.active || state2.nativeMode || !fullscreenEnabled())) {
+          await exitBokounFullscreen();
+          return false;
+        }
+        state2.fullscreenSuppressed = !state2.fullscreenOwned;
+        return state2.fullscreenOwned;
+      } catch {
+        state2.fullscreenOwned = false;
+        state2.fullscreenSuppressed = true;
+        return false;
+      } finally {
+        state2.fullscreenRequestPending = false;
+      }
+    }
+    async function exitBokounFullscreen({ suppress = true } = {}) {
+      if (suppress) state2.fullscreenSuppressed = true;
+      if (!state2.fullscreenOwned || !document.fullscreenElement) {
+        state2.fullscreenOwned = false;
+        return false;
+      }
+      state2.fullscreenOwned = false;
+      try {
+        await document.exitFullscreen();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    function handleFullscreenChange() {
+      const active = Boolean(document.fullscreenElement);
+      if (state2.scroller) state2.scroller.dataset.fullscreen = active ? "active" : "inactive";
+      if (!active && state2.fullscreenOwned) {
+        state2.fullscreenOwned = false;
+        state2.fullscreenSuppressed = true;
+      }
+    }
+    function handleFullscreenGesture(event) {
+      if (!fullscreenEnabled() || !fullscreenGestureAllowed(event)) return;
+      state2.fullscreenSuppressed = false;
+      void requestBokounFullscreen();
+    }
+    function syncFullscreenMode() {
+      if (!fullscreenEnabled()) {
+        void exitBokounFullscreen();
+        return;
+      }
+      if (state2.scroller) {
+        state2.scroller.dataset.fullscreen = document.fullscreenElement ? "active" : "inactive";
+      }
+    }
+    Object.assign(ctx2, {
+      fullscreenEnabled,
+      fullscreenGestureAllowed,
+      requestBokounFullscreen,
+      exitBokounFullscreen,
+      handleFullscreenChange,
+      handleFullscreenGesture,
+      syncFullscreenMode
+    });
+  }
+
+  // src/comparison.js
+  function installComparison(ctx2) {
+    const { COMPARE_HOST_ID: COMPARE_HOST_ID2, state: state2 } = ctx2;
+    const currentDisplaySettings = (...args) => ctx2.currentDisplaySettings(...args);
+    const setLayered = (...args) => ctx2.setLayered(...args);
+    const setHostReveal = (...args) => ctx2.setHostReveal(...args);
+    const captureBokounAnchor = (...args) => ctx2.captureBokounAnchor(...args);
+    const restoreNativeAnchor = (...args) => ctx2.restoreNativeAnchor(...args);
+    function removeCompareHandle() {
+      state2.compareHost?.remove();
+      state2.compareHost = null;
+      state2.compareAnchor = null;
+      setLayered("compare", false);
+      if (state2.active) setHostReveal(100);
+    }
+    function showCompareHandle() {
+      if (!state2.active || !state2.host || state2.compareHost?.isConnected) return;
+      setLayered("compare", true);
+      setHostReveal(100);
+      const host = document.createElement("div");
+      host.id = COMPARE_HOST_ID2;
+      const shadow = host.attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+          position: fixed;
+          inset: 0;
+          z-index: 2147483647;
+          display: block;
+          pointer-events: none;
+        }
+        button {
+          --compare-percent: 100%;
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: clamp(0px, var(--compare-percent), 100%);
+          width: 44px;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: #a85a00;
+          cursor: ew-resize;
+          pointer-events: auto;
+          touch-action: none;
+          transform: translateX(-50%);
+          -webkit-tap-highlight-color: transparent;
+        }
+        button::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: 21px;
+          width: 2px;
+          background: currentColor;
+          box-shadow: 0 0 0 1px rgba(255,255,255,.7);
+        }
+        span {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          display: grid;
+          width: 32px;
+          height: 56px;
+          place-items: center;
+          border: 1px solid currentColor;
+          border-radius: 18px;
+          background: #fff;
+          box-shadow: 0 2px 12px rgba(0,0,0,.22);
+          color: currentColor;
+          font: 700 15px/1 system-ui, sans-serif;
+          transform: translate(-50%, -50%);
+        }
+        button:focus-visible span {
+          outline: 3px solid #a85a00;
+          outline-offset: 2px;
+        }
+      </style>
+      <button
+        type="button"
+        role="slider"
+        aria-label="Porovnání Bokouna a Kapybary"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="100"
+      ><span aria-hidden="true">↔</span></button>
+    `;
+      document.body.append(host);
+      state2.compareHost = host;
+      const slider = shadow.querySelector("[role='slider']");
+      const updateFromClientX = (clientX) => {
+        const width = Math.max(1, document.documentElement.clientWidth);
+        setHostReveal(clientX / width * 100);
+      };
+      slider.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        state2.compareAnchor = captureBokounAnchor();
+        restoreNativeAnchor(state2.compareAnchor);
+        slider.setPointerCapture(event.pointerId);
+        updateFromClientX(event.clientX);
+      });
+      slider.addEventListener("pointermove", (event) => {
+        if (!slider.hasPointerCapture(event.pointerId)) return;
+        updateFromClientX(event.clientX);
+      });
+      slider.addEventListener("keydown", (event) => {
+        const amounts = { ArrowLeft: -5, ArrowRight: 5, Home: -100, End: 100 };
+        if (!(event.key in amounts)) return;
+        event.preventDefault();
+        if (!state2.compareAnchor) {
+          state2.compareAnchor = captureBokounAnchor();
+          restoreNativeAnchor(state2.compareAnchor);
+        }
+        setHostReveal(
+          event.key === "Home" ? 0 : event.key === "End" ? 100 : state2.comparePercent + amounts[event.key]
+        );
+      });
+      setHostReveal(state2.comparePercent);
+    }
+    function syncCompareMode() {
+      if (!state2.active || state2.nativeMode || state2.revealRunning || document.documentElement.dataset.bokounBooting === "true") return;
+      if (currentDisplaySettings().compareHandle) showCompareHandle();
+      else removeCompareHandle();
+    }
+    Object.assign(ctx2, {
+      showCompareHandle,
+      removeCompareHandle,
+      syncCompareMode
     });
   }
 
@@ -7484,6 +7510,7 @@ ${COMPACT_READER_STYLES}
   var ctx = { ...runtime_exports };
   installShell(ctx);
   installScrollState(ctx);
+  installFullscreen(ctx);
   installAdapters(ctx);
   installReadSync(ctx);
   installBoardState(ctx);
@@ -7494,6 +7521,7 @@ ${COMPACT_READER_STYLES}
   installUiPanels(ctx);
   installUi(ctx);
   installNavigation(ctx);
+  installComparison(ctx);
   installUiEvents(ctx);
   installController(ctx);
   ctx.waitForDocumentElement().then(() => {

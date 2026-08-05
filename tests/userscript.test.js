@@ -31,6 +31,8 @@ const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), 
 const mainSource = fs.readFileSync(path.join(sourceDir, "main.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
 const scrollStateSource = fs.readFileSync(path.join(sourceDir, "scroll-state.js"), "utf8");
+const fullscreenSource = fs.readFileSync(path.join(sourceDir, "fullscreen.js"), "utf8");
+const comparisonSource = fs.readFileSync(path.join(sourceDir, "comparison.js"), "utf8");
 const stylesSource = fs.readFileSync(path.join(sourceDir, "styles.js"), "utf8");
 const compactStylesSource = fs.readFileSync(path.join(sourceDir, "styles-compact.js"), "utf8");
 const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
@@ -54,8 +56,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.11\.1/);
-  assert.match(source, /export const VERSION = "0\.11\.1"/);
+  assert.match(source, /@version\s+0\.11\.2/);
+  assert.match(source, /export const VERSION = "0\.11\.2"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -947,10 +949,24 @@ test("live comparison uses an opt-in accessible drag handle and layered native v
   assert.match(source, /restoreNativeAnchor\(state\.compareAnchor\)/);
   const handoffSource = shellSource.slice(
     shellSource.indexOf("function animateHostReveal"),
-    shellSource.indexOf("function removeCompareHandle"),
+    shellSource.indexOf("async function revealBokoun"),
   );
   assert.match(handoffSource, /clipPath/);
   assert.doesNotMatch(handoffSource, /filter: "blur/);
+});
+
+test("fullscreen and comparison ownership are isolated behind shell contracts", () => {
+  assert.match(mainSource, /import \{ installFullscreen \} from "\.\/fullscreen\.js"/);
+  assert.match(mainSource, /import \{ installComparison \} from "\.\/comparison\.js"/);
+  assert.ok(mainSource.indexOf("installShell(ctx)") < mainSource.indexOf("installFullscreen(ctx)"));
+  assert.ok(mainSource.indexOf("installNavigation(ctx)") < mainSource.indexOf("installComparison(ctx)"));
+  assert.doesNotMatch(shellSource, /function fullscreenGestureAllowed|function showCompareHandle/);
+  assert.match(fullscreenSource, /function fullscreenGestureAllowed/);
+  assert.match(comparisonSource, /function showCompareHandle/);
+  assert.match(shellSource, /ctx\.exitBokounFullscreen\(\.\.\.args\)/);
+  assert.match(shellSource, /ctx\.removeCompareHandle\(\.\.\.args\)/);
+  assert.doesNotMatch(fullscreenSource, /\bfetch\(/);
+  assert.doesNotMatch(comparisonSource, /\bfetch\(/);
 });
 
 test("compact reader preset is reversible and has light, dark, and system palettes", () => {

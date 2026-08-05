@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.1`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.2`).
 
 ## Install the first prototype
 
@@ -552,8 +552,10 @@ bokoun/
 │   ├── runtime.js              # constants and shared runtime state
 │   ├── styles.js               # base isolated Shadow DOM component styles
 │   ├── styles-compact.js       # compact-reader palette and overrides
-│   ├── shell.js                # boot, fullscreen and visual-layer ownership
+│   ├── shell.js                # boot, host mounting and visual transitions
 │   ├── scroll-state.js         # bounded per-route scroll persistence
+│   ├── fullscreen.js           # gesture-owned fullscreen lifecycle
+│   ├── comparison.js           # Bokoun/Kapybara comparison handle
 │   ├── adapters.js             # structured-data and semantic-DOM readers
 │   ├── board-state.js          # normalized post window and deduplication
 │   ├── writing.js              # drafts and native composer bridge
@@ -598,6 +600,10 @@ markup, navigation, storage, reads and network behavior remain unchanged.
 Version `0.11.1` continues that pass by separating bounded scroll persistence
 from the visual shell and the compact-reader CSS layer from base component
 styles. Runtime contracts and final stylesheet cascade order remain unchanged.
+
+Version `0.11.2` moves fullscreen gesture/lifecycle handling and the optional
+comparison handle behind their existing shell contracts. The core shell now
+owns only boot, host mounting, native visibility and transition state.
 
 ## Roadmap
 

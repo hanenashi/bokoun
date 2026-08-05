@@ -9,7 +9,9 @@ const limits = {
   files: {
     "styles.js": 1_400,
     "styles-compact.js": 700,
-    "shell.js": 900,
+    "shell.js": 700,
+    "fullscreen.js": 160,
+    "comparison.js": 180,
     "ui.js": 1_100,
   },
 };
