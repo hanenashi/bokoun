@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.2`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.3`).
 
 ## Install the first prototype
 
@@ -556,7 +556,8 @@ bokoun/
 │   ├── scroll-state.js         # bounded per-route scroll persistence
 │   ├── fullscreen.js           # gesture-owned fullscreen lifecycle
 │   ├── comparison.js           # Bokoun/Kapybara comparison handle
-│   ├── adapters.js             # structured-data and semantic-DOM readers
+│   ├── adapters.js             # structured transport/cache and semantic-DOM readers
+│   ├── structured-models.js    # pure SvelteKit decoding and model normalization
 │   ├── board-state.js          # normalized post window and deduplication
 │   ├── writing.js              # drafts and native composer bridge
 │   ├── pagination.js           # endless older-page loading
@@ -604,6 +605,11 @@ styles. Runtime contracts and final stylesheet cascade order remain unchanged.
 Version `0.11.2` moves fullscreen gesture/lifecycle handling and the optional
 comparison handle behind their existing shell contracts. The core shell now
 owns only boot, host mounting, native visibility and transition state.
+
+Version `0.11.3` separates pure SvelteKit stream decoding and normalized
+Favorites/board model construction from adapter transport, cache and fallback
+ownership. The installed compatibility API and request discipline remain the
+same, while fixture decoding can evolve without touching fetch lifecycles.
 
 ## Roadmap
 

@@ -33,6 +33,11 @@ const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
 const scrollStateSource = fs.readFileSync(path.join(sourceDir, "scroll-state.js"), "utf8");
 const fullscreenSource = fs.readFileSync(path.join(sourceDir, "fullscreen.js"), "utf8");
 const comparisonSource = fs.readFileSync(path.join(sourceDir, "comparison.js"), "utf8");
+const adaptersSource = fs.readFileSync(path.join(sourceDir, "adapters.js"), "utf8");
+const structuredModelsSource = fs.readFileSync(
+  path.join(sourceDir, "structured-models.js"),
+  "utf8",
+);
 const stylesSource = fs.readFileSync(path.join(sourceDir, "styles.js"), "utf8");
 const compactStylesSource = fs.readFileSync(path.join(sourceDir, "styles-compact.js"), "utf8");
 const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
@@ -56,8 +61,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.11\.2/);
-  assert.match(source, /export const VERSION = "0\.11\.2"/);
+  assert.match(source, /@version\s+0\.11\.3/);
+  assert.match(source, /export const VERSION = "0\.11\.3"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -1051,6 +1056,19 @@ test("contextual panel rendering is isolated behind the shared UI contract", () 
   assert.doesNotMatch(uiSource, /function attachUiEvents/);
   assert.match(uiEventsSource, /function attachUiEvents/);
   assert.match(packageJson.scripts.check, /check-size-budgets\.mjs/);
+});
+
+test("structured decoding is isolated from transport and cache ownership", () => {
+  assert.match(adaptersSource, /from "\.\/structured-models\.js"/);
+  assert.match(adaptersSource, /async function fetchStructuredModel/);
+  assert.match(adaptersSource, /state\.structuredCache/);
+  assert.match(adaptersSource, /recordTraffic\("structuredGets"/);
+  assert.doesNotMatch(adaptersSource, /function decodeSvelteDataValues/);
+  assert.match(structuredModelsSource, /export function decodeSvelteDataValues/);
+  assert.match(structuredModelsSource, /export function boardModelFromSvelteRoots/);
+  assert.match(structuredModelsSource, /A structured post sanitizer is required/);
+  assert.doesNotMatch(structuredModelsSource, /\bfetch\s*\(/);
+  assert.doesNotMatch(structuredModelsSource, /structuredCache|structuredPending|recordTraffic/);
 });
 
 test("the extracted UI event contract attaches safely to an empty rendered shell", () => {

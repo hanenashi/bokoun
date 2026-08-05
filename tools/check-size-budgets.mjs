@@ -12,6 +12,8 @@ const limits = {
     "shell.js": 700,
     "fullscreen.js": 160,
     "comparison.js": 180,
+    "adapters.js": 500,
+    "structured-models.js": 260,
     "ui.js": 1_100,
   },
 };
