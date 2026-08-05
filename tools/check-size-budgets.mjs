@@ -7,8 +7,9 @@ const limits = {
   generatedBytes: 320 * 1024,
   sourceLines: 9_000,
   files: {
-    "styles.js": 2_000,
-    "shell.js": 1_100,
+    "styles.js": 1_400,
+    "styles-compact.js": 700,
+    "shell.js": 900,
     "ui.js": 1_100,
   },
 };
@@ -45,6 +46,6 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Size budget OK: ${generatedBytes} B generated; ${sourceLines} source lines; ui.js ${sourceCounts["ui.js"]} lines.`,
+    `Size budget OK: ${generatedBytes} B generated; ${sourceLines} source lines; ui.js ${sourceCounts["ui.js"]} lines; shell.js ${sourceCounts["shell.js"]} lines.`,
   );
 }

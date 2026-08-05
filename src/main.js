@@ -1,5 +1,6 @@
 import * as runtime from "./runtime.js";
 import { installShell } from "./shell.js";
+import { installScrollState } from "./scroll-state.js";
 import { installAdapters } from "./adapters.js";
 import { installReadSync } from "./read-sync.js";
 import { installBoardState } from "./board-state.js";
@@ -15,6 +16,7 @@ import { installController } from "./controller.js";
 
 const ctx = { ...runtime };
 installShell(ctx);
+installScrollState(ctx);
 installAdapters(ctx);
 installReadSync(ctx);
 installBoardState(ctx);

@@ -8,7 +8,8 @@ import { installBoardState } from "../src/board-state.js";
 import { installPagination } from "../src/pagination.js";
 import { installReadSync } from "../src/read-sync.js";
 import { installSettings } from "../src/settings.js";
-import { canonicalScrollRoute, installShell } from "../src/shell.js";
+import { installShell } from "../src/shell.js";
+import { canonicalScrollRoute } from "../src/scroll-state.js";
 import { installWriting } from "../src/writing.js";
 import { installFirstUnread } from "../src/first-unread.js";
 import { isThreadBranchOnlyChange } from "../src/controller.js";
@@ -29,6 +30,9 @@ const generatedSource = fs.readFileSync(scriptPath, "utf8");
 const controllerSource = fs.readFileSync(path.join(sourceDir, "controller.js"), "utf8");
 const mainSource = fs.readFileSync(path.join(sourceDir, "main.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(sourceDir, "shell.js"), "utf8");
+const scrollStateSource = fs.readFileSync(path.join(sourceDir, "scroll-state.js"), "utf8");
+const stylesSource = fs.readFileSync(path.join(sourceDir, "styles.js"), "utf8");
+const compactStylesSource = fs.readFileSync(path.join(sourceDir, "styles-compact.js"), "utf8");
 const uiSource = fs.readFileSync(path.join(sourceDir, "ui.js"), "utf8");
 const uiPanelsSource = fs.readFileSync(path.join(sourceDir, "ui-panels.js"), "utf8");
 const uiEventsSource = fs.readFileSync(path.join(sourceDir, "ui-events.js"), "utf8");
@@ -50,8 +54,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.11\.0/);
-  assert.match(source, /export const VERSION = "0\.11\.0"/);
+  assert.match(source, /@version\s+0\.11\.1/);
+  assert.match(source, /export const VERSION = "0\.11\.1"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -455,6 +459,16 @@ test("scroll positions ignore temporary Bokoun mode and thread-branch queries", 
     canonicalScrollRoute("/boards/test?rootId=42&p=44&branch=43"),
     "/boards/test?rootId=42&p=44",
   );
+});
+
+test("scroll persistence is isolated from shell visual ownership", () => {
+  assert.match(mainSource, /import \{ installScrollState \} from "\.\/scroll-state\.js"/);
+  assert.ok(mainSource.indexOf("installShell(ctx)") < mainSource.indexOf("installScrollState(ctx)"));
+  assert.doesNotMatch(shellSource, /function storedScroll|function restoreScroll/);
+  assert.match(scrollStateSource, /function storedScroll|function restoreScroll/);
+  assert.match(shellSource, /ctx\.saveScroll\(\.\.\.args\)/);
+  assert.match(shellSource, /ctx\.handleBokounScroll\(\.\.\.args\)/);
+  assert.doesNotMatch(scrollStateSource, /\bfetch\(/);
 });
 
 test("forced desktop mode follows Bokoun-owned supported navigation", () => {
@@ -950,6 +964,15 @@ test("compact reader preset is reversible and has light, dark, and system palett
   assert.match(source, /data-color-scheme="dark"/);
   assert.match(source, /prefers-color-scheme: dark/);
   assert.match(source, /Kompaktní čtečka mění pouze vzhled/);
+});
+
+test("compact-reader CSS remains a final isolated cascade layer", () => {
+  assert.match(stylesSource, /import \{ COMPACT_READER_STYLES \} from "\.\/styles-compact\.js"/);
+  assert.match(stylesSource, /\$\{COMPACT_READER_STYLES\}\s*`;/);
+  assert.doesNotMatch(stylesSource, /\.app\[data-interface-preset="compact-reader"\]/);
+  assert.match(compactStylesSource, /\.app\[data-interface-preset="compact-reader"\]/);
+  assert.match(compactStylesSource, /data-color-scheme="traditional"/);
+  assert.doesNotMatch(compactStylesSource, /\bfetch\(/);
 });
 
 test("compact reader club strip is optional, bounded, and request-free", () => {

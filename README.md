@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.0`).
+> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.1`).
 
 ## Install the first prototype
 
@@ -550,8 +550,10 @@ bokoun/
 ├── src/
 │   ├── main.js                 # module assembly and guarded startup
 │   ├── runtime.js              # constants and shared runtime state
-│   ├── styles.js               # isolated Shadow DOM styles
-│   ├── shell.js                # boot shell, preferences and scroll state
+│   ├── styles.js               # base isolated Shadow DOM component styles
+│   ├── styles-compact.js       # compact-reader palette and overrides
+│   ├── shell.js                # boot, fullscreen and visual-layer ownership
+│   ├── scroll-state.js         # bounded per-route scroll persistence
 │   ├── adapters.js             # structured-data and semantic-DOM readers
 │   ├── board-state.js          # normalized post window and deduplication
 │   ├── writing.js              # drafts and native composer bridge
@@ -592,6 +594,10 @@ Version `0.11.0` begins a behavior-preserving maintainability pass. Contextual
 header/settings-panel rendering and event binding now live separately from
 board/post markup. The split changes source ownership only: selectors, generated
 markup, navigation, storage, reads and network behavior remain unchanged.
+
+Version `0.11.1` continues that pass by separating bounded scroll persistence
+from the visual shell and the compact-reader CSS layer from base component
+styles. Runtime contracts and final stylesheet cascade order remain unchanged.
 
 ## Roadmap
 
