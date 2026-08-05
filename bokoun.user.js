@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.11.3
+// @version      0.12.0
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -38,6 +38,7 @@
     FONT_SETTINGS_KEY: () => FONT_SETTINGS_KEY,
     HOST_ID: () => HOST_ID,
     ICONS: () => ICONS,
+    LIST_RETURN_KEY: () => LIST_RETURN_KEY,
     MOBILE_QUERY: () => MOBILE_QUERY,
     NAVIGATION_INTENT_KEY: () => NAVIGATION_INTENT_KEY,
     OLDER_TRIGGER_PX: () => OLDER_TRIGGER_PX,
@@ -1897,7 +1898,7 @@ ${COMPACT_READER_STYLES}
 `;
 
   // src/runtime.js
-  var VERSION = "0.11.3";
+  var VERSION = "0.12.0";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -1936,7 +1937,10 @@ ${COMPACT_READER_STYLES}
   var FAVORITES_ORDER_KEY = "bokoun.favorites-order.v1";
   var RECENT_CLUBS_KEY = "bokoun.recent-clubs.v1";
   var NAVIGATION_INTENT_KEY = "bokoun.navigation-intent.v1";
+  var LIST_RETURN_KEY = "bokoun.list-return.v1";
   var SELECTORS = Object.freeze({
+    activePage: ".boards-section",
+    activeRows: ".boards-section a[href^='/boards/']",
     favoritesPage: ".favorites-page",
     favoriteRows: ".favorites-page a[href^='/boards/']",
     favoriteName: ".name",
@@ -2115,6 +2119,7 @@ ${COMPACT_READER_STYLES}
     const removeCompareHandle = (...args) => ctx2.removeCompareHandle(...args);
     const syncCompareMode = (...args) => ctx2.syncCompareMode(...args);
     function routeType(pathname = location.pathname) {
+      if (pathname === "/") return "active";
       if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
       if (/^\/boards\/[^/]+\/?$/.test(pathname)) return "board";
       return "unsupported";
@@ -2609,6 +2614,9 @@ ${COMPACT_READER_STYLES}
       );
     }
     function nativeReady(type) {
+      if (type === "active") {
+        return Boolean(document.querySelector(SELECTORS2.activePage));
+      }
       if (type === "favorites") {
         return Boolean(document.querySelector(SELECTORS2.favoritesPage));
       }
@@ -3155,19 +3163,29 @@ ${COMPACT_READER_STYLES}
       newPostsCount: Number.isFinite(boardRoot.board.newPostsCount) ? Math.max(0, boardRoot.board.newPostsCount) : 0
     };
   }
-  function favoritesModelFromSvelteRoots(roots) {
-    const root = roots.filter((candidate) => Array.isArray(candidate?.boards)).at(-1);
-    if (!root || root.apiAccessRequired || root.error) {
-      throw new Error("Incomplete structured Favorites data");
-    }
-    return root.boards.map((board) => ({
+  function clubSummary(board) {
+    return {
       id: String(board?.id || ""),
       href: `/boards/${encodeURIComponent(String(board?.slug || ""))}`,
       name: String(board?.name || ""),
       unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
       activity: relativeActivityFromTimestamp(board?.lastPosted),
       lastPosted: typeof board?.lastPosted === "string" ? board.lastPosted : ""
-    })).filter((club) => club.href !== "/boards/" && club.name);
+    };
+  }
+  function clubListFromRoot(root, field, label) {
+    if (!root || root.apiAccessRequired || root.error || !Array.isArray(root[field])) {
+      throw new Error(`Incomplete structured ${label} data`);
+    }
+    return root[field].map(clubSummary).filter((club) => club.href !== "/boards/" && club.name);
+  }
+  function favoritesModelFromSvelteRoots(roots) {
+    const root = roots.filter((candidate) => Array.isArray(candidate?.boards)).at(-1);
+    return clubListFromRoot(root, "boards", "Favorites");
+  }
+  function activeModelFromSvelteRoots(roots) {
+    const root = roots.filter((candidate) => Array.isArray(candidate?.activeBoards)).at(-1);
+    return clubListFromRoot(root, "activeBoards", "active-club");
   }
 
   // src/adapters.js
@@ -3252,6 +3270,23 @@ ${COMPACT_READER_STYLES}
         lastPosted: row.querySelector(SELECTORS2.favoriteTime)?.getAttribute("datetime") || ""
       })).filter((club) => club.href && club.name);
     }
+    function readActiveFromDom() {
+      const seen = /* @__PURE__ */ new Set();
+      return [...document.querySelectorAll(SELECTORS2.activeRows)].map((row) => {
+        const href = normalizeHref(row.getAttribute("href"));
+        if (!href || seen.has(href)) return null;
+        seen.add(href);
+        const datetime = row.querySelector("time[datetime]")?.getAttribute("datetime") || "";
+        return {
+          id: String(row.dataset.boardId || ""),
+          href,
+          name: text(row.querySelector(".name")) || text(row),
+          unread: unreadCount(row),
+          activity: relativeActivityFromTimestamp(datetime),
+          lastPosted: datetime
+        };
+      }).filter((club) => club?.href && club.name);
+    }
     function boardModelFromSvelteRoots2(roots, pageHref, options = {}) {
       const sanitize = typeof options.sanitize === "function" ? options.sanitize : sanitizeHtml;
       return boardModelFromSvelteRoots(roots, pageHref, { sanitize });
@@ -3285,7 +3320,7 @@ ${COMPACT_READER_STYLES}
         throw new Error(`Structured data HTTP ${response.status}`);
       }
       const roots = decodeSvelteDataText(await response.text());
-      const model = type === "favorites" ? favoritesModelFromSvelteRoots(roots) : boardModelFromSvelteRoots2(roots, pageHref);
+      const model = type === "favorites" ? favoritesModelFromSvelteRoots(roots) : type === "active" ? activeModelFromSvelteRoots(roots) : boardModelFromSvelteRoots2(roots, pageHref);
       return { type, model, fetchedAt: now() };
     }
     function structuredCacheKey(type, pageHref) {
@@ -3551,6 +3586,7 @@ ${COMPACT_READER_STYLES}
       relativeActivityFromTimestamp,
       relativeActivity,
       readFavoritesFromDom,
+      readActiveFromDom,
       decodeSvelteDataValues,
       decodeSvelteDataText,
       formatPragueParts,
@@ -3560,6 +3596,7 @@ ${COMPACT_READER_STYLES}
       normalizedStructuredPageHref,
       boardModelFromSvelteRoots: boardModelFromSvelteRoots2,
       favoritesModelFromSvelteRoots,
+      activeModelFromSvelteRoots,
       structuredDataUrl,
       fetchStructuredModel,
       structuredCacheKey,
@@ -5324,9 +5361,10 @@ ${COMPACT_READER_STYLES}
     }
     function overflowMenuMarkup(type) {
       const favorites = type === "favorites";
+      const active = type === "active";
       const unreadOnly = currentFavoritesSettings().unreadOnly;
       return `
-      <div class="header-panel overflow-menu" role="menu" aria-label="${favorites ? "Možnosti oblíbených" : "Možnosti klubu"}">
+      <div class="header-panel overflow-menu" role="menu" aria-label="${favorites ? "Možnosti oblíbených" : active ? "Možnosti aktivních klubů" : "Možnosti klubu"}">
         ${favorites ? `
           <button type="button" role="menuitem" data-action="open-panel" data-panel="favorite-sort">Řazení…</button>
           <button
@@ -5336,6 +5374,9 @@ ${COMPACT_READER_STYLES}
             data-action="toggle-unread-only"
           ><span>Pouze nepřečtené</span><span aria-hidden="true">${unreadOnly ? "✓" : ""}</span></button>
           <button type="button" role="menuitem" data-action="edit-favorite-order">${state2.editingFavoriteOrder ? "Dokončit pořadí" : "Upravit pořadí"}</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="favorites-appearance">Písmo a vzhled…</button>
+        ` : active ? `
+          <button type="button" role="menuitem" data-action="refresh">Obnovit</button>
           <button type="button" role="menuitem" data-action="open-panel" data-panel="favorites-appearance">Písmo a vzhled…</button>
         ` : `
           <button type="button" role="menuitem" data-action="refresh">Obnovit</button>
@@ -5398,16 +5439,16 @@ ${COMPACT_READER_STYLES}
       const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
       const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
       return `
-      <section class="header-panel favorites-panel" aria-label="Písmo a vzhled oblíbených">
+      <section class="header-panel favorites-panel" aria-label="Písmo a vzhled seznamu klubů">
         <header class="panel-head">
           <strong>Písmo a vzhled</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
         ${interfaceAppearanceMarkup(display)}
-        <div class="panel-section-title">Oblíbené</div>
+        <div class="panel-section-title">Seznam klubů</div>
         <label class="settings-field">
           <span>Písmo</span>
-          <select data-setting="favorite-font-family" aria-label="Písmo oblíbených">${fontOptionsMarkup(favorites.fontFamily)}</select>
+          <select data-setting="favorite-font-family" aria-label="Písmo seznamu klubů">${fontOptionsMarkup(favorites.fontFamily)}</select>
         </label>
         <label class="settings-field settings-field--custom" ${customFont ? "" : "hidden"}>
           <span>Vlastní</span>
@@ -5418,7 +5459,7 @@ ${COMPACT_READER_STYLES}
               autocomplete="off"
               spellcheck="false"
               value="${escapeHtml(favorites.customFontFamily)}"
-              aria-label="Vlastní písmo oblíbených"
+              aria-label="Vlastní písmo seznamu klubů"
               aria-invalid="${invalidCustomFont ? "true" : "false"}"
             >
             <small>${invalidCustomFont ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami"}</small>
@@ -5427,15 +5468,15 @@ ${COMPACT_READER_STYLES}
         <div class="settings-field">
           <span>Velikost</span>
           <span class="font-size-controls">
-            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma oblíbených posuvníkem">
-            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma oblíbených v pixelech">
+            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma seznamu klubů posuvníkem">
+            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma seznamu klubů v pixelech">
             <span>px</span>
           </span>
         </div>
         <div class="settings-field">
           <span>Odsazení</span>
           <span class="compact-range-controls">
-            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení oblíbených posuvníkem">
+            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení seznamu klubů posuvníkem">
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>
@@ -5677,8 +5718,9 @@ ${COMPACT_READER_STYLES}
     const normalizeClubRoute = (...args) => ctx2.normalizeClubRoute(...args);
     const unreadHeat = (...args) => ctx2.unreadHeat(...args);
     const overflowControlMarkup = (...args) => ctx2.overflowControlMarkup(...args);
+    const listReturnTarget = (...args) => ctx2.listReturnTarget(...args);
     function signatureFor(type, model) {
-      if (type === "favorites") {
+      if (["active", "favorites"].includes(type)) {
         return [
           routeKey(),
           JSON.stringify(currentDisplaySettings()),
@@ -5753,29 +5795,28 @@ ${COMPACT_READER_STYLES}
       const display = currentDisplaySettings();
       if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
       const activeClub = normalizeClubRoute(location.pathname);
-      const favoritesActive = routeType() === "favorites";
+      const currentType = routeType();
       const recent = currentRecentClubs();
-      const candidates = favoritesActive ? [{
-        href: "/fav/activity",
-        name: "Oblíbené",
-        active: true
-      }, ...recent] : [{
+      const listLinks = [
+        { href: "/", name: "Aktivní" },
+        { href: "/fav/activity", name: "Oblíbené" }
+      ];
+      const candidates = currentType === "board" ? [...listLinks, {
         href: activeClub,
-        name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub",
-        active: true
-      }, ...recent];
+        name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub"
+      }, ...recent] : [...listLinks, ...recent];
       const seen = /* @__PURE__ */ new Set();
       const links = candidates.filter((link) => {
         const href = normalizeClubRoute(link.href) || link.href;
         if (!href || seen.has(href)) return false;
         seen.add(href);
         return true;
-      }).slice(0, favoritesActive ? 7 : 6).map((link) => ({
+      }).slice(0, 8).map((link) => ({
         ...link,
-        active: favoritesActive ? link.href === "/fav/activity" : normalizeClubRoute(link.href) === activeClub
+        active: link.href === "/" ? currentType === "active" : link.href === "/fav/activity" ? currentType === "favorites" : currentType === "board" && normalizeClubRoute(link.href) === activeClub
       }));
       return `
-      <nav class="club-strip" aria-label="Rychlé přepínání klubů">
+      <nav class="club-strip" aria-label="Aktivní, oblíbené a rychlé přepínání klubů">
         ${links.map((link) => `
           <a
             class="club-strip-link${link.active ? " club-strip-link--active" : ""}"
@@ -5787,9 +5828,9 @@ ${COMPACT_READER_STYLES}
       </nav>
     `;
     }
-    function favoritesMarkup(clubs) {
+    function favoritesMarkup(clubs, type = routeType()) {
       const favorites = currentFavoritesSettings();
-      const editing = favorites.sort === "manual" && state2.editingFavoriteOrder;
+      const editing = type === "favorites" && favorites.sort === "manual" && state2.editingFavoriteOrder;
       const showCount = ["count", "both"].includes(favorites.unreadMode);
       const showHeat = ["heat", "both"].includes(favorites.unreadMode);
       const rows = clubs.length ? clubs.map((club) => {
@@ -5829,13 +5870,13 @@ ${COMPACT_READER_STYLES}
             ` : ""}
           </li>
         `;
-      }).join("") : `<li class="empty">Žádné oblíbené kluby.</li>`;
+      }).join("") : `<li class="empty">${type === "active" ? "Žádné aktivní kluby." : "Žádné oblíbené kluby."}</li>`;
       return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
         ${modeSwitchButton()}
         ${fullscreenButton()}
-        ${overflowControlMarkup("favorites")}
+        ${overflowControlMarkup(type)}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -6005,13 +6046,14 @@ ${COMPACT_READER_STYLES}
         tailState = '<button class="tail-action" type="button" data-action="load-older">Načíst starší</button>';
       }
       const newest = !threadMode && board.loadedPageCount > 1 ? '<button class="tail-action tail-action--accent" type="button" data-action="newest">↑ Nejnovější</button>' : "";
+      const listReturnLabel = listReturnTarget() === "/" ? "aktivních klubů" : "oblíbených";
       return `
       <header class="topbar topbar--board">
         <button
           class="icon-button"
           type="button"
           data-action="${threadMode ? "thread-back" : "back"}"
-          aria-label="${threadMode ? "Zpět do klubu" : "Zpět do oblíbených"}"
+          aria-label="${threadMode ? "Zpět do klubu" : `Zpět do ${listReturnLabel}`}"
         >${ICONS2.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS2.write}</button>
@@ -6522,7 +6564,7 @@ ${COMPACT_READER_STYLES}
       const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
       const target = new URL(href, base);
       const current = new URL(currentHref, base);
-      const supported = target.pathname === "/fav/activity" || target.pathname === "/fav/topics" || /^\/boards\/[^/]+\/?$/.test(target.pathname);
+      const supported = target.pathname === "/" || target.pathname === "/fav/activity" || target.pathname === "/fav/topics" || /^\/boards\/[^/]+\/?$/.test(target.pathname);
       if (supported && current.searchParams.get("bokoun") === "on" && !target.searchParams.has("bokoun")) {
         target.searchParams.set("bokoun", "on");
       }
@@ -6546,6 +6588,7 @@ ${COMPACT_READER_STYLES}
       const base = origin || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
       const url = new URL(value, base);
       if (url.origin !== base) return "";
+      if (url.pathname === "/") return "/";
       if (url.pathname === "/fav/activity" || url.pathname === "/fav/topics") {
         return "/fav/activity";
       }
@@ -6561,10 +6604,11 @@ ${COMPACT_READER_STYLES}
     const fromKey = transitionRouteKey(from);
     const toKey = transitionRouteKey(to);
     if (!fromKey || !toKey || fromKey === toKey) return "";
-    const fromFavorite = fromKey === "/fav/activity";
-    const toFavorite = toKey === "/fav/activity";
-    if (fromFavorite && !toFavorite) return "forward";
-    if (!fromFavorite && toFavorite) return "back";
+    const listRoutes = /* @__PURE__ */ new Set(["/", "/fav/activity"]);
+    const fromList = listRoutes.has(fromKey);
+    const toList = listRoutes.has(toKey);
+    if (fromList && !toList) return "forward";
+    if (!fromList && toList) return "back";
     const fromThread = fromKey.includes("?rootId=");
     const toThread = toKey.includes("?rootId=");
     if (!fromThread && toThread) return "forward";
@@ -6578,6 +6622,7 @@ ${COMPACT_READER_STYLES}
       RETURN_HOST_ID: RETURN_HOST_ID2,
       BOOT_TIMEOUT_MS: BOOT_TIMEOUT_MS2,
       NAVIGATION_INTENT_KEY: NAVIGATION_INTENT_KEY2 = "bokoun.navigation-intent.v1",
+      LIST_RETURN_KEY: LIST_RETURN_KEY2 = "bokoun.list-return.v1",
       SESSION_DISABLED_KEY: SESSION_DISABLED_KEY2,
       SELECTORS: SELECTORS2,
       state: state2
@@ -6602,6 +6647,38 @@ ${COMPACT_READER_STYLES}
     function transitionsEnabled() {
       const display = currentDisplaySettings();
       return display.interfacePreset === "compact-reader" && display.pageTransitions;
+    }
+    function storedListReturn() {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem(LIST_RETURN_KEY2) || "null");
+        if (!stored || !["/", "/fav/activity"].includes(stored.list) || !/^\/boards\/[^/]+\/?$/.test(stored.boardPath)) return null;
+        return stored;
+      } catch {
+        return null;
+      }
+    }
+    function listReturnTarget(boardPath = location.pathname) {
+      const stored = storedListReturn();
+      return stored?.boardPath.replace(/\/$/, "") === boardPath.replace(/\/$/, "") ? stored.list : "/fav/activity";
+    }
+    function rememberListReturn(target) {
+      const sourceType = routeType();
+      const targetType = routeType(target.pathname);
+      if (["active", "favorites"].includes(sourceType) && targetType === "board") {
+        sessionStorage.setItem(LIST_RETURN_KEY2, JSON.stringify({
+          list: sourceType === "active" ? "/" : "/fav/activity",
+          boardPath: target.pathname
+        }));
+        return;
+      }
+      if (sourceType === "board" && targetType === "board") {
+        const stored = storedListReturn();
+        if (stored?.boardPath.replace(/\/$/, "") !== location.pathname.replace(/\/$/, "")) return;
+        sessionStorage.setItem(LIST_RETURN_KEY2, JSON.stringify({
+          ...stored,
+          boardPath: target.pathname
+        }));
+      }
     }
     function prepareNavigationTransition(href, {
       direction = "",
@@ -6733,6 +6810,7 @@ ${COMPACT_READER_STYLES}
       if (!href) return;
       saveScroll();
       const target = preserveForcedBokounMode(href, location.href, location.origin);
+      rememberListReturn(target);
       prepareNavigationTransition(target.href, { direction });
       if (routeType() === "board" && target.pathname !== location.pathname) {
         leaveBoardVisit(location.pathname);
@@ -6767,7 +6845,7 @@ ${COMPACT_READER_STYLES}
     }
     function goBack() {
       saveScroll();
-      navigateNative("/fav/activity", { direction: "back" });
+      navigateNative(listReturnTarget(), { direction: "back" });
     }
     async function openThread(rootId, postId = "") {
       let normalized = String(rootId || "");
@@ -6827,7 +6905,7 @@ ${COMPACT_READER_STYLES}
     function captureBokounAnchor() {
       if (!state2.scroller || !state2.shadow) return null;
       const scrollerRect = state2.scroller.getBoundingClientRect();
-      if (routeType() === "favorites") {
+      if (["active", "favorites"].includes(routeType())) {
         const rows = [...state2.shadow.querySelectorAll(".favorite-item [data-native-href]")];
         const row = rows.find((item) => item.getBoundingClientRect().bottom > scrollerRect.top) || rows.at(-1);
         if (!row) return null;
@@ -6851,8 +6929,9 @@ ${COMPACT_READER_STYLES}
       };
     }
     function captureNativeAnchor() {
-      if (routeType() === "favorites") {
-        const rows = [...document.querySelectorAll(SELECTORS2.favoriteRows)];
+      if (["active", "favorites"].includes(routeType())) {
+        const selector = routeType() === "active" ? SELECTORS2.activeRows : SELECTORS2.favoriteRows;
+        const rows = [...document.querySelectorAll(selector)];
         const row = rows.find((item) => item.getBoundingClientRect().bottom > 0) || rows.at(-1);
         if (!row) return null;
         return {
@@ -6878,7 +6957,9 @@ ${COMPACT_READER_STYLES}
       if (!anchor) return;
       document.documentElement.dataset.bokounAligning = "true";
       const apply = () => {
-        const target = routeType() === "favorites" ? [...document.querySelectorAll(SELECTORS2.favoriteRows)].find((row) => sameFavoriteRoute(row.getAttribute("href"), anchor.favoriteHref)) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
+        const target = ["active", "favorites"].includes(routeType()) ? [...document.querySelectorAll(
+          routeType() === "active" ? SELECTORS2.activeRows : SELECTORS2.favoriteRows
+        )].find((row) => sameFavoriteRoute(row.getAttribute("href"), anchor.favoriteHref)) : nativePostById(anchor.postId) || [...document.querySelectorAll(SELECTORS2.posts)].at(-1);
         if (!target) return;
         const delta = target.getBoundingClientRect().top - anchor.offset;
         for (const scroller of /* @__PURE__ */ new Set([
@@ -6904,8 +6985,8 @@ ${COMPACT_READER_STYLES}
       if (!anchor || !state2.scroller || !state2.shadow) return;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const items = routeType() === "favorites" ? [...state2.shadow.querySelectorAll(".favorite-item [data-native-href]")] : [...state2.shadow.querySelectorAll("[data-bokoun-post-id]")];
-          const target = routeType() === "favorites" ? items.find((row) => sameFavoriteRoute(
+          const items = ["active", "favorites"].includes(routeType()) ? [...state2.shadow.querySelectorAll(".favorite-item [data-native-href]")] : [...state2.shadow.querySelectorAll("[data-bokoun-post-id]")];
+          const target = ["active", "favorites"].includes(routeType()) ? items.find((row) => sameFavoriteRoute(
             row.getAttribute("data-native-href"),
             anchor.favoriteHref
           )) : items.find((post) => post.getAttribute("data-bokoun-post-id") === String(anchor.postId)) || items.at(-1);
@@ -6967,6 +7048,7 @@ ${COMPACT_READER_STYLES}
       animateRouteEntry,
       animateRouteExit,
       routeAnimationTarget,
+      listReturnTarget,
       goBack,
       openThread,
       closeThread,
@@ -7021,6 +7103,7 @@ ${COMPACT_READER_STYLES}
     const restoreScroll = (...args) => ctx2.restoreScroll(...args);
     const nativeReady = (...args) => ctx2.nativeReady(...args);
     const readFavoritesFromDom = (...args) => ctx2.readFavoritesFromDom(...args);
+    const readActiveFromDom = (...args) => ctx2.readActiveFromDom(...args);
     const cachedStructuredModel = (...args) => ctx2.cachedStructuredModel(...args);
     const structuredModelAge = (...args) => ctx2.structuredModelAge(...args);
     const ensureStructuredModel = (...args) => ctx2.ensureStructuredModel(...args);
@@ -7073,14 +7156,17 @@ ${COMPACT_READER_STYLES}
     }
     function scheduleFavoritesRefresh() {
       stopFavoritesRefresh();
-      if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || !["favorites", "board"].includes(routeType())) return;
+      if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || !["active", "favorites", "board"].includes(routeType())) return;
       state2.favoritesRefreshTimer = window.setTimeout(async () => {
         state2.favoritesRefreshTimer = 0;
-        if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || !["favorites", "board"].includes(routeType())) return;
+        if (state2.disabled || state2.nativeMode || document.visibilityState === "hidden" || !["active", "favorites", "board"].includes(routeType())) return;
         try {
-          await ensureStructuredModel("favorites", favoritesRefreshHref(), {
+          const currentType = routeType();
+          const refreshType = currentType === "active" ? "active" : "favorites";
+          const refreshHref = refreshType === "active" ? activeRefreshHref() : favoritesRefreshHref();
+          await ensureStructuredModel(refreshType, refreshHref, {
             reason: "favorites-poll",
-            render: routeType() === "favorites"
+            render: routeType() === refreshType
           });
         } finally {
           scheduleFavoritesRefresh();
@@ -7089,6 +7175,13 @@ ${COMPACT_READER_STYLES}
     }
     function favoritesRefreshHref() {
       const url = new URL("/fav/activity", location.origin);
+      if (new URL(location.href).searchParams.get("bokoun") === "on") {
+        url.searchParams.set("bokoun", "on");
+      }
+      return `${url.pathname}${url.search}`;
+    }
+    function activeRefreshHref() {
+      const url = new URL("/", location.origin);
       if (new URL(location.href).searchParams.get("bokoun") === "on") {
         url.searchParams.set("bokoun", "on");
       }
@@ -7189,17 +7282,21 @@ ${COMPACT_READER_STYLES}
       const previousY = state2.scroller?.scrollTop || 0;
       let model;
       let readSource = "dom";
-      if (type === "favorites") {
+      if (["active", "favorites"].includes(type)) {
         model = structuredRouteModel;
         if (model) readSource = "structured";
-        else model = readFavoritesFromDom();
-        model = reconcileFavoriteReadState(model);
-        state2.favoriteSourceClubs = model.map((club) => ({ ...club }));
-        if (currentFavoritesSettings().unreadOnly) {
-          model = model.filter((club) => club.unread > 0);
+        else model = type === "active" ? readActiveFromDom() : readFavoritesFromDom();
+        if (type === "favorites") {
+          model = reconcileFavoriteReadState(model);
+          state2.favoriteSourceClubs = model.map((club) => ({ ...club }));
+          if (currentFavoritesSettings().unreadOnly) {
+            model = model.filter((club) => club.unread > 0);
+          }
+          model = sortFavorites(model);
+          state2.favoriteViewClubs = model.map((club) => ({ ...club }));
+        } else {
+          state2.editingFavoriteOrder = false;
         }
-        model = sortFavorites(model);
-        state2.favoriteViewClubs = model.map((club) => ({ ...club }));
       } else {
         const structuredModel = structuredRouteModel;
         const nativeModel = structuredModel || readBoardFromDom(document, key);
@@ -7229,7 +7326,7 @@ ${COMPACT_READER_STYLES}
       state2.currentSignature = signature;
       state2.host.dataset.readSource = readSource;
       const inner = state2.shadow.querySelector(".app-inner");
-      inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
+      inner.innerHTML = ["active", "favorites"].includes(type) ? favoritesMarkup(model, type) : boardMarkup(model);
       attachUiEvents();
       commitLayerState("render-committed");
       const transitionDirection = consumeNavigationTransition(key);
@@ -7294,9 +7391,9 @@ ${COMPACT_READER_STYLES}
       state2.currentRouteKey = key;
       const type = routeType();
       scheduleFavoritesRefresh();
-      const reusePolledFavorites = type === "favorites" && structuredModelAge(type, key) < FAVORITES_REFRESH_MS2;
-      abortStructuredRequests(reusePolledFavorites ? type : "", reusePolledFavorites ? key : "");
-      if (!reusePolledFavorites) invalidateStructuredModel(type, key);
+      const reusePolledList = ["active", "favorites"].includes(type) && structuredModelAge(type, key) < FAVORITES_REFRESH_MS2;
+      abortStructuredRequests(reusePolledList ? type : "", reusePolledList ? key : "");
+      if (!reusePolledList) invalidateStructuredModel(type, key);
       if (!state2.host?.isConnected) mountShell();
       const outgoingRoute = state2.shadow.querySelector(".route-content");
       if (outgoingRoute) {
@@ -7332,7 +7429,7 @@ ${COMPACT_READER_STYLES}
     }
     function nativeObservationRoot() {
       const anchor = document.querySelector(
-        `${SELECTORS2.favoritesPage}, ${SELECTORS2.boardHeader}`
+        `${SELECTORS2.activePage}, ${SELECTORS2.favoritesPage}, ${SELECTORS2.boardHeader}`
       );
       if (!anchor) return null;
       let root = anchor;

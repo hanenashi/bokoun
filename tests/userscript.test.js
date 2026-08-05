@@ -61,8 +61,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.11\.3/);
-  assert.match(source, /export const VERSION = "0\.11\.3"/);
+  assert.match(source, /@version\s+0\.12\.0/);
+  assert.match(source, /export const VERSION = "0\.12\.0"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -87,6 +87,7 @@ test("older-page fallback stays authenticated and same-origin", () => {
 });
 
 test("compatibility layer uses semantic selectors, not generated Svelte classes", () => {
+  assert.match(source, /activeRows: "\.boards-section a\[href\^='\/boards\/'\]"/);
   assert.match(source, /favoriteRows: ".favorites-page a\[href\^='\/boards\/'\]"/);
   assert.match(source, /posts: "article.post\[data-post-id\]"/);
   assert.match(source, /postAvatar: "\.avatar img"/);
@@ -271,7 +272,7 @@ test("ordinary route commits preserve the mounted opaque Bokoun shell", () => {
     controllerSource.indexOf("if (!state.host?.isConnected) mountShell();"),
     controllerSource.indexOf("const transitionDirection = consumeNavigationTransition"),
   );
-  assert.match(ordinaryRender, /inner\.innerHTML = type === "favorites"/);
+  assert.match(ordinaryRender, /inner\.innerHTML = \["active", "favorites"\]\.includes\(type\)/);
   assert.match(ordinaryRender, /commitLayerState\("render-committed"\)/);
   assert.doesNotMatch(ordinaryRender, /revealNative|\.remove\(\)|bokounActive/);
   assert.doesNotMatch(controllerSource, /state\.host\?\.remove|state\.host\.remove/);
@@ -932,7 +933,7 @@ test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering
   assert.match(source, /Aktivita \+ nové/);
   assert.match(source, /data-unread-count=/);
   assert.match(source, /data-setting="favorite-font-family"/);
-  assert.match(source, /Svislé odsazení oblíbených posuvníkem/);
+  assert.match(source, /Svislé odsazení seznamu klubů posuvníkem/);
   assert.match(source, /--favorite-row-padding/);
   assert.doesNotMatch(source, /class="favorite-avatar"/);
   assert.match(source, /data-setting="avatar-shape"/);
@@ -998,11 +999,12 @@ test("compact-reader CSS remains a final isolated cascade layer", () => {
 
 test("compact reader club strip is optional, bounded, and request-free", () => {
   assert.match(source, /class="club-strip"/);
-  assert.match(source, /aria-label="Rychlé přepínání klubů"/);
+  assert.match(source, /aria-label="Aktivní, oblíbené a rychlé přepínání klubů"/);
   assert.match(source, /data-setting="show-club-strip"/);
-  assert.match(uiSource, /favoritesActive\s+\?\s+\[\{\s*href: "\/fav\/activity",\s*name: "Oblíbené"/);
-  assert.match(uiSource, /:\s+\[\{\s*href: activeClub,\s*name: currentTitle/);
-  assert.match(uiSource, /\.slice\(0, favoritesActive \? 7 : 6\)/);
+  assert.match(uiSource, /\{ href: "\/", name: "Aktivní" \}/);
+  assert.match(uiSource, /\{ href: "\/fav\/activity", name: "Oblíbené" \}/);
+  assert.match(uiSource, /currentType === "board"[\s\S]*href: activeClub/);
+  assert.match(uiSource, /\.slice\(0, 8\)/);
   assert.match(source, /const MAX_RECENT_CLUBS = 8/);
   assert.match(source, /data-club-strip="visible"/);
   const clubStripSource = uiSource.slice(
@@ -1013,7 +1015,7 @@ test("compact reader club strip is optional, bounded, and request-free", () => {
 });
 
 test("compact headers keep the mode switch visible and use contextual overflow menus", () => {
-  assert.match(uiSource, /class="topbar topbar--favorites"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{fullscreenButton\(\)\}[\s\S]*\$\{overflowControlMarkup\("favorites"\)\}/);
+  assert.match(uiSource, /class="topbar topbar--favorites"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{fullscreenButton\(\)\}[\s\S]*\$\{overflowControlMarkup\(type\)\}/);
   assert.match(uiSource, /class="topbar topbar--board"[\s\S]*data-action="compose"[\s\S]*\$\{modeSwitchButton\(\)\}[\s\S]*\$\{fullscreenButton\(\)\}[\s\S]*\$\{overflowControlMarkup\("board"\)\}/);
   assert.match(uiSource, /data-action="mode-switch"/);
   assert.match(uiSource, /aria-label="Přepnout do plné Kapybary"/);
@@ -1098,6 +1100,7 @@ test("mode switching and disabling remain distinct and preserve the handoff anch
 });
 
 test("compact reader route transitions classify routes and use bounded blur motion", () => {
+  assert.equal(transitionRouteKey("https://kapybara.okoun.cz/?bokoun=on"), "/");
   assert.equal(
     transitionRouteKey("https://kapybara.okoun.cz/boards/test?bokoun=on"),
     "/boards/test",
@@ -1107,6 +1110,8 @@ test("compact reader route transitions classify routes and use bounded blur moti
     "/boards/test?rootId=42",
   );
   assert.equal(inferNavigationDirection("/fav/activity", "/boards/test"), "forward");
+  assert.equal(inferNavigationDirection("/", "/boards/test"), "forward");
+  assert.equal(inferNavigationDirection("/", "/fav/activity"), "lateral");
   assert.equal(inferNavigationDirection("/boards/test", "/fav/activity"), "back");
   assert.equal(
     inferNavigationDirection("/boards/test", "/boards/test?rootId=42"),
@@ -1536,6 +1541,16 @@ test("decodes a sanitized streamed SvelteKit Favorites contract", () => {
   assert.match(model[0].activity, /^před \d+ dny$/);
 });
 
+test("decodes Kapybara's active-club list without changing its activity order", () => {
+  const roots = structured.decodeSvelteDataText(fixture("active.svelte-data.ndjson"));
+  const model = structured.activeModelFromSvelteRoots(roots);
+
+  assert.deepEqual(model.map((club) => club.name), ["Recently Busy", "Also Moving"]);
+  assert.equal(model[0].href, "/boards/recently-busy");
+  assert.equal(model[0].unread, 7);
+  assert.equal(model[1].unread, 0);
+});
+
 test("hardware Back finalizes a board visit before Favorites render", () => {
   const renderIndex = source.indexOf("function render({ force = false } = {})");
   const transitionIndex = source.indexOf(
@@ -1549,12 +1564,14 @@ test("hardware Back finalizes a board visit before Favorites render", () => {
   assert.match(source, /boundary >= lastPosted/);
 });
 
-test("club back targets Favorites while thread back first clears branch focus", () => {
+test("club back targets its originating list while thread Back clears branch focus", () => {
   const goBack = navigationSource.slice(
     navigationSource.indexOf("function goBack()"),
     navigationSource.indexOf("async function openThread"),
   );
-  assert.match(goBack, /navigateNative\("\/fav\/activity", \{ direction: "back" \}\)/);
+  assert.match(goBack, /navigateNative\(listReturnTarget\(\), \{ direction: "back" \}\)/);
+  assert.match(navigationSource, /JSON\.stringify\(\{[\s\S]*list:[\s\S]*boardPath: target\.pathname/);
+  assert.match(navigationSource, /stored\?\.boardPath[\s\S]*=== boardPath[\s\S]*\? stored\.list/);
   assert.doesNotMatch(goBack, /history\.back/);
   assert.match(source, /threadMode \? "thread-back" : "back"/);
   assert.match(
@@ -1760,7 +1777,7 @@ test("structured reads are primary and retain an explicit DOM fallback", () => {
   assert.match(source, /cachedStructuredModel\(type, key\)/);
   assert.match(source, /if \(!structuredRouteModel && !nativeReady\(type\)\) return/);
   assert.match(source, /const isThreadRoute = type === "board"/);
-  assert.match(source, /else model = readFavoritesFromDom\(\)/);
+  assert.match(source, /type === "active" \? readActiveFromDom\(\) : readFavoritesFromDom\(\)/);
   assert.match(source, /structuredModel \|\| readBoardFromDom\(document, key\)/);
   assert.match(source, /Structured \$\{type\} data unavailable; using DOM fallback/);
 });
@@ -1882,18 +1899,18 @@ test("ordinary rerenders are network-quiet and board entry has no preflight", ()
   assert.match(source, /state\.boardLoadAbort\?\.abort\(\)/);
 });
 
-test("Favorites polling is visible-route only, one-minute, and self-rescheduling", () => {
+test("club-list polling is visible-route only, one-minute, and self-rescheduling", () => {
   const polling = controllerSource.slice(
     controllerSource.indexOf("function stopFavoritesRefresh"),
     controllerSource.indexOf("function exposeDebugTools"),
   );
   assert.match(source, /FAVORITES_REFRESH_MS = 60_000/);
-  assert.match(polling, /\["favorites", "board"\]\.includes\(routeType\(\)\)/);
+  assert.match(polling, /\["active", "favorites", "board"\]\.includes\(routeType\(\)\)/);
   assert.match(polling, /document\.visibilityState === "hidden"/);
-  assert.match(polling, /ensureStructuredModel\("favorites", favoritesRefreshHref\(\)/);
-  assert.match(polling, /render: routeType\(\) === "favorites"/);
+  assert.match(polling, /refreshType = currentType === "active" \? "active" : "favorites"/);
+  assert.match(polling, /render: routeType\(\) === refreshType/);
   assert.match(polling, /finally \{\s*scheduleFavoritesRefresh\(\)/);
   assert.match(source, /stopFavoritesRefresh\(\);\s*state\.observer\?\.disconnect/);
   assert.match(source, /structuredModelAge\(type, key\) < FAVORITES_REFRESH_MS/);
-  assert.match(source, /if \(!reusePolledFavorites\) invalidateStructuredModel\(type, key\)/);
+  assert.match(source, /if \(!reusePolledList\) invalidateStructuredModel\(type, key\)/);
 });

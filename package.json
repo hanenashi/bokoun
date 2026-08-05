@@ -1,6 +1,6 @@
 {
   "name": "bokoun",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "description": "Minimal mobile reading and Markdown writing interface for Kapybara/Okoun",

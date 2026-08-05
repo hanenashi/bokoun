@@ -4,7 +4,8 @@ export function preserveForcedBokounMode(href, currentHref, origin = "") {
       || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
     const target = new URL(href, base);
     const current = new URL(currentHref, base);
-    const supported = target.pathname === "/fav/activity"
+    const supported = target.pathname === "/"
+      || target.pathname === "/fav/activity"
       || target.pathname === "/fav/topics"
       || /^\/boards\/[^/]+\/?$/.test(target.pathname);
     if (
@@ -39,6 +40,7 @@ export function transitionRouteKey(value, origin = "") {
       || (typeof location !== "undefined" ? location.origin : "https://kapybara.okoun.cz");
     const url = new URL(value, base);
     if (url.origin !== base) return "";
+    if (url.pathname === "/") return "/";
     if (url.pathname === "/fav/activity" || url.pathname === "/fav/topics") {
       return "/fav/activity";
     }
@@ -57,10 +59,11 @@ export function inferNavigationDirection(from, to, { historyTraversal = false } 
   const fromKey = transitionRouteKey(from);
   const toKey = transitionRouteKey(to);
   if (!fromKey || !toKey || fromKey === toKey) return "";
-  const fromFavorite = fromKey === "/fav/activity";
-  const toFavorite = toKey === "/fav/activity";
-  if (fromFavorite && !toFavorite) return "forward";
-  if (!fromFavorite && toFavorite) return "back";
+  const listRoutes = new Set(["/", "/fav/activity"]);
+  const fromList = listRoutes.has(fromKey);
+  const toList = listRoutes.has(toKey);
+  if (fromList && !toList) return "forward";
+  if (!fromList && toList) return "back";
   const fromThread = fromKey.includes("?rootId=");
   const toThread = toKey.includes("?rootId=");
   if (!fromThread && toThread) return "forward";
@@ -75,6 +78,7 @@ export function installNavigation(ctx) {
     RETURN_HOST_ID,
     BOOT_TIMEOUT_MS,
     NAVIGATION_INTENT_KEY = "bokoun.navigation-intent.v1",
+    LIST_RETURN_KEY = "bokoun.list-return.v1",
     SESSION_DISABLED_KEY,
     SELECTORS,
     state,
@@ -100,6 +104,47 @@ export function installNavigation(ctx) {
   function transitionsEnabled() {
     const display = currentDisplaySettings();
     return display.interfacePreset === "compact-reader" && display.pageTransitions;
+  }
+
+  function storedListReturn() {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(LIST_RETURN_KEY) || "null");
+      if (
+        !stored
+        || !["/", "/fav/activity"].includes(stored.list)
+        || !/^\/boards\/[^/]+\/?$/.test(stored.boardPath)
+      ) return null;
+      return stored;
+    } catch {
+      return null;
+    }
+  }
+
+  function listReturnTarget(boardPath = location.pathname) {
+    const stored = storedListReturn();
+    return stored?.boardPath.replace(/\/$/, "") === boardPath.replace(/\/$/, "")
+      ? stored.list
+      : "/fav/activity";
+  }
+
+  function rememberListReturn(target) {
+    const sourceType = routeType();
+    const targetType = routeType(target.pathname);
+    if (["active", "favorites"].includes(sourceType) && targetType === "board") {
+      sessionStorage.setItem(LIST_RETURN_KEY, JSON.stringify({
+        list: sourceType === "active" ? "/" : "/fav/activity",
+        boardPath: target.pathname,
+      }));
+      return;
+    }
+    if (sourceType === "board" && targetType === "board") {
+      const stored = storedListReturn();
+      if (stored?.boardPath.replace(/\/$/, "") !== location.pathname.replace(/\/$/, "")) return;
+      sessionStorage.setItem(LIST_RETURN_KEY, JSON.stringify({
+        ...stored,
+        boardPath: target.pathname,
+      }));
+    }
   }
 
   function prepareNavigationTransition(
@@ -255,6 +300,7 @@ export function installNavigation(ctx) {
     if (!href) return;
     saveScroll();
     const target = preserveForcedBokounMode(href, location.href, location.origin);
+    rememberListReturn(target);
     prepareNavigationTransition(target.href, { direction });
     if (routeType() === "board" && target.pathname !== location.pathname) {
       leaveBoardVisit(location.pathname);
@@ -295,7 +341,7 @@ export function installNavigation(ctx) {
 
   function goBack() {
     saveScroll();
-    navigateNative("/fav/activity", { direction: "back" });
+    navigateNative(listReturnTarget(), { direction: "back" });
   }
 
   async function openThread(rootId, postId = "") {
@@ -360,7 +406,7 @@ export function installNavigation(ctx) {
   function captureBokounAnchor() {
     if (!state.scroller || !state.shadow) return null;
     const scrollerRect = state.scroller.getBoundingClientRect();
-    if (routeType() === "favorites") {
+    if (["active", "favorites"].includes(routeType())) {
       const rows = [...state.shadow.querySelectorAll(".favorite-item [data-native-href]")];
       const row = rows.find((item) => item.getBoundingClientRect().bottom > scrollerRect.top)
         || rows.at(-1);
@@ -387,8 +433,9 @@ export function installNavigation(ctx) {
   }
 
   function captureNativeAnchor() {
-    if (routeType() === "favorites") {
-      const rows = [...document.querySelectorAll(SELECTORS.favoriteRows)];
+    if (["active", "favorites"].includes(routeType())) {
+      const selector = routeType() === "active" ? SELECTORS.activeRows : SELECTORS.favoriteRows;
+      const rows = [...document.querySelectorAll(selector)];
       const row = rows.find((item) => item.getBoundingClientRect().bottom > 0) || rows.at(-1);
       if (!row) return null;
       return {
@@ -417,8 +464,10 @@ export function installNavigation(ctx) {
     if (!anchor) return;
     document.documentElement.dataset.bokounAligning = "true";
     const apply = () => {
-      const target = routeType() === "favorites"
-        ? [...document.querySelectorAll(SELECTORS.favoriteRows)]
+      const target = ["active", "favorites"].includes(routeType())
+        ? [...document.querySelectorAll(
+          routeType() === "active" ? SELECTORS.activeRows : SELECTORS.favoriteRows,
+        )]
           .find((row) => sameFavoriteRoute(row.getAttribute("href"), anchor.favoriteHref))
         : nativePostById(anchor.postId)
           || [...document.querySelectorAll(SELECTORS.posts)].at(-1);
@@ -448,10 +497,10 @@ export function installNavigation(ctx) {
     if (!anchor || !state.scroller || !state.shadow) return;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const items = routeType() === "favorites"
+        const items = ["active", "favorites"].includes(routeType())
           ? [...state.shadow.querySelectorAll(".favorite-item [data-native-href]")]
           : [...state.shadow.querySelectorAll("[data-bokoun-post-id]")];
-        const target = routeType() === "favorites"
+        const target = ["active", "favorites"].includes(routeType())
           ? items.find((row) => sameFavoriteRoute(
             row.getAttribute("data-native-href"),
             anchor.favoriteHref,
@@ -522,6 +571,7 @@ export function installNavigation(ctx) {
     animateRouteEntry,
     animateRouteExit,
     routeAnimationTarget,
+    listReturnTarget,
     goBack,
     openThread,
     closeThread,

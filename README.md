@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, configurable live-refreshing Favorites, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.11.3`).
+> Status: event-driven structured-data reading, live active clubs and Favorites, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.12.0`).
 
 ## Install the first prototype
 
@@ -16,7 +16,7 @@ another userscript manager, then open Kapybara on a phone:
 - [install Bokoun directly](https://github.com/hanenashi/bokoun/raw/refs/heads/main/bokoun.user.js)
   while signed into GitHub;
 - after the first installation, reload any Kapybara tab that was already open;
-- supported routes: `/fav/activity`, `/fav/topics` and `/boards/{club}`;
+- supported routes: `/` (Aktivní), `/fav/activity`, `/fav/topics` and `/boards/{club}`;
 - Bokoun activates automatically at viewport widths up to 760 px;
 - append `?bokoun=on` to a supported URL to try it on desktop;
 - tap the permanent **◐** switch to show normal Kapybara; the same **◐** stays
@@ -36,7 +36,7 @@ failures restore normal Kapybara automatically.
 
 Current prototype boundaries:
 
-- it reads Favorites and boards from authenticated same-origin
+- it reads active clubs, Favorites and boards from authenticated same-origin
   `text/sveltekit-data` routes;
 - approaching the bottom loads older post batches through the same structured
   transport;
@@ -61,12 +61,11 @@ Current prototype boundaries:
 - refreshing or opening a thread keeps the active visit boundary, while leaving
   the club records its newest seen timestamp and returning combines it with
   Kapybara's latest read marker;
-- Favorites always use Kapybara's Activity feed; the redundant Activity/Topics
-  tab row is removed to recover mobile height;
-- Favorites keep **Oblíbené** as the active first item in the compact club
-  strip; club and thread routes omit that duplicate destination because their
-  Back arrow already returns to Favorites, leaving only the current and recent
-  sibling clubs;
+- **Aktivní** mirrors Kapybara's current twenty recently active clubs in native
+  activity order; **Oblíbené** retains its configurable sorting and unread tools;
+- the compact strip keeps **Aktivní** and **Oblíbené** first, followed by the
+  current and recently visited clubs. Opening a club remembers which list it came
+  from, so Back returns to that list and restores its saved position;
 - route headers are deliberately compact: Favorites show the title, **⋮** and
   a far-right **◐**; clubs add Back and the primary pencil. Sorting, refresh, appearance,
   display and disable actions live in route-specific **⋮** menus;
@@ -233,18 +232,18 @@ session without exporting credentials anywhere.
 
 Bokoun should feel like a quiet reader, not a miniature social network.
 
-### Favorites
+### Club lists
 
 - One compact row per club.
 - Club name, unread count and last activity only.
-- Activity ordering only; Bokoun omits the extra tab row.
-- Optional "only with unread posts" filter.
+- Active clubs retain Kapybara's live activity ordering.
+- Favorites offer configurable ordering and an optional "only with unread posts" filter.
 - Exact scroll position restored after returning from a club.
 - No decorative cards or secondary metadata walls.
 
 ### Board
 
-- Sticky bar with Back, club name and Favorites.
+- Sticky bar with Back, club name and list shortcuts.
 - Chronological post list.
 - Clear visual separators.
 - Author, date, body and a small reply reference.
@@ -611,6 +610,12 @@ Favorites/board model construction from adapter transport, cache and fallback
 ownership. The installed compatibility API and request discipline remain the
 same, while fixture decoding can evolve without touching fetch lifecycles.
 
+Version `0.12.0` adds Kapybara's live recently active club list as a first-class
+Bokoun route. The compact strip starts with **Aktivní** and **Oblíbené** before
+recent clubs, list-to-club Back remembers its origin, and the visible active
+list reuses the existing bounded one-minute refresh without adding a parallel
+poller or direct GraphQL traffic.
+
 ## Roadmap
 
 ### Phase 0 — contract recorder
@@ -813,7 +818,7 @@ back to **Výchozí Bokoun** leaves existing font, avatar, Favorites and
 comparison preferences intact.
 
 Version `0.8.1` adds an optional horizontal club strip to **Kompaktní čtečka**.
-It keeps **Oblíbené** and up to six recently visited clubs within one tap,
+It keeps the primary club lists and recently visited clubs within one tap,
 marks the current destination and uses the existing Bokoun navigation and read
 state. The locally stored history is bounded to eight clubs, causes no extra
 network requests, and can be switched off independently in either appearance

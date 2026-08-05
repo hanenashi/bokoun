@@ -37,10 +37,11 @@ export function installUiPanels(ctx) {
 
   function overflowMenuMarkup(type) {
     const favorites = type === "favorites";
+    const active = type === "active";
     const unreadOnly = currentFavoritesSettings().unreadOnly;
     return `
       <div class="header-panel overflow-menu" role="menu" aria-label="${
-        favorites ? "Možnosti oblíbených" : "Možnosti klubu"
+        favorites ? "Možnosti oblíbených" : active ? "Možnosti aktivních klubů" : "Možnosti klubu"
       }">
         ${favorites ? `
           <button type="button" role="menuitem" data-action="open-panel" data-panel="favorite-sort">Řazení…</button>
@@ -53,6 +54,9 @@ export function installUiPanels(ctx) {
           <button type="button" role="menuitem" data-action="edit-favorite-order">${
             state.editingFavoriteOrder ? "Dokončit pořadí" : "Upravit pořadí"
           }</button>
+          <button type="button" role="menuitem" data-action="open-panel" data-panel="favorites-appearance">Písmo a vzhled…</button>
+        ` : active ? `
+          <button type="button" role="menuitem" data-action="refresh">Obnovit</button>
           <button type="button" role="menuitem" data-action="open-panel" data-panel="favorites-appearance">Písmo a vzhled…</button>
         ` : `
           <button type="button" role="menuitem" data-action="refresh">Obnovit</button>
@@ -117,16 +121,16 @@ export function installUiPanels(ctx) {
     const normalizedCustomFont = normalizeCustomFamily(favorites.customFontFamily);
     const invalidCustomFont = Boolean(favorites.customFontFamily.trim() && !normalizedCustomFont);
     return `
-      <section class="header-panel favorites-panel" aria-label="Písmo a vzhled oblíbených">
+      <section class="header-panel favorites-panel" aria-label="Písmo a vzhled seznamu klubů">
         <header class="panel-head">
           <strong>Písmo a vzhled</strong>
           <button type="button" data-action="close-header-panel" aria-label="Zavřít">×</button>
         </header>
         ${interfaceAppearanceMarkup(display)}
-        <div class="panel-section-title">Oblíbené</div>
+        <div class="panel-section-title">Seznam klubů</div>
         <label class="settings-field">
           <span>Písmo</span>
-          <select data-setting="favorite-font-family" aria-label="Písmo oblíbených">${fontOptionsMarkup(favorites.fontFamily)}</select>
+          <select data-setting="favorite-font-family" aria-label="Písmo seznamu klubů">${fontOptionsMarkup(favorites.fontFamily)}</select>
         </label>
         <label class="settings-field settings-field--custom" ${customFont ? "" : "hidden"}>
           <span>Vlastní</span>
@@ -137,7 +141,7 @@ export function installUiPanels(ctx) {
               autocomplete="off"
               spellcheck="false"
               value="${escapeHtml(favorites.customFontFamily)}"
-              aria-label="Vlastní písmo oblíbených"
+              aria-label="Vlastní písmo seznamu klubů"
               aria-invalid="${invalidCustomFont ? "true" : "false"}"
             >
             <small>${invalidCustomFont ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami"}</small>
@@ -146,15 +150,15 @@ export function installUiPanels(ctx) {
         <div class="settings-field">
           <span>Velikost</span>
           <span class="font-size-controls">
-            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma oblíbených posuvníkem">
-            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma oblíbených v pixelech">
+            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma seznamu klubů posuvníkem">
+            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma seznamu klubů v pixelech">
             <span>px</span>
           </span>
         </div>
         <div class="settings-field">
           <span>Odsazení</span>
           <span class="compact-range-controls">
-            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení oblíbených posuvníkem">
+            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení seznamu klubů posuvníkem">
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>

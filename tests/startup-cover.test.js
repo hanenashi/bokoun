@@ -13,6 +13,14 @@ const favoritesData = fs.readFileSync(
   path.join(dirname, "fixtures", "favorites.svelte-data.ndjson"),
   "utf8",
 );
+const activeData = fs.readFileSync(
+  path.join(dirname, "fixtures", "active.svelte-data.ndjson"),
+  "utf8",
+);
+const boardData = fs.readFileSync(
+  path.join(dirname, "fixtures", "board.svelte-data.ndjson"),
+  "utf8",
+);
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -35,6 +43,22 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       setTimeout(() => {
         response.writeHead(200, { "content-type": "text/sveltekit-data" });
         response.end(favoritesData);
+      }, 650);
+      return;
+    }
+    if (request.url?.startsWith("/boards/recently-busy/__data.json")) {
+      structuredRequests += 1;
+      setTimeout(() => {
+        response.writeHead(200, { "content-type": "text/sveltekit-data" });
+        response.end(boardData);
+      }, 650);
+      return;
+    }
+    if (request.url?.startsWith("/__data.json")) {
+      structuredRequests += 1;
+      setTimeout(() => {
+        response.writeHead(200, { "content-type": "text/sveltekit-data" });
+        response.end(activeData);
       }, 650);
       return;
     }
@@ -201,6 +225,57 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
             ?.querySelector(".overflow-menu")
         ));
 
+        assert.deepEqual(
+          await page.locator("#bokoun-host .club-strip-link").allTextContents(),
+          ["Aktivní", "Oblíbené"],
+        );
+        await page.locator("#bokoun-host .club-strip-link", { hasText: "Aktivní" }).click();
+        await page.waitForFunction(() => (
+          location.pathname === "/"
+          && document.documentElement.dataset.bokounBooting !== "true"
+          && document.getElementById("bokoun-host")?.shadowRoot
+            ?.querySelector(".favorite-name")?.textContent === "Recently Busy"
+        ));
+        assert.equal(
+          await page.locator("#bokoun-host .club-strip-link[aria-current='page']").textContent(),
+          "Aktivní",
+        );
+        assert.deepEqual(
+          await page.locator("#bokoun-host .favorite-name").allTextContents(),
+          ["Recently Busy", "Also Moving"],
+        );
+        if (process.env.BOKOUN_QA_SCREENSHOT) {
+          const activeScreenshot = process.env.BOKOUN_QA_SCREENSHOT.replace(
+            /(\.[^.]+)?$/,
+            "-active$1",
+          );
+          await page.screenshot({ path: activeScreenshot, fullPage: false });
+        }
+
+        await page.locator("#bokoun-host .favorite-row", { hasText: "Recently Busy" }).click();
+        await page.waitForFunction(() => (
+          location.pathname === "/boards/recently-busy"
+          && document.getElementById("bokoun-host")?.shadowRoot?.querySelector(".posts")
+        ));
+        assert.equal(
+          await page.locator("#bokoun-host [data-action='back']").getAttribute("aria-label"),
+          "Zpět do aktivních klubů",
+        );
+        await page.locator("#bokoun-host [data-action='back']").click();
+        await page.waitForFunction(() => (
+          location.pathname === "/"
+          && document.documentElement.dataset.bokounBooting !== "true"
+          && document.getElementById("bokoun-host")?.shadowRoot
+            ?.querySelector(".favorite-name")?.textContent === "Recently Busy"
+        ));
+
+        await page.locator("#bokoun-host .club-strip-link", { hasText: "Oblíbené" }).click();
+        await page.waitForFunction(() => (
+          location.pathname === "/fav/activity"
+          && document.getElementById("bokoun-host")?.shadowRoot
+            ?.querySelector(".favorite-name")?.textContent === "Fixture Club"
+        ));
+
         await page.evaluate(() => {
           const host = document.getElementById("bokoun-host");
           host.dataset.testStableHost = "startup-host";
@@ -251,7 +326,11 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
       assert.deepEqual(runtimeErrors, []);
       await context.close();
     }
-    assert.equal(structuredRequests, 2, "startup adds no request beyond the existing structured read");
+    assert.equal(
+      structuredRequests,
+      6,
+      "each explicit list/board navigation performs only its destination structured read",
+    );
   } finally {
     await browser?.close();
     await close(server);

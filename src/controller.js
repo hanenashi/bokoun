@@ -41,6 +41,7 @@ export function installController(ctx) {
   const restoreScroll = (...args) => ctx.restoreScroll(...args);
   const nativeReady = (...args) => ctx.nativeReady(...args);
   const readFavoritesFromDom = (...args) => ctx.readFavoritesFromDom(...args);
+  const readActiveFromDom = (...args) => ctx.readActiveFromDom(...args);
   const cachedStructuredModel = (...args) => ctx.cachedStructuredModel(...args);
   const structuredModelAge = (...args) => ctx.structuredModelAge(...args);
   const ensureStructuredModel = (...args) => ctx.ensureStructuredModel(...args);
@@ -100,7 +101,7 @@ export function installController(ctx) {
       state.disabled
       || state.nativeMode
       || document.visibilityState === "hidden"
-      || !["favorites", "board"].includes(routeType())
+      || !["active", "favorites", "board"].includes(routeType())
     ) return;
     state.favoritesRefreshTimer = window.setTimeout(async () => {
       state.favoritesRefreshTimer = 0;
@@ -108,12 +109,15 @@ export function installController(ctx) {
         state.disabled
         || state.nativeMode
         || document.visibilityState === "hidden"
-        || !["favorites", "board"].includes(routeType())
+        || !["active", "favorites", "board"].includes(routeType())
       ) return;
       try {
-        await ensureStructuredModel("favorites", favoritesRefreshHref(), {
+        const currentType = routeType();
+        const refreshType = currentType === "active" ? "active" : "favorites";
+        const refreshHref = refreshType === "active" ? activeRefreshHref() : favoritesRefreshHref();
+        await ensureStructuredModel(refreshType, refreshHref, {
           reason: "favorites-poll",
-          render: routeType() === "favorites",
+          render: routeType() === refreshType,
         });
       } finally {
         scheduleFavoritesRefresh();
@@ -123,6 +127,14 @@ export function installController(ctx) {
 
   function favoritesRefreshHref() {
     const url = new URL("/fav/activity", location.origin);
+    if (new URL(location.href).searchParams.get("bokoun") === "on") {
+      url.searchParams.set("bokoun", "on");
+    }
+    return `${url.pathname}${url.search}`;
+  }
+
+  function activeRefreshHref() {
+    const url = new URL("/", location.origin);
     if (new URL(location.href).searchParams.get("bokoun") === "on") {
       url.searchParams.set("bokoun", "on");
     }
@@ -241,17 +253,21 @@ export function installController(ctx) {
     const previousY = state.scroller?.scrollTop || 0;
     let model;
     let readSource = "dom";
-    if (type === "favorites") {
+    if (["active", "favorites"].includes(type)) {
       model = structuredRouteModel;
       if (model) readSource = "structured";
-      else model = readFavoritesFromDom();
-      model = reconcileFavoriteReadState(model);
-      state.favoriteSourceClubs = model.map((club) => ({ ...club }));
-      if (currentFavoritesSettings().unreadOnly) {
-        model = model.filter((club) => club.unread > 0);
+      else model = type === "active" ? readActiveFromDom() : readFavoritesFromDom();
+      if (type === "favorites") {
+        model = reconcileFavoriteReadState(model);
+        state.favoriteSourceClubs = model.map((club) => ({ ...club }));
+        if (currentFavoritesSettings().unreadOnly) {
+          model = model.filter((club) => club.unread > 0);
+        }
+        model = sortFavorites(model);
+        state.favoriteViewClubs = model.map((club) => ({ ...club }));
+      } else {
+        state.editingFavoriteOrder = false;
       }
-      model = sortFavorites(model);
-      state.favoriteViewClubs = model.map((club) => ({ ...club }));
     } else {
       const structuredModel = structuredRouteModel;
       const nativeModel = structuredModel || readBoardFromDom(document, key);
@@ -294,7 +310,9 @@ export function installController(ctx) {
     state.currentSignature = signature;
     state.host.dataset.readSource = readSource;
     const inner = state.shadow.querySelector(".app-inner");
-    inner.innerHTML = type === "favorites" ? favoritesMarkup(model) : boardMarkup(model);
+    inner.innerHTML = ["active", "favorites"].includes(type)
+      ? favoritesMarkup(model, type)
+      : boardMarkup(model);
     attachUiEvents();
     commitLayerState("render-committed");
 
@@ -367,12 +385,12 @@ export function installController(ctx) {
     state.currentRouteKey = key;
     const type = routeType();
     scheduleFavoritesRefresh();
-    const reusePolledFavorites = (
-      type === "favorites"
+    const reusePolledList = (
+      ["active", "favorites"].includes(type)
       && structuredModelAge(type, key) < FAVORITES_REFRESH_MS
     );
-    abortStructuredRequests(reusePolledFavorites ? type : "", reusePolledFavorites ? key : "");
-    if (!reusePolledFavorites) invalidateStructuredModel(type, key);
+    abortStructuredRequests(reusePolledList ? type : "", reusePolledList ? key : "");
+    if (!reusePolledList) invalidateStructuredModel(type, key);
     if (!state.host?.isConnected) mountShell();
     const outgoingRoute = state.shadow.querySelector(".route-content");
     if (outgoingRoute) {
@@ -420,7 +438,7 @@ export function installController(ctx) {
 
   function nativeObservationRoot() {
     const anchor = document.querySelector(
-      `${SELECTORS.favoritesPage}, ${SELECTORS.boardHeader}`,
+      `${SELECTORS.activePage}, ${SELECTORS.favoritesPage}, ${SELECTORS.boardHeader}`,
     );
     if (!anchor) return null;
     let root = anchor;

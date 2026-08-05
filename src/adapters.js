@@ -1,4 +1,5 @@
 import {
+  activeModelFromSvelteRoots,
   boardModelFromSvelteRoots as normalizeBoardModel,
   decodeSvelteDataText,
   decodeSvelteDataValues,
@@ -105,6 +106,26 @@ export function installAdapters(ctx) {
       .filter((club) => club.href && club.name);
   }
 
+  function readActiveFromDom() {
+    const seen = new Set();
+    return [...document.querySelectorAll(SELECTORS.activeRows)]
+      .map((row) => {
+        const href = normalizeHref(row.getAttribute("href"));
+        if (!href || seen.has(href)) return null;
+        seen.add(href);
+        const datetime = row.querySelector("time[datetime]")?.getAttribute("datetime") || "";
+        return {
+          id: String(row.dataset.boardId || ""),
+          href,
+          name: text(row.querySelector(".name")) || text(row),
+          unread: unreadCount(row),
+          activity: relativeActivityFromTimestamp(datetime),
+          lastPosted: datetime,
+        };
+      })
+      .filter((club) => club?.href && club.name);
+  }
+
   function boardModelFromSvelteRoots(roots, pageHref, options = {}) {
     const sanitize = typeof options.sanitize === "function"
       ? options.sanitize
@@ -151,7 +172,9 @@ export function installAdapters(ctx) {
     const roots = decodeSvelteDataText(await response.text());
     const model = type === "favorites"
       ? favoritesModelFromSvelteRoots(roots)
-      : boardModelFromSvelteRoots(roots, pageHref);
+      : type === "active"
+        ? activeModelFromSvelteRoots(roots)
+        : boardModelFromSvelteRoots(roots, pageHref);
     return { type, model, fetchedAt: now() };
   }
 
@@ -428,6 +451,7 @@ export function installAdapters(ctx) {
     relativeActivityFromTimestamp,
     relativeActivity,
     readFavoritesFromDom,
+    readActiveFromDom,
     decodeSvelteDataValues,
     decodeSvelteDataText,
     formatPragueParts,
@@ -437,6 +461,7 @@ export function installAdapters(ctx) {
     normalizedStructuredPageHref,
     boardModelFromSvelteRoots,
     favoritesModelFromSvelteRoots,
+    activeModelFromSvelteRoots,
     structuredDataUrl,
     fetchStructuredModel,
     structuredCacheKey,

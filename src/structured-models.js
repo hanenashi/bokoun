@@ -208,17 +208,32 @@ export function boardModelFromSvelteRoots(
   };
 }
 
-export function favoritesModelFromSvelteRoots(roots) {
-  const root = roots.filter((candidate) => Array.isArray(candidate?.boards)).at(-1);
-  if (!root || root.apiAccessRequired || root.error) {
-    throw new Error("Incomplete structured Favorites data");
-  }
-  return root.boards.map((board) => ({
+function clubSummary(board) {
+  return {
     id: String(board?.id || ""),
     href: `/boards/${encodeURIComponent(String(board?.slug || ""))}`,
     name: String(board?.name || ""),
     unread: Number.isFinite(board?.newPostsCount) ? Math.max(0, board.newPostsCount) : 0,
     activity: relativeActivityFromTimestamp(board?.lastPosted),
     lastPosted: typeof board?.lastPosted === "string" ? board.lastPosted : "",
-  })).filter((club) => club.href !== "/boards/" && club.name);
+  };
+}
+
+function clubListFromRoot(root, field, label) {
+  if (!root || root.apiAccessRequired || root.error || !Array.isArray(root[field])) {
+    throw new Error(`Incomplete structured ${label} data`);
+  }
+  return root[field]
+    .map(clubSummary)
+    .filter((club) => club.href !== "/boards/" && club.name);
+}
+
+export function favoritesModelFromSvelteRoots(roots) {
+  const root = roots.filter((candidate) => Array.isArray(candidate?.boards)).at(-1);
+  return clubListFromRoot(root, "boards", "Favorites");
+}
+
+export function activeModelFromSvelteRoots(roots) {
+  const root = roots.filter((candidate) => Array.isArray(candidate?.activeBoards)).at(-1);
+  return clubListFromRoot(root, "activeBoards", "active-club");
 }

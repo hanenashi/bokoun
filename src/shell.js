@@ -28,6 +28,7 @@ export function installShell(ctx) {
   const syncCompareMode = (...args) => ctx.syncCompareMode(...args);
 
   function routeType(pathname = location.pathname) {
+    if (pathname === "/") return "active";
     if (pathname === "/fav/activity" || pathname === "/fav/topics") return "favorites";
     if (/^\/boards\/[^/]+\/?$/.test(pathname)) return "board";
     return "unsupported";
@@ -590,6 +591,9 @@ export function installShell(ctx) {
 
 
   function nativeReady(type) {
+    if (type === "active") {
+      return Boolean(document.querySelector(SELECTORS.activePage));
+    }
     if (type === "favorites") {
       return Boolean(document.querySelector(SELECTORS.favoritesPage));
     }

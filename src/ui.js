@@ -16,9 +16,10 @@ export function installUi(ctx) {
   const normalizeClubRoute = (...args) => ctx.normalizeClubRoute(...args);
   const unreadHeat = (...args) => ctx.unreadHeat(...args);
   const overflowControlMarkup = (...args) => ctx.overflowControlMarkup(...args);
+  const listReturnTarget = (...args) => ctx.listReturnTarget(...args);
 
   function signatureFor(type, model) {
-    if (type === "favorites") {
+    if (["active", "favorites"].includes(type)) {
       return [
         routeKey(),
         JSON.stringify(currentDisplaySettings()),
@@ -100,19 +101,18 @@ export function installUi(ctx) {
     const display = currentDisplaySettings();
     if (display.interfacePreset !== "compact-reader" || !display.showClubStrip) return "";
     const activeClub = normalizeClubRoute(location.pathname);
-    const favoritesActive = routeType() === "favorites";
+    const currentType = routeType();
     const recent = currentRecentClubs();
-    const candidates = favoritesActive
-      ? [{
-        href: "/fav/activity",
-        name: "Oblíbené",
-        active: true,
-      }, ...recent]
-      : [{
+    const listLinks = [
+      { href: "/", name: "Aktivní" },
+      { href: "/fav/activity", name: "Oblíbené" },
+    ];
+    const candidates = currentType === "board"
+      ? [...listLinks, {
         href: activeClub,
         name: currentTitle || recent.find((club) => club.href === activeClub)?.name || "Klub",
-        active: true,
-      }, ...recent];
+      }, ...recent]
+      : [...listLinks, ...recent];
     const seen = new Set();
     const links = candidates
       .filter((link) => {
@@ -121,15 +121,17 @@ export function installUi(ctx) {
         seen.add(href);
         return true;
       })
-      .slice(0, favoritesActive ? 7 : 6)
+      .slice(0, 8)
       .map((link) => ({
         ...link,
-        active: favoritesActive
-          ? link.href === "/fav/activity"
-          : normalizeClubRoute(link.href) === activeClub,
+        active: link.href === "/"
+          ? currentType === "active"
+          : link.href === "/fav/activity"
+            ? currentType === "favorites"
+            : currentType === "board" && normalizeClubRoute(link.href) === activeClub,
       }));
     return `
-      <nav class="club-strip" aria-label="Rychlé přepínání klubů">
+      <nav class="club-strip" aria-label="Aktivní, oblíbené a rychlé přepínání klubů">
         ${links.map((link) => `
           <a
             class="club-strip-link${link.active ? " club-strip-link--active" : ""}"
@@ -142,9 +144,11 @@ export function installUi(ctx) {
     `;
   }
 
-  function favoritesMarkup(clubs) {
+  function favoritesMarkup(clubs, type = routeType()) {
     const favorites = currentFavoritesSettings();
-    const editing = favorites.sort === "manual" && state.editingFavoriteOrder;
+    const editing = type === "favorites"
+      && favorites.sort === "manual"
+      && state.editingFavoriteOrder;
     const showCount = ["count", "both"].includes(favorites.unreadMode);
     const showHeat = ["heat", "both"].includes(favorites.unreadMode);
     const rows = clubs.length
@@ -188,14 +192,14 @@ export function installUi(ctx) {
           </li>
         `;
       }).join("")
-      : `<li class="empty">Žádné oblíbené kluby.</li>`;
+      : `<li class="empty">${type === "active" ? "Žádné aktivní kluby." : "Žádné oblíbené kluby."}</li>`;
 
     return `
       <header class="topbar topbar--favorites">
         <h1 class="title title--brand">Bokoun</h1>
         ${modeSwitchButton()}
         ${fullscreenButton()}
-        ${overflowControlMarkup("favorites")}
+        ${overflowControlMarkup(type)}
       </header>
       ${clubStripMarkup()}
       <div class="route-content">
@@ -408,13 +412,16 @@ export function installUi(ctx) {
       ? '<button class="tail-action tail-action--accent" type="button" data-action="newest">↑ Nejnovější</button>'
       : "";
 
+    const listReturnLabel = listReturnTarget() === "/"
+      ? "aktivních klubů"
+      : "oblíbených";
     return `
       <header class="topbar topbar--board">
         <button
           class="icon-button"
           type="button"
           data-action="${threadMode ? "thread-back" : "back"}"
-          aria-label="${threadMode ? "Zpět do klubu" : "Zpět do oblíbených"}"
+          aria-label="${threadMode ? "Zpět do klubu" : `Zpět do ${listReturnLabel}`}"
         >${ICONS.back}</button>
         <h1 class="title">${escapeHtml(board.title)}</h1>
         <button class="icon-button" type="button" data-action="compose" aria-label="Napsat příspěvek">${ICONS.write}</button>
