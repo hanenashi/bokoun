@@ -6,7 +6,7 @@
 
 A deliberately minimal mobile interface for Kapybara/Okoun.
 
-> Status: event-driven structured-data reading, live active clubs and Favorites, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.12.1`).
+> Status: event-driven structured-data reading, live active clubs and Favorites, compact threaded clubs, visit-scoped new-post highlighting, optional first-unread navigation, inline Markdown writing, live Kapybara comparison, and the compact-reader interface (`0.12.2`).
 
 ## Install the first prototype
 
@@ -622,6 +622,14 @@ handoff to full Kapybara is now document-local instead of persisting a disabled
 tab flag: reloading deliberately starts Bokoun again, legacy stuck flags are
 cleared before boot, and a failed return transition restores a working return
 button for another attempt.
+
+Version `0.12.2` makes the compact club strip follow the font controls instead
+of pinning its links to 12 px. On Aktivní and Oblíbené it derives its compact
+type from the club-list font; inside a club it derives it from the post font.
+The default remains 12 px, while both custom family and size changes now carry
+through to Aktivní, Oblíbené and the neighboring-club links. Stable setting
+hooks also repair the club-list font, custom-font and spacing controls that had
+stopped reacting after their visible Czech labels were renamed.
 
 ## Roadmap
 

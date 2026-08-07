@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bokoun
 // @namespace    https://github.com/hanenashi/bokoun
-// @version      0.12.1
+// @version      0.12.2
 // @description  Minimal mobile reading and Markdown writing interface for Kapybara/Okoun
 // @author       BeeChan
 // @icon         https://github.com/hanenashi/bokoun/raw/refs/heads/main/assets/bokoun.ico
@@ -200,12 +200,18 @@
     padding: 0 10px;
     overflow: hidden;
     color: var(--muted);
-    font-size: 12px;
+    font-family: var(--post-font-family, inherit);
+    font-size: clamp(10px, calc(var(--post-font-size, 17px) - 5px), 24px);
     font-weight: 650;
     line-height: var(--club-strip-height);
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .app[data-interface-preset="compact-reader"] .topbar--favorites + .club-strip .club-strip-link {
+    font-family: var(--favorite-font-family, inherit);
+    font-size: clamp(10px, calc(var(--favorite-font-size, 17px) - 5px), 24px);
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip-link--active {
@@ -1897,7 +1903,7 @@ ${COMPACT_READER_STYLES}
 `;
 
   // src/runtime.js
-  var VERSION = "0.12.1";
+  var VERSION = "0.12.2";
   var HOST_ID = "bokoun-host";
   var RETURN_HOST_ID = "bokoun-return";
   var COMPARE_HOST_ID = "bokoun-compare";
@@ -5446,6 +5452,7 @@ ${COMPACT_READER_STYLES}
           <span class="custom-font-wrap">
             <input
               type="text"
+              data-setting="favorite-custom-font"
               maxlength="160"
               autocomplete="off"
               spellcheck="false"
@@ -5459,15 +5466,15 @@ ${COMPACT_READER_STYLES}
         <div class="settings-field">
           <span>Velikost</span>
           <span class="font-size-controls">
-            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma seznamu klubů posuvníkem">
-            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma seznamu klubů v pixelech">
+            <input type="range" data-setting="favorite-font-size-range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma seznamu klubů posuvníkem">
+            <input type="number" data-setting="favorite-font-size-number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma seznamu klubů v pixelech">
             <span>px</span>
           </span>
         </div>
         <div class="settings-field">
           <span>Odsazení</span>
           <span class="compact-range-controls">
-            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení seznamu klubů posuvníkem">
+            <input type="range" data-setting="favorite-spacing" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení seznamu klubů posuvníkem">
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>
@@ -6347,7 +6354,7 @@ ${COMPACT_READER_STYLES}
       state2.shadow.querySelector("[data-setting='favorite-font-family']")?.addEventListener("change", (event) => {
         updateFavoritesSettings({ fontFamily: event.currentTarget.value });
       });
-      state2.shadow.querySelector("[aria-label='Vlastní písmo oblíbených']")?.addEventListener("input", (event) => {
+      state2.shadow.querySelector("[data-setting='favorite-custom-font']")?.addEventListener("input", (event) => {
         updateFavoritesSettings(
           { customFontFamily: event.currentTarget.value },
           { render: false }
@@ -6358,8 +6365,8 @@ ${COMPACT_READER_STYLES}
         const hint = event.currentTarget.parentElement?.querySelector("small");
         if (hint) hint.textContent = invalid ? "Použijte jen názvy písem oddělené čárkami" : "Místní písma, oddělená čárkami";
       });
-      const favoriteFontRange = state2.shadow.querySelector("[aria-label='Velikost písma oblíbených posuvníkem']");
-      const favoriteFontNumber = state2.shadow.querySelector("[aria-label='Velikost písma oblíbených v pixelech']");
+      const favoriteFontRange = state2.shadow.querySelector("[data-setting='favorite-font-size-range']");
+      const favoriteFontNumber = state2.shadow.querySelector("[data-setting='favorite-font-size-number']");
       favoriteFontRange?.addEventListener("input", (event) => {
         updateFavoritesSettings({ fontSize: event.currentTarget.value }, { render: false });
         if (favoriteFontNumber) favoriteFontNumber.value = displayFontSize(event.currentTarget.value);
@@ -6374,7 +6381,7 @@ ${COMPACT_READER_STYLES}
       favoriteFontNumber?.addEventListener("change", (event) => {
         updateFavoritesSettings({ fontSize: event.currentTarget.value });
       });
-      const favoriteSpacingRange = state2.shadow.querySelector("[aria-label='Svislé odsazení oblíbených posuvníkem']");
+      const favoriteSpacingRange = state2.shadow.querySelector("[data-setting='favorite-spacing']");
       favoriteSpacingRange?.addEventListener("input", (event) => {
         updateFavoritesSettings({ spacing: event.currentTarget.value }, { render: false });
         const output = event.currentTarget.parentElement?.querySelector("output");

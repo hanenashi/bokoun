@@ -269,6 +269,53 @@ test("slow first render stays behind the Bokoun-owned cover in light and dark mo
             ?.querySelector(".overflow-menu")
         ));
 
+        const initialListTypography = await page.evaluate(() => {
+          const root = document.getElementById("bokoun-host")?.shadowRoot;
+          return {
+            clubStrip: getComputedStyle(root.querySelector(".club-strip-link")).fontSize,
+            favoriteName: getComputedStyle(root.querySelector(".favorite-name")).fontSize,
+          };
+        });
+        assert.deepEqual(initialListTypography, {
+          clubStrip: "12px",
+          favoriteName: "17px",
+        });
+        await page.locator("#bokoun-host [data-action='overflow']").click();
+        await page.locator(
+          "#bokoun-host [data-panel='favorites-appearance']",
+        ).click();
+        await page.locator(
+          "#bokoun-host [aria-label='Velikost písma seznamu klubů v pixelech']",
+        ).evaluate((input) => {
+          input.value = "24";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        const enlargedListTypography = await page.evaluate(() => {
+          const root = document.getElementById("bokoun-host")?.shadowRoot;
+          return {
+            clubStrip: getComputedStyle(root.querySelector(".club-strip-link")).fontSize,
+            favoriteName: getComputedStyle(root.querySelector(".favorite-name")).fontSize,
+          };
+        });
+        assert.deepEqual(enlargedListTypography, {
+          clubStrip: "19px",
+          favoriteName: "24px",
+        });
+        if (process.env.BOKOUN_QA_SCREENSHOT) {
+          const fontScreenshot = process.env.BOKOUN_QA_SCREENSHOT.replace(
+            /(\.[^.]+)?$/,
+            "-font-24$1",
+          );
+          await page.screenshot({ path: fontScreenshot, fullPage: false });
+        }
+        await page.locator(
+          "#bokoun-host [aria-label='Velikost písma seznamu klubů v pixelech']",
+        ).evaluate((input) => {
+          input.value = "17";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await page.locator("#bokoun-host .title").click();
+
         assert.deepEqual(
           await page.locator("#bokoun-host .club-strip-link").allTextContents(),
           ["Aktivní", "Oblíbené"],

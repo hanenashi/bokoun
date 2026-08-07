@@ -61,8 +61,8 @@ function fixture(name) {
 test("is an installable document-start Kapybara userscript", () => {
   assert.match(source, /@match\s+https:\/\/kapybara\.okoun\.cz\/\*/);
   assert.match(source, /@run-at\s+document-start/);
-  assert.match(source, /@version\s+0\.12\.1/);
-  assert.match(source, /export const VERSION = "0\.12\.1"/);
+  assert.match(source, /@version\s+0\.12\.2/);
+  assert.match(source, /export const VERSION = "0\.12\.2"/);
   const metadataVersion = generatedSource.match(/@version\s+([^\s]+)/)?.[1];
   const runtimeVersion = fs.readFileSync(path.join(sourceDir, "runtime.js"), "utf8")
     .match(/export const VERSION = "([^"]+)"/)?.[1];
@@ -968,6 +968,11 @@ test("Favorites UI exposes sorting, unread modes, and touch-safe manual ordering
   assert.match(source, /data-action="toggle-unread-only"/);
   assert.match(source, /data-action="edit-favorite-order"/);
   assert.match(source, /data-setting="favorites-sort"/);
+  assert.match(source, /data-setting="favorite-custom-font"/);
+  assert.match(source, /data-setting="favorite-font-size-range"/);
+  assert.match(source, /data-setting="favorite-font-size-number"/);
+  assert.match(source, /data-setting="favorite-spacing"/);
+  assert.doesNotMatch(uiEventsSource, /querySelector\("\[aria-label='(?:Vlastní|Velikost|Svislé)[^']*oblíbených[^']*'\]"\)/);
   assert.match(source, /data-setting="unread-mode"/);
   assert.match(source, /class="favorite-drag-handle"/);
   assert.match(source, /touch-action: none/);
@@ -1052,6 +1057,14 @@ test("compact reader club strip is optional, bounded, and request-free", () => {
   assert.match(uiSource, /\.slice\(0, 8\)/);
   assert.match(source, /const MAX_RECENT_CLUBS = 8/);
   assert.match(source, /data-club-strip="visible"/);
+  assert.match(
+    compactStylesSource,
+    /\.club-strip-link \{[\s\S]*font-family: var\(--post-font-family, inherit\);[\s\S]*font-size: clamp\(10px, calc\(var\(--post-font-size, 17px\) - 5px\), 24px\)/,
+  );
+  assert.match(
+    compactStylesSource,
+    /\.topbar--favorites \+ \.club-strip \.club-strip-link \{[\s\S]*font-family: var\(--favorite-font-family, inherit\);[\s\S]*font-size: clamp\(10px, calc\(var\(--favorite-font-size, 17px\) - 5px\), 24px\)/,
+  );
   const clubStripSource = uiSource.slice(
     uiSource.indexOf("function clubStripMarkup("),
     uiSource.indexOf("function favoritesMarkup"),

@@ -137,6 +137,7 @@ export function installUiPanels(ctx) {
           <span class="custom-font-wrap">
             <input
               type="text"
+              data-setting="favorite-custom-font"
               maxlength="160"
               autocomplete="off"
               spellcheck="false"
@@ -150,15 +151,15 @@ export function installUiPanels(ctx) {
         <div class="settings-field">
           <span>Velikost</span>
           <span class="font-size-controls">
-            <input type="range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma seznamu klubů posuvníkem">
-            <input type="number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma seznamu klubů v pixelech">
+            <input type="range" data-setting="favorite-font-size-range" min="10" max="32" step="0.5" value="${escapeHtml(Math.min(32, Math.max(10, favorites.fontSize)))}" aria-label="Velikost písma seznamu klubů posuvníkem">
+            <input type="number" data-setting="favorite-font-size-number" min="8" max="72" step="0.5" inputmode="decimal" value="${escapeHtml(displayFontSize(favorites.fontSize))}" aria-label="Velikost písma seznamu klubů v pixelech">
             <span>px</span>
           </span>
         </div>
         <div class="settings-field">
           <span>Odsazení</span>
           <span class="compact-range-controls">
-            <input type="range" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení seznamu klubů posuvníkem">
+            <input type="range" data-setting="favorite-spacing" min="0" max="24" step="1" value="${escapeHtml(favorites.spacing)}" aria-label="Svislé odsazení seznamu klubů posuvníkem">
             <output>${escapeHtml(favorites.spacing)} px</output>
           </span>
         </div>

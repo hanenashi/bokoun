@@ -214,7 +214,7 @@ export function installUiEvents(ctx) {
     state.shadow.querySelector("[data-setting='favorite-font-family']")?.addEventListener("change", (event) => {
       updateFavoritesSettings({ fontFamily: event.currentTarget.value });
     });
-    state.shadow.querySelector("[aria-label='Vlastní písmo oblíbených']")?.addEventListener("input", (event) => {
+    state.shadow.querySelector("[data-setting='favorite-custom-font']")?.addEventListener("input", (event) => {
       updateFavoritesSettings(
         { customFontFamily: event.currentTarget.value },
         { render: false },
@@ -227,8 +227,8 @@ export function installUiEvents(ctx) {
         ? "Použijte jen názvy písem oddělené čárkami"
         : "Místní písma, oddělená čárkami";
     });
-    const favoriteFontRange = state.shadow.querySelector("[aria-label='Velikost písma oblíbených posuvníkem']");
-    const favoriteFontNumber = state.shadow.querySelector("[aria-label='Velikost písma oblíbených v pixelech']");
+    const favoriteFontRange = state.shadow.querySelector("[data-setting='favorite-font-size-range']");
+    const favoriteFontNumber = state.shadow.querySelector("[data-setting='favorite-font-size-number']");
     favoriteFontRange?.addEventListener("input", (event) => {
       updateFavoritesSettings({ fontSize: event.currentTarget.value }, { render: false });
       if (favoriteFontNumber) favoriteFontNumber.value = displayFontSize(event.currentTarget.value);
@@ -243,7 +243,7 @@ export function installUiEvents(ctx) {
     favoriteFontNumber?.addEventListener("change", (event) => {
       updateFavoritesSettings({ fontSize: event.currentTarget.value });
     });
-    const favoriteSpacingRange = state.shadow.querySelector("[aria-label='Svislé odsazení oblíbených posuvníkem']");
+    const favoriteSpacingRange = state.shadow.querySelector("[data-setting='favorite-spacing']");
     favoriteSpacingRange?.addEventListener("input", (event) => {
       updateFavoritesSettings({ spacing: event.currentTarget.value }, { render: false });
       const output = event.currentTarget.parentElement?.querySelector("output");

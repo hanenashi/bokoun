@@ -128,12 +128,18 @@ export const COMPACT_READER_STYLES = `
     padding: 0 10px;
     overflow: hidden;
     color: var(--muted);
-    font-size: 12px;
+    font-family: var(--post-font-family, inherit);
+    font-size: clamp(10px, calc(var(--post-font-size, 17px) - 5px), 24px);
     font-weight: 650;
     line-height: var(--club-strip-height);
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .app[data-interface-preset="compact-reader"] .topbar--favorites + .club-strip .club-strip-link {
+    font-family: var(--favorite-font-family, inherit);
+    font-size: clamp(10px, calc(var(--favorite-font-size, 17px) - 5px), 24px);
   }
 
   .app[data-interface-preset="compact-reader"] .club-strip-link--active {
